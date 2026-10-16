@@ -1,0 +1,327 @@
+// Agent-side commands. They only read/write the database: a post is queued for its recipients right
+// away, and the next tick (run by Herdr when an agent changes state, e.g. this one ending its turn)
+// delivers it.
+// An agent's room is its Herdr workspace, so none of these take a room name.
+
+import {
+  appendLog,
+  filesDir,
+  MAX_MESSAGE_CHARS,
+  type Member,
+  readLog,
+  rootDir,
+  Store,
+  serviceState,
+} from '#store';
+import { leadingMention } from './recipients.ts';
+import { SELF } from './self.ts';
+import { guestInstructions, memberInstructions, sanitizeForTerminal } from './text.ts';
+
+type CommandOptions = { env?: NodeJS.ProcessEnv };
+
+const REUSABLE_HANDLE = ['gone', 'left', 'rejected'];
+// A role, shown to the others in the member list and the "joined" notice; not a place for a brief.
+const MAX_DESCRIPTION_CHARS = 200;
+const STATUS_LOG_LINES = 20;
+
+// HERDR_PANE_ID and HERDR_WORKSPACE_ID are fixed when the agent starts. Membership is matched
+// on these launch-time values, so an agent stays in its room even if its pane is moved later.
+function caller(env: NodeJS.ProcessEnv): { pane: string; workspace: string } {
+  if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
+    throw new Error(
+      'This command must run inside a Herdr pane (HERDR_PANE_ID / HERDR_WORKSPACE_ID are not set).',
+    );
+  }
+  return { pane: env.HERDR_PANE_ID, workspace: env.HERDR_WORKSPACE_ID };
+}
+
+function slug(description: string): string {
+  const first = description.trim().split(/[\s,;:/]+/)[0] || '';
+  return (
+    first
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .replace(/^[-_]+/, '')
+      .slice(0, 20) || 'agent'
+  );
+}
+
+// Ticks are run by the herdr-agent-hub Herdr plugin. If none ever ran, posts would wait forever.
+function requireInstalled(store: Store): void {
+  if (!serviceState(store.root).heartbeat) {
+    throw new Error(
+      `herdr-agent-hub has never run here (${store.root}). Install it as a Herdr plugin: herdr plugin link <herdr-agent-hub directory>`,
+    );
+  }
+}
+
+// The first free handle: base, then base-2, base-3, … Handles of members that are gone or were
+// rejected are free again once nothing from them waits for delivery.
+function freeHandle(store: Store, base: string): string {
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? base : `${base}-${n}`;
+    const old = store.member(candidate);
+    if (!old || (REUSABLE_HANDLE.includes(old.status) && !store.hasQueuedFrom(candidate))) {
+      return candidate;
+    }
+  }
+}
+
+// A join waiting for the next tick, which checks with Herdr that an agent runs in the pane.
+function newMember(description: string, pane: string): Omit<Member, 'handle'> {
+  return {
+    description: description.trim(),
+    pane_id: pane,
+    joined_at: new Date().toISOString(),
+    status: 'pending',
+    terminal_id: null,
+    agent: null,
+    session: null,
+    reason: null,
+    held: null,
+  };
+}
+
+// Records the join and returns the instructions right away. The agent is admitted (or refused, if Herdr
+// sees no agent in its pane) by the tick that runs when its turn ends; its posts are delivered after.
+export function join({
+  description,
+  env = process.env,
+}: CommandOptions & { description: string }): string {
+  if (!description?.trim()) {
+    throw new Error(`Usage: ${SELF} join <agent type or description>`);
+  }
+  if (description.trim().length > MAX_DESCRIPTION_CHARS) {
+    throw new Error(
+      `The description is too long (${description.trim().length} chars, max ${MAX_DESCRIPTION_CHARS}). Give your agent type and a short role, e.g. "codex, reviews for performance".`,
+    );
+  }
+  const { pane, workspace } = caller(env);
+  const store = new Store(rootDir(env), workspace);
+  requireInstalled(store);
+
+  const handle = store.transaction(() => {
+    // Re-joining from the same pane is idempotent: just print the instructions again.
+    const existing = store.memberByPane(pane);
+    if (existing) {
+      return existing.handle;
+    }
+    const candidate = freeHandle(store, slug(description));
+    const member = { ...newMember(description, pane), handle: candidate };
+    store.saveMember(member);
+    // Queued now, so it comes before anything the agent posts; held until the join is confirmed.
+    const id = store.announce(candidate, 'joined', `@${candidate} joined (${member.description}).`);
+    appendLog(store.root, store.room, `${id} @${candidate} joined (${member.description}).`);
+    return candidate;
+  });
+
+  return instructionsFor(store, handle, true);
+}
+
+function instructionsFor(store: Store, handle: string, justJoined: boolean): string {
+  return memberInstructions({
+    handle,
+    room: store.room,
+    members: store.members('active'),
+    justJoined,
+  });
+}
+
+// The room's rules: this pane's own (handle, members, wake rule) if it has joined, else the general
+// guide. Only reads, so an agent can run it any time, e.g. after its context was compacted.
+export function skill({ env = process.env }: CommandOptions = {}): string {
+  if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
+    return guestInstructions();
+  }
+  const store = new Store(rootDir(env), env.HERDR_WORKSPACE_ID);
+  const member = store.memberByPane(env.HERDR_PANE_ID);
+  return member ? instructionsFor(store, member.handle, false) : guestInstructions();
+}
+
+// A joined member, or one whose join the next tick will confirm.
+function resolveMembership(env: NodeJS.ProcessEnv): { store: Store; member: Member } {
+  const { pane, workspace } = caller(env);
+  const store = new Store(rootDir(env), workspace);
+  const member = store.memberByPane(pane);
+  if (!member) {
+    const rejected = store.rejectionFor(pane);
+    if (rejected) {
+      throw new Error(`Your join was refused: ${rejected.reason}`);
+    }
+    throw new Error(
+      `This pane has not joined the chat. Run: ${SELF} join "<agent type or description>"`,
+    );
+  }
+  return { store, member };
+}
+
+// to: the handles from --to; without it, the post goes to every other member.
+// re: the id of the message it answers (--re). fyi: no reply needed, so it wakes nobody (--fyi).
+export function message({
+  text,
+  to,
+  re,
+  fyi = false,
+  env = process.env,
+}: CommandOptions & { text: string; to?: string[]; re?: string; fyi?: boolean }): string {
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error('Message is empty. Pass text or use --stdin.');
+  }
+  if (text.includes('\0')) {
+    throw new Error('Message contains a NUL byte.');
+  }
+  const { store, member } = resolveMembership(env);
+  if (text.length > MAX_MESSAGE_CHARS) {
+    throw new Error(tooLong(store.root, member.handle, text.length));
+  }
+  requireInstalled(store);
+  const others = store.handles().filter((h) => h !== member.handle);
+  const recipients = checkRecipients(to, others);
+  const answers = re === undefined ? null : checkRe(store, re);
+  const id = store.enqueue(member.handle, text, recipients, {
+    kind: fyi ? 'fyi' : 'message',
+    re: answers,
+  });
+  const tags = [answers ? `re ${answers}` : '', fyi ? 'fyi' : ''].filter(Boolean).join(', ');
+  appendLog(
+    store.root,
+    store.room,
+    `${id} @${member.handle} → ${handleList(recipients)}${tags ? ` (${tags})` : ''}: ${preview(text)}`,
+  );
+  return confirmation({ handle: member.handle, text, to, recipients, others, fyi });
+}
+
+// What `message` answers: whom the post is queued for, when it goes out, and a reminder when a post
+// to everyone looks meant for one agent.
+function confirmation({
+  handle,
+  text,
+  to,
+  recipients,
+  others,
+  fyi,
+}: {
+  handle: string;
+  text: string;
+  to: string[] | undefined;
+  recipients: string[];
+  others: string[];
+  fyi: boolean;
+}): string {
+  const audience =
+    to || others.length === 1
+      ? handleList(recipients)
+      : `all agents in the room: ${handleList(recipients)}`;
+  const named = to ? null : leadingMention(text, others);
+  const reminder =
+    named && others.length > 1
+      ? ` Note: it starts with @${named} but has no --to, so everyone gets it; to send only to @${named}, use --to ${named}.`
+      : '';
+  if (fyi) {
+    return `Queued as @${handle} for ${audience}, as FYI: it wakes nobody and arrives with their next message.${reminder}`;
+  }
+  return `Queued as @${handle} for ${audience}.${reminder} It is sent when you end your turn, so end it now; replies will be delivered to you.`;
+}
+
+// `--re m12` (or 12): the id of a message that exists, as m<number>.
+function checkRe(store: Store, re: string): string {
+  const id = `m${re.trim().replace(/^m/i, '')}`;
+  if (!/^m\d+$/.test(id) || !store.wasIssued(id)) {
+    throw new Error(
+      `Not queued: --re ${re} is not a message id. Use an id from a delivery's header, e.g. --re m12.`,
+    );
+  }
+  return id;
+}
+
+// The members a post goes to: those named with --to, or all the others. Refuses a name that isn't
+// another member (a typo would otherwise go unnoticed), and a post nobody would get. Joins the next
+// tick confirms count too: their posts and deliveries start once it has.
+function checkRecipients(to: string[] | undefined, others: string[]): string[] {
+  if (!others.length) {
+    throw new Error(
+      'Not queued: there are no other agents in the room yet, so nobody would get it. Tell your user instead.',
+    );
+  }
+  if (!to) {
+    return others;
+  }
+  const unknown = to.filter((h) => !others.includes(h));
+  if (unknown.length || !to.length) {
+    throw new Error(
+      `Not queued: ${to.length ? `${handleList(unknown)} ${unknown.length === 1 ? 'is' : 'are'} not another member of the room` : '--to names nobody'}. Members: ${handleList(others)}. Fix --to and post again, or leave it out to send to everyone.`,
+    );
+  }
+  return to;
+}
+
+// The first line of a message, cut short, for the log.
+function preview(text: string): string {
+  const first = text.trim().split('\n', 1)[0] ?? '';
+  return first.length > 80 ? `${first.slice(0, 80)}…` : first;
+}
+
+// The way out for content too big to type into a pane: a file the others can read, named for them.
+function tooLong(root: string, handle: string, length: number): string {
+  // Unique even for several long posts in the same millisecond.
+  const stamp = new Date().toISOString().replace(/[-:.]/g, '');
+  const file = `${filesDir(root)}/${handle}-${stamp}-${crypto.randomUUID().slice(0, 8)}.md`;
+  return `Not queued: the message is too long (${length} chars, max ${MAX_MESSAGE_CHARS}). Save the full text to a file the others can read, then post a short message with its path:
+    cat > ${file} <<'EOF'
+    the full text
+    EOF
+    ${SELF} message [--to <handle>] --stdin <<'EOF'
+    <a short summary>. Details: ${file}
+    EOF`;
+}
+
+const handleList = (handles: string[]): string =>
+  handles.length ? handles.map((h) => `@${h}`).join(', ') : 'nobody else';
+
+export function leave({ env = process.env }: CommandOptions = {}): string {
+  const { store, member } = resolveMembership(env);
+  const id = store.remove(member, 'left', 'left the room');
+  if (id) {
+    appendLog(store.root, store.room, `${id} @${member.handle} left the room.`);
+  }
+  return 'You left the room. Nothing more will be delivered to you.';
+}
+
+// What the current workspace's room is doing, for debugging: its members, what waits for each, and
+// the latest activity. Only reads the database, like the other agent commands.
+export function status({ env = process.env }: CommandOptions = {}): string {
+  const { workspace } = caller(env);
+  const store = new Store(rootDir(env), workspace);
+  const active = store.members('active');
+  const pending = store.members('pending');
+  const lines = [
+    `Room ${workspace}:`,
+    '',
+    'Members:',
+    ...(active.length || pending.length ? [] : ['  (none)']),
+    ...active.map((m) => memberLine(store, m)),
+    ...pending.map((m) => `  @${m.handle} — ${m.description} [joining from ${m.pane_id}]`),
+    '',
+    'Recent activity:',
+    ...readLog(store.root, workspace, STATUS_LOG_LINES).map(
+      (row) => `  ${new Date(row.at).toLocaleTimeString('en-GB')} ${row.text}`,
+    ),
+  ];
+  if (lines.at(-1) === 'Recent activity:') {
+    lines.push('  (none)');
+  }
+  // Agents can post escape sequences; this is printed in a human's terminal.
+  return sanitizeForTerminal(lines.join('\n'));
+}
+
+function memberLine(store: Store, m: Member): string {
+  const queued = store.queued(m.handle);
+  const unsure = queued.filter((q) => q.unsure).map((q) => q.id);
+  const notes = [
+    queued.length ? `${queued.length} message(s) waiting` : '',
+    m.held && queued.length ? `held: ${m.held}` : '',
+    unsure.length ? `may not have received ${unsure.join(',')}` : '',
+  ].filter(Boolean);
+  const extra = notes.length ? `; ${notes.join('; ')}` : '';
+  return `  @${m.handle} — ${m.description} [${m.agent}, joined from ${m.pane_id}${extra}]`;
+}
