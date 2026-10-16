@@ -26,7 +26,7 @@
       "preset": "recommended",
       "complexity": {
         "noExcessiveCognitiveComplexity": {
-          "level": "warn",
+          "level": "error",
           "options": {
             "maxAllowedComplexity": 10
           }
@@ -37,12 +37,27 @@
       "style": {
         "useBlockStatements": "error",
         "noNestedTernary": "error",
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["../*/**", "../../**", "!../../drizzle/*.sql", "#*/**"],
+                "message": "Import other modules as #<module> (its index.ts; see imports in package.json), e.g. #store; their other files are internal, and a relative path may not leave its module."
+              }
+            ]
+          }
+        }
       },
       "nursery": {
         "noFloatingPromises": "error",
         "noMisusedPromises": "error",
-        "useExplicitType": "warn"
+        "useExplicitType": "error",
+        "useExhaustiveSwitchCases": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error"
       }
     }
   },
@@ -56,7 +71,7 @@
   },
   "overrides": [
     {
-      "includes": ["test/**"],
+      "includes": ["**/*.test.ts", "src/testing/**"],
       "linter": {
         "rules": {
           "style": {
@@ -64,6 +79,34 @@
           },
           "nursery": {
             "useExplicitType": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/**", "!src/store/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "bun:sqlite": "The database is the store module's business: use src/store/index.ts.",
+                  "drizzle-orm": "The database is the store module's business: use src/store/index.ts."
+                },
+                "patterns": [
+                  {
+                    "group": ["../*/**", "../../**", "!../../drizzle/*.sql", "#*/**"],
+                    "message": "Import other modules as #<module> (its index.ts; see imports in package.json), e.g. #store; their other files are internal, and a relative path may not leave its module."
+                  },
+                  {
+                    "group": ["drizzle-orm/*"],
+                    "message": "The database is the store module's business: use src/store/index.ts."
+                  }
+                ]
+              }
+            }
           }
         }
       }
