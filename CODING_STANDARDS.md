@@ -39,7 +39,7 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
 - Validate everything Herdr returns with Zod `safeParse`; on failure throw a `HerdrError`
   (`invalid_response`).
 - Pass agent-written text (messages, descriptions) through `sanitizeForTerminal` before printing
-  it to a terminal.
+  it to a terminal or typing it into a pane.
 - Spawn processes with an argv array (`Bun.spawn([bin, ...args])`), so message text stays one
   argument and never meets a shell.
 

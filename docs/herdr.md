@@ -34,6 +34,8 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
   `agent_prompt_stalled`: the text **was** submitted but no turn started.
 - `timeout` (Herdr's, or the client's 30 s kill) means the outcome is unknown.
 - It accepts a prompt for a working agent too, and doesn't track turns; the hub checks state first.
+- It honours the pane's bracketed-paste mode: the text goes in as a paste, then Enter. An ESC in the
+  text could end the paste early, so deliveries are stripped of control characters first.
 - The text is one argv entry: at most 128 KiB on Linux, so deliveries are capped at 100 KB.
 
 Which of these mean "nothing was typed" decides re-sending: see `docs/adr/0006-no-unmarked-resend.md`.

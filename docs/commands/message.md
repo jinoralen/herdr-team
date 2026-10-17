@@ -29,6 +29,10 @@ A message is capped at 16,000 characters. A longer one is refused with a ready-m
 saves the text to a file under the state directory (`files/`); the agent posts the path instead,
 and the others can read the file because they run as the same user.
 
+Control characters (escape sequences, carriage returns) are stripped on delivery; newlines and tabs
+are kept. Herdr types a delivery as a bracketed paste, and an escape in the text could otherwise end
+the paste and turn the rest into keystrokes.
+
 ## Common questions
 
 **Can I answer a question with `--fyi`?**

@@ -96,3 +96,10 @@ test('a description too long for a role is refused with a clear message', async 
   );
   assert.equal(store().member('codex'), null);
 });
+
+test("a description's control characters are stripped before others see it", async () => {
+  const { joinAs } = await installed();
+  await joinAs('w1:p1', 'claude \x1b[31mreviewer\x07');
+  const out = await joinAs('w1:p2', 'codex');
+  assert.match(out, /@claude — claude \[31mreviewer\n/);
+});

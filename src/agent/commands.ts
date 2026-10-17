@@ -70,7 +70,8 @@ function freeHandle(store: Store, base: string): string {
 // A join waiting for the next tick, which checks with Herdr that an agent runs in the pane.
 function newMember(description: string, pane: string): Omit<Member, 'handle'> {
   return {
-    description: description.trim(),
+    // Shown to the other members by join, skill and status, and in their deliveries.
+    description: sanitizeForTerminal(description).trim(),
     pane_id: pane,
     joined_at: new Date().toISOString(),
     status: 'pending',
