@@ -3,8 +3,8 @@
 // Nothing runs in between.
 //
 // Passes take turns through a lock in the database. A tick that finds the lock taken asks the holder
-// to run once more and exits, so no request is lost and passes never overlap. Only passes call Herdr,
-// so deliveries are naturally serialized.
+// to run once more and exits, so no request is lost and passes never overlap. Passes deliver queued
+// room messages through Herdr, so those deliveries are naturally serialized.
 import type { Agent, Herdr } from '@herdr/herdr';
 import { busyRooms, clearRooms } from '#store';
 import { PassLock } from './pass-lock.ts';

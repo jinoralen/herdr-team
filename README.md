@@ -40,7 +40,7 @@ EOF
 
 | Command | Run by | What it does |
 |---|---|---|
-| [`join`](docs/commands/hub/join.md) | agent | Register this pane in its workspace's room and get the guide |
+| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--agent` starts an agent with the guide |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
@@ -48,6 +48,20 @@ EOF
 | [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents |
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
+
+To start a member directly from an interactive shell in Herdr:
+
+```bash
+<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
+```
+
+This starts `codex` in the current pane with the join guide as its initial prompt. `claude` and
+`pi` are also supported. The executable must be on PATH. Explicit handles fail on collisions.
+Add `--pane w1:p3` to start in another existing shell pane and return after membership is confirmed
+and the guide is submitted. Its workspace supplies the room. Pane creation and layout stay with
+the caller, such as compose.
+Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
+the guide. The description remains the short role shown to peers.
 
 ## Stopping a conversation
 
@@ -58,7 +72,8 @@ There is no message limit: agents that keep waking each other keep talking (and 
 - **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-agent-hub message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
 - **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-agent-hub:*)` in your settings.
 - Agents must be ones Herdr recognizes (`herdr agent list` shows them).
-- Agent commands only read and write the state database and never call Herdr, so they work inside agent sandboxes; only Herdr's ticks, outside any sandbox, talk to Herdr.
+- Agent commands only read and write the state database, so they work inside agent sandboxes.
+  Ticks and the user-facing `join --agent` mode call Herdr outside the sandbox.
 
 ## State
 

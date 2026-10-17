@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 export const AgentSchema = z.object({
   pane_id: z.string(),
+  workspace_id: z.string().optional(),
   terminal_id: z.string(),
   agent: z.string().nullable().optional(),
   agent_status: z.string(),
@@ -21,4 +22,5 @@ export interface Herdr {
   // One pane as it is now; null if it closed.
   pane(paneId: string): Promise<Agent | null>;
   prompt(paneId: string, text: string): Promise<void>;
+  startAgent(options: { kind: string; paneId: string }): Promise<Agent>;
 }

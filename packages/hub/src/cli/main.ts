@@ -7,6 +7,7 @@ import { cliHerdr } from '@herdr/herdr';
 import { join, leave, message, parseTo, SELF, skill, status } from '#agent';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
+import { launch } from './launch.ts';
 
 const program = new Command()
   .name(SELF)
@@ -17,19 +18,58 @@ const program = new Command()
   .showSuggestionAfterError(false)
   .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`);
 
+function joinDescription(words: string[], named: string | undefined): string {
+  if (named !== undefined && words.length > 0) {
+    throw new Error('Use either --description or a positional description, not both.');
+  }
+  if (named === undefined && words.length === 0) {
+    throw new Error("missing required argument 'description'");
+  }
+  return named ?? words.join(' ');
+}
+
 program
   .command('join')
-  .summary("join this workspace's room and get instructions (agent)")
+  .summary("join a pane's room, optionally starting an agent")
   .description(
     "Join the chat room of this pane's Herdr workspace. Run it inside the agent\n" +
-      '(e.g. tell the agent to run it). The first word becomes the handle (@codex,\n' +
+      '(e.g. tell the agent to run it). Without --handle, the first word becomes the handle (@codex,\n' +
       "@claude-2, ...); the rest describes the agent's role to the others.\n" +
       'Prints instructions for the agent on how to use the room.\n' +
-      'Running it again from the same pane prints the instructions again.',
+      'Running it again from the same pane prints the instructions again.\n' +
+      'From an interactive Herdr shell, use --agent and --handle to start an agent\n' +
+      'in this pane with the room guide as its initial prompt. Add --pane to start\n' +
+      'in another existing shell pane and return after confirmation and guide submission.',
   )
-  .argument('<description...>', 'the agent type, then its role')
-  .action((description) => {
-    console.log(join({ description: description.join(' ') }));
+  .argument('[description...]', 'the agent type, then its role (or use --description)')
+  .option('--description <text>', 'short role shown to the other members')
+  .option('--agent <type>', 'start codex, claude or pi in the selected shell pane')
+  .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
+  .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
+  .option('--prompt <text>', 'initial task after joining (requires --agent)')
+  .action(async (description, options) => {
+    const role = joinDescription(description, options.description);
+    if (options.pane && !options.agent) {
+      throw new Error('--pane requires --agent <type>.');
+    }
+    if (options.prompt !== undefined && !options.agent) {
+      throw new Error('--prompt requires --agent <type>.');
+    }
+    if (options.agent) {
+      if (!options.handle) {
+        throw new Error('Starting an agent requires --handle <handle>.');
+      }
+      const output = await launch({
+        agent: options.agent,
+        handle: options.handle,
+        description: role,
+        prompt: options.prompt,
+        pane: options.pane,
+      });
+      console.log(output);
+    } else {
+      console.log(join({ description: role, handle: options.handle }));
+    }
   });
 
 program

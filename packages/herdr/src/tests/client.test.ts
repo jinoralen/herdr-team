@@ -72,3 +72,32 @@ test('malformed agent records are rejected before reaching the router', async ()
     code: 'invalid_response',
   });
 });
+
+test('agent startup passes the target pane and validates the returned agent', async () => {
+  const { bin, dir } = fakeBinary(`
+require('node:fs').writeFileSync(process.env.OUT, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ result: { agent: {
+  pane_id: 'w2:p3', workspace_id: 'w2', terminal_id: 't3', agent: 'codex', agent_status: 'idle'
+} } }));`);
+  const out = path.join(dir, 'args.json');
+  const agent = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out }).startAgent({
+    kind: 'codex',
+    paneId: 'w2:p3',
+  });
+  assert.equal(agent.workspace_id, 'w2');
+  assert.equal(agent.terminal_id, 't3');
+  const args = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.deepEqual(args.slice(0, 2), ['agent', 'start']);
+  assert.match(args[2], /^hub-/);
+  assert.deepEqual(args.slice(3), ['--kind', 'codex', '--pane', 'w2:p3', '--timeout', '120000']);
+});
+
+test('agent startup rejects malformed success responses', async () => {
+  const { bin } = fakeBinary(
+    `console.log(JSON.stringify({ result: { agent: { pane_id: 'p' } } }));`,
+  );
+  await assert.rejects(
+    cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).startAgent({ kind: 'codex', paneId: 'p' }),
+    { code: 'invalid_response' },
+  );
+});

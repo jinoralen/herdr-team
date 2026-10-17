@@ -27,6 +27,10 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
   recognized, and `pane get` fails with `pane_not_found` once the pane closed. Checked in 0.9.5.
 - `agent_session` may appear some time after the agent is detected; a new value in the same terminal
   is a new conversation.
+- `join --agent --pane` uses `herdr agent start <name> --kind <kind> --pane <pane> --timeout 120000`.
+  The pane must be at an interactive shell prompt. Success means the expected agent was detected
+  in the same terminal and is ready for input. The client allows 130 seconds for this operation.
+  The hub then confirms membership and submits the room guide through `agent prompt`.
 - Only agents Herdr recognizes can join; `agent` is null for a plain shell.
 
 ## Prompting
@@ -57,3 +61,5 @@ Which of these mean "nothing was typed" decides re-sending: see `docs/adr/0006-n
   ID and keeps its `terminal_id`. Its process keeps the old IDs in its environment.
 - Both lists report each pane's `workspace_id` and `tab_id` too.
 - Workspace IDs are Herdr's; one could in principle be reused for a new workspace.
+- Remote startup requires `workspace_id` from `pane get`; this supplies the target room rather
+  than the caller's inherited workspace. The pane and terminal are checked again after startup.

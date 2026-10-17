@@ -1,4 +1,4 @@
-// Thin adapter over the installed `herdr` CLI. Only ticks use it. What it relies on from Herdr:
+// Thin adapter over the installed `herdr` CLI, used by ticks and agent startup. Herdr's guarantees:
 // docs/herdr.md.
 import { z } from 'zod';
 import { type Agent, AgentSchema, type Herdr } from './types.ts';
@@ -87,6 +87,28 @@ async function run(
 export function cliHerdr(env = process.env): Herdr {
   const bin = env.HERDR_BIN_PATH || 'herdr';
   return {
+    async startAgent({ kind, paneId }: { kind: string; paneId: string }): Promise<Agent> {
+      const result = await run(
+        bin,
+        [
+          'agent',
+          'start',
+          `hub-${crypto.randomUUID()}`,
+          '--kind',
+          kind,
+          '--pane',
+          paneId,
+          '--timeout',
+          '120000',
+        ],
+        { timeout: 130000, env },
+      );
+      const parsed = z.object({ agent: AgentSchema }).safeParse(result);
+      if (!parsed.success) {
+        throw new HerdrError('invalid_response', 'agent start has invalid agent data');
+      }
+      return parsed.data.agent;
+    },
     async listPanes(): Promise<Agent[]> {
       const result = await run(bin, ['pane', 'list'], { timeout: 10000, env });
       const parsed = z.object({ panes: z.array(AgentSchema) }).safeParse(result);

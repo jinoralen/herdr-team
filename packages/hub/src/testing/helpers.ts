@@ -23,6 +23,9 @@ export const kinds = (store: Store, handle: string): string[] =>
 
 // Herdr as the router sees it, with agents the tests set up.
 class FakeHerdr implements Herdr {
+  async startAgent(): Promise<Agent> {
+    throw new Error('Room ticks never start agents.');
+  }
   agents: Agent[] = [];
   prompts: { pane: string; text: string }[] = [];
   failNext: Error | null = null;
