@@ -1,13 +1,10 @@
 // Text shown to agents: join instructions and delivered message batches.
 
+import { sanitizeForTerminal } from '@herdr/terminal';
 import { type Entry, MAX_MESSAGE_CHARS, type Member } from '#store';
 import { SELF } from './self.ts';
 
-export function sanitizeForTerminal(text: string): string {
-  // Strip control chars (escape sequences) but keep newlines and tabs.
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
-  return text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
-}
+export { sanitizeForTerminal } from '@herdr/terminal';
 
 // How to talk in a room: the same rules whether the agent just joined or asks for them again.
 function roomRules(handle: string): string {

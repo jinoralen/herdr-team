@@ -1,7 +1,7 @@
 // Who is in a room, checked against Herdr at the start of each pass: stored members are found by
 // their panes, and pending joins are admitted or refused. Like delivery.ts, these take the room.
 
-import type { Agent } from '#herdr';
+import type { Agent } from '@herdr/herdr';
 import type { Member } from '#store';
 import type { Router } from './router.ts';
 import { admissionProblem, findPane } from './rules.ts';

@@ -3,8 +3,8 @@ import { onTestFinished } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { type Agent, type Herdr, HerdrError } from '@herdr/herdr';
 import { join, message } from '#agent';
-import { type Agent, type Herdr, HerdrError } from '#herdr';
 import { tick as runTick } from '#rooms';
 import { type Entry, Store } from '#store';
 

@@ -1,7 +1,7 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
+import { HerdrError } from '@herdr/herdr';
 import { message, status } from '#agent';
-import { HerdrError } from '#herdr';
 import type { Store } from '#store';
 import { installed } from '#testing';
 

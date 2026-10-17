@@ -4,22 +4,41 @@
   "workspaces": {
     "": {
       "name": "herdr-agent-hub",
-      "dependencies": {
-        "@commander-js/extra-typings": "15.0.0",
-        "commander": "15.0.0",
-        "drizzle-orm": "0.45.4",
-        "zod": "^4.6.5",
-      },
       "devDependencies": {
         "@biomejs/biome": "2.5.15",
+        "@herdr/hub": "workspace:*",
         "@types/bun": "latest",
-        "drizzle-kit": "0.31.11",
         "knip": "6.41.0",
         "lefthook": "2.2.2",
       },
       "peerDependencies": {
         "typescript": "^7",
       },
+    },
+    "packages/herdr": {
+      "name": "@herdr/herdr",
+      "version": "0.1.0",
+      "dependencies": {
+        "zod": "^4.6.5",
+      },
+    },
+    "packages/hub": {
+      "name": "@herdr/hub",
+      "version": "0.1.0",
+      "dependencies": {
+        "@commander-js/extra-typings": "15.0.0",
+        "@herdr/herdr": "workspace:*",
+        "@herdr/terminal": "workspace:*",
+        "commander": "15.0.0",
+        "drizzle-orm": "0.45.4",
+      },
+      "devDependencies": {
+        "drizzle-kit": "0.31.11",
+      },
+    },
+    "packages/terminal": {
+      "name": "@herdr/terminal",
+      "version": "0.1.0",
     },
   },
   "packages": {
@@ -106,6 +125,12 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.12", "", { "os": "win32", "cpu": "ia32" }, "sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
+
+    "@herdr/herdr": ["@herdr/herdr@workspace:packages/herdr"],
+
+    "@herdr/hub": ["@herdr/hub@workspace:packages/hub"],
+
+    "@herdr/terminal": ["@herdr/terminal@workspace:packages/terminal"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.5", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" } }, "sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA=="],
 

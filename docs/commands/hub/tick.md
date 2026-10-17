@@ -5,7 +5,7 @@
 Brings every room up to date, then exits: confirms or refuses pending joins, removes members that
 are gone, and delivers what waits for members that are idle or done. That's one pass, plus one more
 for each tick that asked for one while it ran. Nothing else delivers anything, and nothing runs
-between ticks: the hub has no daemon ([ADR 0001](../adr/0001-one-shot-plugin-no-daemon.md)).
+between ticks: the hub has no daemon ([ADR 0001](../../adr/0001-one-shot-plugin-no-daemon.md)).
 
 ```
 agent pane ──join / message──▶ chat.db (members, queue, log)
@@ -20,7 +20,7 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
 - **Who runs it**: Herdr, through the plugin manifest, on every agent state change, pane close and
   startup. At startup it runs as `tick --startup`, which first clears every room of the server
   before: its panes are gone, and their IDs may be handed out again
-  ([ADR 0010](../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
+  ([ADR 0010](../../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
   without `HERDR_SOCKET_PATH`, it can't tell which session that is and clears nothing. That's enough: a post is delivered when its author's turn ends, and a message waiting for
   a busy agent when that agent goes idle; both are state changes.
 - **Trigger**: you don't run it. Running it by hand is harmless.
@@ -40,7 +40,7 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   recipient's pane, and then its author is told.
 - **No unmarked re-send.** If a prompt fails in a way where the text may have arrived, it isn't sent
   again on its own; it goes out with the next delivery marked "may repeat", and its author is warned
-  unless it was an FYI or the author has left ([ADR 0006](../adr/0006-no-unmarked-resend.md)).
+  unless it was an FYI or the author has left ([ADR 0006](../../adr/0006-no-unmarked-resend.md)).
 - **Nothing is cut.** A queue too big for one prompt (100 KB) goes out over several deliveries.
 - **No work, no Herdr calls.** A tick with no members or queued messages anywhere exits without
   calling Herdr.
@@ -74,4 +74,4 @@ marked "may not have arrived" also tells its author.
 
 The Herdr side of every conversation: it delivers what [`message`](message.md) queues and confirms
 what [`join`](join.md) records. [`status`](status.md) shows what it did and why something waits.
-Herdr behaviour it relies on: [docs/herdr.md](../herdr.md).
+Herdr behaviour it relies on: [docs/herdr.md](../../herdr.md).

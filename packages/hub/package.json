@@ -1,0 +1,33 @@
+{
+  "name": "@herdr/hub",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Room membership and message delivery for agents in Herdr",
+  "exports": {
+    "./cli": "./src/cli/main.ts"
+  },
+  "imports": {
+    "#agent": "./src/agent/index.ts",
+    "#rooms": "./src/rooms/index.ts",
+    "#store": "./src/store/index.ts",
+    "#testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "build": "bun build --compile --minify src/cli/main.ts --outfile ../../dist/herdr-agent-hub",
+    "dev": "bun src/cli/main.ts",
+    "test": "bun test src",
+    "typecheck": "bun check",
+    "db:generate": "rm -rf drizzle && drizzle-kit generate --name init"
+  },
+  "dependencies": {
+    "@commander-js/extra-typings": "15.0.0",
+    "commander": "15.0.0",
+    "@herdr/herdr": "workspace:*",
+    "@herdr/terminal": "workspace:*",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.11"
+  }
+}

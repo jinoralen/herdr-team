@@ -1,9 +1,7 @@
 // How agents run this program. Nothing puts it on PATH, so the instructions it prints carry the
 // full path of whatever is running now.
 
-function shellQuote(word: string): string {
-  return /^[\w/.,:@%+=-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`;
-}
+import { shellQuote } from '@herdr/terminal';
 
 function selfCommand(): string {
   // Compiled executable: its own path. Its bundled code lives under /$bunfs/.

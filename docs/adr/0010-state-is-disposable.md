@@ -6,7 +6,7 @@ socket, since IDs are only unique within one server) and holds only members and 
 messages, which go stale fast once their agents restart. Every room is cleared when Herdr's server
 starts, including after a live handoff: its panes are new, or at least can't be trusted to be the
 old ones. So there are no data migrations: the schema is one
-migration, `drizzle/0000_init.sql`, regenerated on every change, and a database built from any
+migration, `packages/hub/drizzle/0000_init.sql`, regenerated on every change, and a database built from any
 other schema is set aside on open and started fresh; agents just join again.
 
 ## Consequences
