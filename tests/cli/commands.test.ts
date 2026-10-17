@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { cli } from './run-cli.ts';
 
 test('with no arguments, prints the help and points agents to skill', async () => {
@@ -116,4 +117,20 @@ test("tick --startup clears the session's rooms, but only when it knows the sess
   const cleared = await session.run(['status'], { inPane: true });
   expect(cleared.stdout).toContain('Members:\n  (none)');
   expect(cleared.stdout).toContain('Herdr started: rooms cleared');
+});
+
+test('JSON status exposes room membership and draining handles without Herdr calls', async () => {
+  const { run } = cli();
+  assert.equal((await run(['tick'])).code, 0);
+  assert.equal((await run(['join', '--handle', 'reviewer', 'reviews'], { inPane: true })).code, 0);
+  const pending = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(pending.version, 1);
+  assert.equal(pending.room, 'w1');
+  assert.equal(pending.members[0].handle, 'reviewer');
+  assert.equal(pending.members[0].status, 'pending');
+  assert.equal(pending.members[0].pane_id, 'p1');
+  assert.equal((await run(['leave'], { inPane: true })).code, 0);
+  const left = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(left.members[0].status, 'left');
+  assert.equal(typeof left.members[0].queuedFrom, 'boolean');
 });

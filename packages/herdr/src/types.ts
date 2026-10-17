@@ -22,5 +22,5 @@ export interface Herdr {
   // One pane as it is now; null if it closed.
   pane(paneId: string): Promise<Agent | null>;
   prompt(paneId: string, text: string): Promise<void>;
-  startAgent(options: { kind: string; paneId: string }): Promise<Agent>;
+  startAgent(options: { kind: string; paneId: string; args?: string[] }): Promise<Agent>;
 }

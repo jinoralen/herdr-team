@@ -18,6 +18,7 @@ function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
 
 export async function launchInPane({
   agent,
+  model,
   handle,
   description,
   task,
@@ -25,6 +26,7 @@ export async function launchInPane({
   env,
 }: {
   agent: string;
+  model?: string;
   handle: string;
   description: string;
   task: string;
@@ -54,7 +56,11 @@ export async function launchInPane({
   // the second join below recovers it after detection, with the same collision checks.
   join({ description, handle, env: targetEnv });
   try {
-    const started = await herdr.startAgent({ kind: agent, paneId: target });
+    const started = await herdr.startAgent({
+      kind: agent,
+      paneId: target,
+      args: model ? ['--model', model] : [],
+    });
     // Start responses may omit workspace metadata; the live pane must still match the target.
     checkPane({ ...started, workspace_id: started.workspace_id ?? pane.workspace_id }, pane, agent);
     const live = await herdr.pane(target);

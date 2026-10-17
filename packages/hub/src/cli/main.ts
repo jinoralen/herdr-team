@@ -43,6 +43,7 @@ program
   )
   .argument('[description...]', 'the agent type, then its role (or use --description)')
   .option('--description <text>', 'short role shown to the other members')
+  .option('--model <id>', 'model for the agent being started (requires --agent)')
   .option('--agent <type>', 'start codex, claude or pi in the selected shell pane')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
   .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
@@ -55,12 +56,16 @@ program
     if (options.prompt !== undefined && !options.agent) {
       throw new Error('--prompt requires --agent <type>.');
     }
+    if (options.model !== undefined && !options.agent) {
+      throw new Error('--model requires --agent <type>.');
+    }
     if (options.agent) {
       if (!options.handle) {
         throw new Error('Starting an agent requires --handle <handle>.');
       }
       const output = await launch({
         agent: options.agent,
+        model: options.model,
         handle: options.handle,
         description: role,
         prompt: options.prompt,
@@ -125,8 +130,9 @@ program
       'yet and why, and the last things ticks did. Only reads; run it from any pane in\n' +
       'the workspace to see why a conversation stopped.',
   )
-  .action(() => {
-    console.log(status());
+  .option('--json', 'print a versioned membership snapshot for automation')
+  .action((options) => {
+    console.log(status({ json: options.json }));
   });
 
 program

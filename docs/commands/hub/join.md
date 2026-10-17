@@ -34,6 +34,7 @@ Your working directory, environment and agent defaults are preserved.
 | Option | Behavior |
 |---|---|
 | `--agent codex`, `--agent claude`, `--agent pi` | Start that agent; requires `--handle` and a shell pane with no recognized agent. Without `--pane`, requires an interactive terminal |
+| `--model <id>` | With `--agent`, pass the model unchanged to the harness (including aliases such as `sonnet[1m]`); omit to use its configured default |
 | `--handle reviewer` | Request this exact handle, including when joining from an existing agent; collisions fail rather than adding a suffix |
 | `--description "reviews architecture"` | Short role shown to peers; may also be supplied positionally, but the two forms cannot be combined |
 | `--pane w1:p3` | With `--agent`, start in this existing pane and return to the caller; the target pane's workspace supplies the room |

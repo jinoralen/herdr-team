@@ -39,7 +39,7 @@ const scenario = process.env.SCENARIO;
 const state = ${JSON.stringify(path.join(fixture.root, 'agent.json'))};
 const started = fs.existsSync(state);
 const pane = { pane_id: 'w2:p2', workspace_id: 'w2', terminal_id: started && scenario === 'changed' ? 'other' : 't2',
-  agent: started ? 'codex' : scenario === 'busy' ? 'claude' : null, agent_status: 'idle' };
+  agent: started ? fs.readFileSync(state, 'utf8') : scenario === 'busy' ? 'claude' : null, agent_status: 'idle' };
 const out = result => console.log(JSON.stringify({result}));
 const fail = code => { console.error(JSON.stringify({error: {code, message: code}})); process.exit(1); };
 if (args[0] === 'pane' && args[1] === 'list') out({panes: [pane]});
@@ -52,8 +52,8 @@ else if (args[0] === 'pane') {
     const tick = Bun.spawnSync([...${JSON.stringify(COMMAND)}, 'tick'], {env: process.env});
     if (tick.exitCode !== 0) process.exit(tick.exitCode);
   }
-  fs.writeFileSync(state, '{}');
-  out({agent: {...pane, agent: 'codex'}});
+  fs.writeFileSync(state, args[args.indexOf('--kind') + 1]);
+  out({agent: {...pane, agent: args[args.indexOf('--kind') + 1]}});
 } else if (args[1] === 'prompt') {
   if (scenario === 'prompt-timeout') fail('timeout');
   if (scenario === 'leave-on-prompt') {
@@ -189,4 +189,51 @@ test('remote startup requires a description even with a handle and initial task'
   assert.equal(result.code, 1);
   assert.match(result.stderr, /missing required argument 'description'/);
   assert.equal((await calls()).length, 0);
+});
+
+test('remote startup forwards a model as harness arguments', async () => {
+  const { run, calls } = await remote();
+  const result = await run([...JOIN, '--model', 'example/model-v1']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual((await calls()).find((args) => args[1] === 'start')!.slice(-3), [
+    '--',
+    '--model',
+    'example/model-v1',
+  ]);
+});
+
+test('model selection requires startup and validates before changing membership', async () => {
+  const { run, calls } = await remote();
+  assert.match(
+    (await run(['join', '--model', 'example', 'role'])).stderr,
+    /--model requires --agent/,
+  );
+  for (const model of [
+    '',
+    '--unsafe',
+    'two words',
+    'bad\nmodel',
+    'bad\tmodel',
+    'bad\x07model',
+    'bad\x7fmodel',
+  ]) {
+    const result = await run([...JOIN, '--model', model]);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /model identifier/);
+  }
+  assert.equal((await calls()).length, 0);
+});
+
+test('remote startup preserves Claude extended-context model aliases', async () => {
+  for (const model of ['sonnet[1m]', 'opus[1m]']) {
+    const { run, calls } = await remote();
+    const args = JOIN.map((value) => (value === 'codex' ? 'claude' : value));
+    const result = await run([...args, '--model', model]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual((await calls()).find((args) => args[1] === 'start')!.slice(-3), [
+      '--',
+      '--model',
+      model,
+    ]);
+  }
 });
