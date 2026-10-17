@@ -37,16 +37,10 @@ export function admissionProblem(
   return dup ? `This agent already joined as @${dup.handle}.` : null;
 }
 
-// The agent a stored member is still running as, found by its terminal; undefined if the terminal
-// is gone, or now runs a different agent or a new session of it (then the member has left).
+// Follow pane moves by terminal, while accepting any agent or session in that pane.
 export function stillThere(stored: Member, agents: Agent[]): Agent | undefined {
-  const live = agents.find((a) => a.terminal_id === stored.terminal_id);
-  if (!live || (live.agent && live.agent !== stored.agent)) {
-    return undefined;
-  }
-  const session = live.agent_session?.value;
-  if (session && stored.session && session !== stored.session) {
-    return undefined;
-  }
-  return live;
+  return (
+    agents.find((a) => a.pane_id === stored.pane_id) ??
+    agents.find((a) => a.terminal_id === stored.terminal_id)
+  );
 }

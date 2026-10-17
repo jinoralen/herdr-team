@@ -33,7 +33,7 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   right before each prompt, but Herdr accepts prompts for working agents, so a user typing at that
   same instant can still race it.
 - **A delivery counts once the agent starts a turn on it.** Until then the message stays queued, so a
-  crash never loses one.
+  crash never silently loses one. If no agent is present, the message is dropped and its author told.
 - **No unmarked re-send.** If a prompt fails in a way where the text may have arrived, it isn't sent
   again on its own; it goes out with the next delivery marked "may repeat", and its author is warned
   unless it was an FYI or the author has left ([ADR 0006](../adr/0006-no-unmarked-resend.md)).
@@ -57,7 +57,8 @@ another pass took over, can finish its prompt while the other sends the same mes
 Deliveries wait, and the next tick that reaches Herdr sends them.
 
 **Why did a message never arrive?**
-Its recipient is busy, blocked on a dialog, or not recognized by Herdr; `status` says which. A
+Its recipient may be busy or blocked on a dialog; `status` says which. Without a recognized agent
+in its pane, messages are dropped and their authors told. A
 message marked "may not have arrived" also tells its author.
 
 ## It's working if

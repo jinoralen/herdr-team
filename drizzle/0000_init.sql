@@ -14,7 +14,6 @@ CREATE TABLE `members` (
 	`status` text NOT NULL,
 	`terminal_id` text,
 	`agent` text,
-	`session` text,
 	`reason` text,
 	`held` text,
 	PRIMARY KEY(`room`, `handle`),

@@ -120,7 +120,7 @@ export class Store {
     return now && now.joined_at === m.joined_at && now.status === 'active' ? now : null;
   }
 
-  admit(pending: Member, agent: Pick<Member, 'terminal_id' | 'agent' | 'session'>): boolean {
+  admit(pending: Member, agent: Pick<Member, 'terminal_id' | 'agent'>): boolean {
     return this.change(pending, ['pending'], { status: 'active', ...agent, held: null });
   }
 
@@ -138,10 +138,6 @@ export class Store {
 
   setHeld(m: Member, held: string | null): boolean {
     return this.change(m, ['active'], { held });
-  }
-
-  setSession(m: Member, session: string): boolean {
-    return this.change(m, ['active'], { session });
   }
 
   private change(m: Member, from: MemberStatus[], set: Partial<Member>): boolean {
@@ -170,7 +166,6 @@ export class Store {
       status: m.status,
       terminal_id: m.terminal_id,
       agent: m.agent,
-      session: m.session,
       reason: m.reason,
       held: m.held,
     };

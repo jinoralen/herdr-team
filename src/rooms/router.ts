@@ -7,7 +7,7 @@ import { type Member, type MemberStatus, Store } from '#store';
 import { deliver } from './delivery.ts';
 import { admitPending, restoreMembers } from './membership.ts';
 
-// live: the member's agent in this tick's `herdr agent list`; null while Herdr hasn't detected it yet.
+// live: the pane in this tick's `herdr agent list`, including panes without a recognized agent.
 export type RuntimeMember = Member & { live: Agent | null };
 type Log = (text: string) => void;
 // active: whether this router may still act; the tick passes a check that it still holds the lock.

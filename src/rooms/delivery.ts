@@ -14,11 +14,9 @@ import { heldReason, stillThere } from './rules.ts';
 // bigger than this goes out in order over several deliveries; any one message fits (MAX_MESSAGE_CHARS).
 const MAX_PROMPT_BYTES = 100_000;
 
-// Errors Herdr reports before typing anything, so the messages simply wait for the next pass:
-// the agent is stuck on a question, or its pane is gone (the next pass removes the member).
+// A blocked agent received nothing; keep its messages for the next pass.
 const NOTHING_SENT: Record<string, string> = {
   agent_blocked: 'became blocked; will retry when it is ready',
-  agent_not_found: 'is no longer in Herdr; nothing was sent',
 };
 
 // Posts and warnings prompt their recipient; FYI posts, join/leave notices, and messages of a delivery
@@ -52,11 +50,11 @@ async function deliverTo(room: Router, runtime: RuntimeMember): Promise<void> {
   // Posts from agents whose join isn't confirmed yet wait; they are dropped if it is refused.
   const pending = new Set(room.store.members('pending').map((m) => m.handle));
   const queued = room.store.queued(member.handle).filter((q) => !pending.has(q.from));
-  if (!queued.some(prompts)) {
+  if (!queued.length || (runtime.live?.agent && !queued.some(prompts))) {
     return;
   }
-  const live = await readyAgent(room, runtime, member, queued.length);
-  if (live) {
+  const live = await readyAgent(room, runtime, member, queued);
+  if (live && queued.some(prompts)) {
     await prompt(room, member, live, fitting(room, member, queued));
   }
 }
@@ -67,20 +65,48 @@ async function readyAgent(
   room: Router,
   runtime: RuntimeMember,
   member: Member,
-  waiting: number,
+  queued: Queued[],
 ): Promise<Agent | null> {
-  // The same identity check as at the start of the pass: terminal, agent kind and session.
+  // Recheck the pane immediately before typing.
   const now = runtime.live && (await room.herdr.agent(runtime.live.pane_id));
   const found = now ? stillThere(member, [now]) : undefined;
   const live = found?.agent ? found : null;
+  if (!live) {
+    failDelivery(room, member, queued);
+    return null;
+  }
   const held = heldReason(live);
   if (held && held !== member.held && room.store.setHeld(member, held)) {
-    room.log(`… holding ${waiting} message(s) for @${member.handle}: ${held}.`);
+    room.log(`… holding ${queued.length} message(s) for @${member.handle}: ${held}.`);
   }
   if (!held && member.held) {
     room.store.setHeld(member, null);
   }
   return held ? null : live;
+}
+
+// No agent is present: discard these items and report each lost post, including FYIs.
+function failDelivery(room: Router, member: Member, entries: Queued[]): void {
+  room.store.transaction(() => {
+    if (!room.active() || !room.store.current(member)) {
+      return;
+    }
+    const ids = entries.map((e) => e.id);
+    room.store.setHeld(member, null);
+    room.store.withdrawWarnings(member.handle, ids);
+    const handles = room.store.handles();
+    for (const e of entries) {
+      if (isPost(e) && handles.includes(e.from)) {
+        room.store.enqueue(
+          member.handle,
+          `Your message ${e.id} to @${member.handle} could not be delivered: no agent is running in its pane. The message was dropped.`,
+          [e.from],
+          { kind: 'undelivered', re: e.id },
+        );
+      }
+    }
+    room.store.dequeue(member.handle, ids);
+  });
 }
 
 // The oldest messages that fit in one prompt (at least one), and that prompt.
@@ -140,6 +166,10 @@ async function prompt(
   } catch (caught) {
     const error = caught as { code?: string; message: string };
     const unsent = error.code ? NOTHING_SENT[error.code] : undefined;
+    if (error.code === 'agent_not_found') {
+      failDelivery(room, member, entries);
+      return;
+    }
     if (unsent) {
       room.store.transaction(() => {
         room.store.setUnsure(member.handle, fresh, false);

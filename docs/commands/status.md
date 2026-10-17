@@ -21,7 +21,7 @@ more. If an answer was posted as `--fyi`, it woke nobody, so the asker never hea
 
 **Why is a message waiting?**
 `status` gives the reason per member: it is working, waiting on an approval in its pane, or Herdr
-hasn't recognized its agent yet.
+cannot take input yet. If no agent is recognized in its pane, posts are dropped and their senders told.
 
 **Where are errors from ticks?**
 In `status`'s recent activity, and in Herdr's plugin log:

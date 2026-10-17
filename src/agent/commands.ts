@@ -77,7 +77,6 @@ function newMember(description: string, pane: string): Omit<Member, 'handle'> {
     status: 'pending',
     terminal_id: null,
     agent: null,
-    session: null,
     reason: null,
     held: null,
   };

@@ -43,10 +43,8 @@ export const service = sqliteTable(
 
 // A room is a Herdr workspace; its ID is the room column here and in queue and log.
 // pane_id: the pane the agent joined from (HERDR_PANE_ID in its environment, fixed for its life);
-// it identifies the agent's commands. Herdr follows the agent itself by terminal_id, even if the
-// pane moves.
-// session: Herdr's id for the agent's conversation, once Herdr reports it; a new session in the same
-// terminal is a different conversation, which never saw the room's rules, so the member is removed.
+// it identifies commands from the pane. terminal_id follows pane moves; agent records its kind
+// at admission for display, and does not restrict delivery.
 // held: why its messages wait, as last logged, so each reason is logged once across ticks.
 export const members = sqliteTable(
   'members',
@@ -59,7 +57,6 @@ export const members = sqliteTable(
     status: text({ enum: MEMBER_STATUSES }).notNull(),
     terminal_id: text(),
     agent: text(),
-    session: text(),
     reason: text(),
     held: text(),
   },
