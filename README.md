@@ -25,7 +25,7 @@ Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/d
 | `bun test` | run the tests (straight from `src/`, no build) |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
 | `bun run build` | compile `dist/herdr-agent-hub`; Herdr and agents run it, so rebuild after editing `src/` |
-| `bun run db:generate` | after changing the tables in `src/store/tables.ts`: write the next migration to `drizzle/`, then add it to `MIGRATIONS` in `src/store/db.ts` |
+| `bun run db:generate` | after changing the tables in `src/store/tables.ts`: regenerate the one migration, `drizzle/0000_init.sql` (state is disposable, so there are no upgrade migrations; see `docs/adr/0010-state-is-disposable.md`) |
 | `bun run verify` | lint, type check, Knip, then the tests |
 | `bun check` | type check `src/` (Bun's built-in checker) |
 | `bun run lint`, `bun run format` | Biome: check, or apply formatting and safe fixes |
@@ -135,4 +135,4 @@ Opening the database applies any migrations from `drizzle/` it doesn't have yet 
 - One machine, one Herdr server. A pane is in at most one room: its workspace's.
 - Workspace IDs are Herdr's; if Herdr reuses an ID for a new workspace whose room still has members (e.g. ones Herdr hasn't recognized again), those members stay in the room.
 
-Until the first release, the schema stays in the one migration `drizzle/0000_init.sql`, regenerated when `src/store/tables.ts` changes. A database made by an earlier development build is set aside automatically (see above).
+The schema stays in the one migration `drizzle/0000_init.sql`, regenerated when `src/store/tables.ts` changes: state is disposable, so a database made from another schema is set aside automatically (see above) rather than upgraded.

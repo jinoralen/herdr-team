@@ -1,4 +1,5 @@
-// Thin adapter over the installed `herdr` CLI. Only ticks use it.
+// Thin adapter over the installed `herdr` CLI. Only ticks use it. What it relies on from Herdr:
+// docs/herdr.md.
 import { z } from 'zod';
 import { type Agent, AgentSchema, type Herdr } from './types.ts';
 
