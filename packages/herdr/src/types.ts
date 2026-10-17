@@ -24,3 +24,25 @@ export interface Herdr {
   prompt(paneId: string, text: string): Promise<void>;
   startAgent(options: { kind: string; paneId: string; args?: string[] }): Promise<Agent>;
 }
+
+// Pane topology, including shells with no recognized agent.
+export const PaneSchema = z.object({
+  pane_id: z.string(),
+  terminal_id: z.string(),
+  tab_id: z.string(),
+  workspace_id: z.string(),
+});
+export type Pane = z.infer<typeof PaneSchema>;
+export type NewTab = { tab: string; pane: string };
+
+export interface LayoutHerdr extends Herdr {
+  listPaneTopology(workspace?: string): Promise<Pane[]>;
+  createTab(options: { workspace: string; cwd: string; label: string }): Promise<NewTab>;
+  listTabs(): Promise<{ tab_id: string; label?: string; workspace_id: string }[]>;
+  renameTab(tab: string, label: string): Promise<void>;
+  movePane(
+    pane: string,
+    options: { tab: string; target: string; direction: 'right' | 'down' },
+  ): Promise<void>;
+  closePane(pane: string): Promise<void>;
+}

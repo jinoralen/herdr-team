@@ -1,0 +1,20 @@
+name: review
+lead:
+  kind: codex
+  prompt: Coordinate the reviewers and report findings to the user.
+shared:
+  prompt: Review only; do not edit the shared checkout.
+tabs:
+  reviewers:
+    layout: columns
+agents:
+  architecture:
+    kind: claude
+    tab: reviewers
+    cwd: ..
+    prompt: Review architecture when the lead assigns work. Report to the lead.
+  correctness:
+    kind: codex
+    tab: reviewers
+    cwd: ..
+    prompt: Review correctness when the lead assigns work. Report to the lead.

@@ -21,4 +21,5 @@ jobs:
       - run: bun run verify
       - run: bun run build
       - run: ./dist/herdr-agent-hub --help
-      - run: HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli
+      - run: ./dist/herdr-compose --help
+      - run: HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli ./tests/compose

@@ -1,0 +1,33 @@
+{
+  "name": "@herdr/compose",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Declarative agent teams and pane layouts in Herdr",
+  "exports": {
+    ".": "./src/compose/index.ts",
+    "./cli": "./src/compose/main.ts"
+  },
+  "imports": {
+    "#compose": "./src/compose/index.ts",
+    "#store": "./src/store/index.ts"
+  },
+  "scripts": {
+    "build": "bun build --compile --minify src/compose/main.ts --outfile ../../dist/herdr-compose",
+    "dev": "bun src/compose/main.ts",
+    "typecheck": "bun check",
+    "db:generate": "rm -rf drizzle && drizzle-kit generate --name init"
+  },
+  "dependencies": {
+    "@commander-js/extra-typings": "15.0.0",
+    "commander": "15.0.0",
+    "@herdr/herdr": "workspace:*",
+    "@herdr/terminal": "workspace:*",
+    "zod": "^4.6.5",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "@herdr/hub": "workspace:*",
+    "drizzle-kit": "0.31.11"
+  }
+}

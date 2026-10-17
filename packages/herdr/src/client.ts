@@ -63,7 +63,7 @@ function failure(args: string[], killed: boolean, stdout: string, stderr: string
   return new HerdrError('process_exit', (stderr || stdout).trim().slice(0, 500));
 }
 
-async function run(
+export async function run(
   bin: string,
   args: string[],
   { timeout, env }: { timeout: number; env: NodeJS.ProcessEnv },
