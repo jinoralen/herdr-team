@@ -97,12 +97,23 @@ program
       'to agents that are idle, then exit. The herdr-agent-hub Herdr plugin runs it when an\n' +
       'agent changes state; running it by hand is harmless.',
   )
-  .action(async () => {
-    await runTick();
+  .option('--startup', "Herdr's server just started: clear every room first (agents join again)")
+  .action(async (options) => {
+    await runTick(options.startup ?? false);
   });
 
+// Without HERDR_SOCKET_PATH, a tick can't tell which Herdr session started, so clearing could empty
+// another session's rooms: the rooms are kept instead.
+function startupKnown(startup: boolean, log: (room: string | null, text: string) => void): boolean {
+  if (startup && !process.env.HERDR_SOCKET_PATH) {
+    log(null, '! tick --startup without HERDR_SOCKET_PATH: rooms were not cleared.');
+    return false;
+  }
+  return startup;
+}
+
 // Run by Herdr hooks. Output goes to Herdr's plugin log; what matters is logged for `status`.
-async function runTick(): Promise<void> {
+async function runTick(startup: boolean): Promise<void> {
   const root = rootDir();
   const log = (room: string | null, text: string): void => appendLog(root, room, text);
   try {
@@ -110,6 +121,7 @@ async function runTick(): Promise<void> {
       root,
       herdr: cliHerdr(),
       log,
+      startup: startupKnown(startup, log),
     });
   } catch (error) {
     try {

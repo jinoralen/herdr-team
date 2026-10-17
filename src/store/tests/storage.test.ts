@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dbPath, readLog, Store } from '#store';
+import { dbPath, readLog, rootDir, Store } from '#store';
 
 function directory(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-storage-'));
@@ -98,4 +98,16 @@ test('replacing an incompatible database waits for the replace lock held by anot
     1,
     'set aside once',
   );
+});
+
+test('each Herdr session gets its own state directory, named for its socket', () => {
+  const base = { HERDR_AGENT_HUB_DIR: '/tmp/hub' };
+  assert.equal(rootDir(base), '/tmp/hub', 'outside Herdr');
+  const main = rootDir({ ...base, HERDR_SOCKET_PATH: '/home/u/.config/herdr/herdr.sock' });
+  const codex = rootDir({
+    ...base,
+    HERDR_SOCKET_PATH: '/home/u/.config/herdr/sessions/codex/herdr.sock',
+  });
+  assert.match(main, /^\/tmp\/hub\/session-[0-9a-f]+$/);
+  assert.notEqual(main, codex);
 });

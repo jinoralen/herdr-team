@@ -6,7 +6,7 @@
 // to run once more and exits, so no request is lost and passes never overlap. Only passes call Herdr,
 // so deliveries are naturally serialized.
 import type { Agent, Herdr } from '#herdr';
-import { busyRooms } from '#store';
+import { busyRooms, clearRooms } from '#store';
 import { PassLock } from './pass-lock.ts';
 import { Router } from './router.ts';
 
@@ -20,7 +20,7 @@ export class Service {
   log: ServiceLog;
   now: () => number;
   rooms = new Map<string, Router>(); // workspace ID -> its room, for this pass
-  agents: Agent[] | null = null; // this pass's `herdr agent list`; null when Herdr is unreachable
+  agents: Agent[] | null = null; // this pass's `herdr pane list`; null when Herdr is unreachable
   private readonly lock: PassLock;
 
   constructor({ root, herdr, log = (): void => {}, now = Date.now }: ServiceOptions) {
@@ -84,7 +84,7 @@ export class Service {
       return;
     }
     try {
-      this.agents = await this.herdr.listAgents();
+      this.agents = await this.herdr.listPanes();
     } catch (caught) {
       const error = caught as { code?: string; message: string };
       this.log(null, `! Herdr unavailable (${error.code}): ${error.message}. Deliveries wait.`);
@@ -134,8 +134,16 @@ async function holding<T>(service: Service, fn: () => Promise<T>): Promise<T> {
 }
 
 // `herdr-agent-hub tick`: runs passes until nobody asked for another one. Returns false if another
-// pass held the lock (it was asked to run again instead).
-export async function tick(options: ServiceOptions): Promise<boolean> {
+// pass held the lock (it was asked to run again instead). startup: Herdr's server just started, so
+// the rooms of the one before are cleared first (a pass of that one still running then finds its
+// members gone, and skips them).
+export async function tick({
+  startup = false,
+  ...options
+}: ServiceOptions & { startup?: boolean }): Promise<boolean> {
+  if (startup) {
+    clearRooms(options.root);
+  }
   const service = new Service(options);
   if (!service.acquire()) {
     return false;

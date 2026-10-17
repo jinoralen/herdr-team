@@ -3,7 +3,7 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { join, leave, message } from '#agent';
 import { Store } from '#store';
-import { installed } from '#testing';
+import { installed, kinds } from '#testing';
 
 // A room with claude, codex and pi; pi posts to everyone, and `during` runs while the pass prompts
 // claude, the first recipient (members are served in handle order), before it reaches codex.
@@ -34,16 +34,12 @@ test("a pass's outdated copy of a member can't undo a leave or a newer join", as
   join({ description: 'codex', env: env('p2') });
   const pendingSnapshot = store().member('codex')!; // what a pass read
   leave({ env: env('p2') }); // meanwhile, the agent leaves
-  assert.equal(
-    store().admit(pendingSnapshot, { terminal_id: 't', agent: 'codex', session: null }),
-    false,
-  );
+  assert.equal(store().admit(pendingSnapshot, { terminal_id: 't', agent: 'codex' }), false);
   assert.equal(store().reject(pendingSnapshot, 'x'), false);
   assert.equal(store().member('codex')!.status, 'left', 'not resurrected');
   const activeSnapshot = store().member('claude')!;
   leave({ env: env('p1') });
   assert.equal(store().setHeld(activeSnapshot, 'it is working'), false);
-  assert.equal(store().setSession(activeSnapshot, 's1'), false);
   assert.equal(store().remove(activeSnapshot, 'gone', 'gone'), null);
   assert.equal(store().member('claude')!.status, 'left');
   assert.equal(store().current(activeSnapshot), null);
@@ -129,32 +125,32 @@ test('a member that leaves while Herdr is being asked about its pane is not type
   const { herdr, env, say, joinAs, store } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
-  const real = herdr.agent;
-  herdr.agent = async function (pane) {
+  const real = herdr.pane;
+  herdr.pane = async function (pane) {
     leave({ env: env('p1') }); // e.g. claude ends a turn in which it ran leave
     return real.call(this, pane);
   };
   await say('p2', 'hello');
-  herdr.agent = real;
+  herdr.pane = real;
   assert.equal(herdr.promptsTo('p1').length, 0);
   assert.equal(store().member('claude')!.status, 'left');
 });
 
-test('a new session found just before the prompt is not typed into', async () => {
+test('a new session found just before the prompt receives the message', async () => {
   const { herdr, say, joinAs } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
   herdr.set('p1', { agent_session: { value: 's1' } });
   await say('p2', 'first'); // records s1
   herdr.set('p1', { agent_status: 'idle' });
-  const real = herdr.agent;
-  herdr.agent = async function (pane) {
+  const real = herdr.pane;
+  herdr.pane = async function (pane) {
     herdr.set('p1', { agent_session: { value: 's2' } }); // claude restarted meanwhile
     return real.call(this, pane);
   };
   await say('p2', 'second');
-  herdr.agent = real;
-  assert.equal(herdr.promptsTo('p1').length, 1, 'only the first, before the restart');
+  herdr.pane = real;
+  assert.equal(herdr.promptsTo('p1').length, 2, 'both sessions receive messages');
 });
 
 test('Herdr failing for one member does not stop delivery to the others', async () => {
@@ -162,15 +158,51 @@ test('Herdr failing for one member does not stop delivery to the others', async 
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
   await joinAs('p3', 'pi');
-  const real = herdr.agent;
-  herdr.agent = async function (pane) {
+  const real = herdr.pane;
+  herdr.pane = async function (pane) {
     if (pane === 'p1') {
-      throw new Error('herdr agent get timed out');
+      throw new Error('herdr pane get timed out');
     }
     return real.call(this, pane);
   };
   await say('p3', 'to everyone');
-  herdr.agent = real;
-  assert.ok(logs.includes('error delivering to @claude: herdr agent get timed out'));
+  herdr.pane = real;
+  assert.ok(logs.includes('error delivering to @claude: herdr pane get timed out'));
   assert.equal(herdr.promptsTo('p2').length, 1, 'codex still served');
+});
+
+test('an agent disappearing just before delivery drops the message and warns its sender', async () => {
+  const { herdr, say, joinAs, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  const real = herdr.pane;
+  herdr.pane = async function (pane) {
+    if (pane === 'p1') {
+      herdr.set('p1', { agent: null });
+    }
+    return real.call(this, pane);
+  };
+  await say('p2', 'hello');
+  assert.equal(herdr.promptsTo('p1').length, 0);
+  assert.deepEqual(kinds(store(), 'claude'), ['joined'], 'the post is dropped; the notice waits');
+  assert.match(herdr.promptsTo('p2')[0]!.text, /m\d+ to @claude was not delivered/);
+});
+
+test('a pane closing just before delivery keeps its messages for the next pass', async () => {
+  const { herdr, say, joinAs, tick, handles, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  const real = herdr.pane;
+  herdr.pane = async function (pane) {
+    if (pane === 'p1') {
+      herdr.agents = herdr.agents.filter((a) => a.pane_id !== 'p1');
+    }
+    return real.call(this, pane);
+  };
+  await say('p2', 'hello');
+  herdr.pane = real;
+  assert.equal(herdr.promptsTo('p2').length, 0, 'no drop warning: the pane is gone, not empty');
+  assert.deepEqual(kinds(store(), 'claude'), ['joined', 'message']);
+  await tick();
+  assert.deepEqual(handles(), ['codex']);
 });

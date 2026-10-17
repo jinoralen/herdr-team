@@ -42,11 +42,10 @@ export const service = sqliteTable(
 );
 
 // A room is a Herdr workspace; its ID is the room column here and in queue and log.
-// pane_id: the pane the agent joined from (HERDR_PANE_ID in its environment, fixed for its life);
-// it identifies the agent's commands. Herdr follows the agent itself by terminal_id, even if the
-// pane moves.
-// session: Herdr's id for the agent's conversation, once Herdr reports it; a new session in the same
-// terminal is a different conversation, which never saw the room's rules, so the member is removed.
+// pane_id: the pane the member joined from (HERDR_PANE_ID in its agent's environment, fixed for the
+// process's life); it identifies commands from the pane. terminal_id and agent are the pane's as Herdr
+// last reported them, so a moved pane is followed and status shows its agent; neither restricts
+// delivery.
 // held: why its messages wait, as last logged, so each reason is logged once across ticks.
 export const members = sqliteTable(
   'members',
@@ -59,7 +58,6 @@ export const members = sqliteTable(
     status: text({ enum: MEMBER_STATUSES }).notNull(),
     terminal_id: text(),
     agent: text(),
-    session: text(),
     reason: text(),
     held: text(),
   },
@@ -86,8 +84,9 @@ export const members = sqliteTable(
 // kind: a 'message' (a post, which prompts the recipient); an 'fyi' post, which needs no reply and so
 // prompts nobody, arriving with the recipient's next message; a notice that the sender 'joined' or
 // 'left' the room, which prompts nobody and arrives with the recipient's next message; or a warning
-// to a post's author that its delivery to the sender may not have arrived ('undelivered', which
-// prompts, so the author learns it even if nothing else is said).
+// to a post's author that its delivery to the sender may not have arrived, or was dropped because no
+// agent runs in the sender's pane ('undelivered', which prompts, so the author learns it even if
+// nothing else is said).
 // re: the id of the message this one answers, shown to the recipient (it routes nothing).
 // unsure: a delivery of it failed in a way where it may still have arrived; it is not sent on its
 // own again, only repeated (marked as such) with the recipient's next message.

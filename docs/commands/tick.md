@@ -11,14 +11,17 @@ between ticks: the hub has no daemon ([ADR 0001](../adr/0001-one-shot-plugin-no-
 agent pane ──join / message──▶ chat.db (members, queue, log)
                                   ▲
 Herdr ── agent state changed, ──▶ tick (passes until none is requested, then exits)
-         pane closed, startup        ├─ herdr agent list / get
+         pane closed, startup        ├─ herdr pane list / get
                                      └─ herdr agent prompt (only to idle/done agents)
 ```
 
 ## When to use it
 
 - **Who runs it**: Herdr, through the plugin manifest, on every agent state change, pane close and
-  startup. That's enough: a post is delivered when its author's turn ends, and a message waiting for
+  startup. At startup it runs as `tick --startup`, which first clears every room of the server
+  before: its panes are gone, and their IDs may be handed out again
+  ([ADR 0010](../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
+  without `HERDR_SOCKET_PATH`, it can't tell which session that is and clears nothing. That's enough: a post is delivered when its author's turn ends, and a message waiting for
   a busy agent when that agent goes idle; both are state changes.
 - **Trigger**: you don't run it. Running it by hand is harmless.
 
@@ -33,7 +36,8 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   right before each prompt, but Herdr accepts prompts for working agents, so a user typing at that
   same instant can still race it.
 - **A delivery counts once the agent starts a turn on it.** Until then the message stays queued, so a
-  crash never loses one.
+  crash never silently loses one: a post is dropped only when no agent is running in its
+  recipient's pane, and then its author is told.
 - **No unmarked re-send.** If a prompt fails in a way where the text may have arrived, it isn't sent
   again on its own; it goes out with the next delivery marked "may repeat", and its author is warned
   unless it was an FYI or the author has left ([ADR 0006](../adr/0006-no-unmarked-resend.md)).
@@ -57,8 +61,9 @@ another pass took over, can finish its prompt while the other sends the same mes
 Deliveries wait, and the next tick that reaches Herdr sends them.
 
 **Why did a message never arrive?**
-Its recipient is busy, blocked on a dialog, or not recognized by Herdr; `status` says which. A
-message marked "may not have arrived" also tells its author.
+Its recipient is busy or blocked on a dialog; `status` says which. If no agent was running in the
+recipient's pane, the post was dropped and its author got a "was not delivered" warning. A message
+marked "may not have arrived" also tells its author.
 
 ## It's working if
 

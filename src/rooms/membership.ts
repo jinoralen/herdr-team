@@ -1,42 +1,39 @@
-// Who is in a room, checked against Herdr at the start of each pass: stored members are followed to
-// their terminals, and pending joins are admitted or refused. Like delivery.ts, these take the room.
+// Who is in a room, checked against Herdr at the start of each pass: stored members are found by
+// their panes, and pending joins are admitted or refused. Like delivery.ts, these take the room.
 
 import type { Agent } from '#herdr';
 import type { Member } from '#store';
 import type { Router } from './router.ts';
-import { admissionProblem, stillThere } from './rules.ts';
+import { admissionProblem, findPane } from './rules.ts';
 
-// Follows each stored member to its terminal. A member whose terminal is gone, or runs a different
-// agent now, leaves the room; one Herdr hasn't recognized yet (e.g. just after Herdr restarted)
-// stays, and gets nothing until it is recognized. A moved pane has a new id in `live`; deliveries
-// go there.
+// Finds each stored member's pane. Membership belongs to the pane, whichever agent or session runs in
+// it; a member whose pane closed, or moved to another workspace, leaves the room. (A pane keeps its
+// id within its workspace; moved to another, it gets a new one, and only its terminal is the same.)
 export function restoreMembers(room: Router, agents: Agent[]): void {
-  const gone: Member[] = [];
+  const gone: [Member, string][] = [];
   for (const stored of room.store.members('active')) {
-    const live = stillThere(stored, agents);
+    const live = findPane(stored, agents);
     if (live) {
-      room.addRuntime(withSession(room, stored, live), live.agent ? live : null);
+      room.addMember(rebound(room, stored, live));
+    } else if (agents.some((a) => a.terminal_id === stored.terminal_id)) {
+      gone.push([stored, 'left: its pane moved to another workspace']);
     } else {
-      gone.push(stored);
+      gone.push([stored, 'left: pane closed']);
     }
   }
-  for (const stored of gone) {
-    room.removeMember(
-      stored,
-      'gone',
-      'left: pane closed, or a different agent or new session is running there',
-    );
+  for (const [stored, why] of gone) {
+    room.removeMember(stored, 'gone', why);
   }
 }
 
-// Herdr may report an agent's session only some time after detecting it: recorded once it does.
-function withSession(room: Router, stored: Member, live: Agent): Member {
-  const session = live.agent_session?.value;
-  if (stored.session || !session) {
+// Records the pane's terminal and agent as Herdr reports them now, so `status` shows the agent there
+// and a move away is told apart from a close. An empty pane keeps the last kind.
+function rebound(room: Router, stored: Member, live: Agent): Member {
+  const bound = { terminal_id: live.terminal_id, agent: live.agent ?? stored.agent };
+  if (bound.terminal_id === stored.terminal_id && bound.agent === stored.agent) {
     return stored;
   }
-  room.store.setSession(stored, session);
-  return { ...stored, session };
+  return room.store.rebind(stored, bound) ? { ...stored, ...bound } : stored;
 }
 
 export function admitPending(room: Router, agents: Agent[]): void {
@@ -53,11 +50,10 @@ export function admitPending(room: Router, agents: Agent[]): void {
     const bound = {
       terminal_id: agent.terminal_id,
       agent: agent.agent,
-      session: agent.agent_session?.value ?? null,
     };
     // Its "joined" notice and anything it posted meanwhile were queued already, and go out now.
     if (room.store.admit(pending, bound)) {
-      room.addRuntime({ ...pending, ...bound, status: 'active', held: null }, agent);
+      room.addMember({ ...pending, ...bound, status: 'active', held: null });
     }
   }
 }

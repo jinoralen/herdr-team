@@ -23,7 +23,7 @@ async function routing() {
   // Exercise routing in isolation. Production delivery is wired through locked passes later.
   async function pass() {
     const room = new Router({ root, room: 'w1', herdr });
-    room.sync(await herdr.listAgents());
+    room.sync(await herdr.listPanes());
     await room.step();
     return room;
   }

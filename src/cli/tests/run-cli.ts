@@ -9,7 +9,7 @@ import path from 'node:path';
 
 const MAIN = path.join(import.meta.dir, '..', 'main.ts');
 
-// The fake herdr: agent list shows an idle codex and claude; prompts are appended to prompts.log.
+// The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
 const FAKE_HERDR = `#!/usr/bin/env bun
 const [cmd, sub, pane, text] = process.argv.slice(2);
 const out = (result) => console.log(JSON.stringify({ result }));
@@ -17,10 +17,10 @@ const agents = [
   { pane_id: 'p1', terminal_id: 't1', agent: 'codex', agent_status: 'idle' },
   { pane_id: 'p2', terminal_id: 't2', agent: 'claude', agent_status: 'idle' },
 ];
-if (cmd === 'agent' && sub === 'list') {
-  out({ agents });
-} else if (cmd === 'agent' && sub === 'get') {
-  out({ agent: agents.find((a) => a.pane_id === pane) });
+if (cmd === 'pane' && sub === 'list') {
+  out({ panes: agents });
+} else if (cmd === 'pane' && sub === 'get') {
+  out({ pane: agents.find((a) => a.pane_id === pane) });
 } else if (cmd === 'agent' && sub === 'prompt') {
   require('node:fs').appendFileSync(process.env.PROMPTS, pane + ': ' + text + '\\n');
   out({ type: 'ok' });
@@ -38,7 +38,8 @@ type Cli = {
   ) => Promise<Result>;
 };
 
-export function cli(): Cli {
+// env: more variables for every command, e.g. the HERDR_SOCKET_PATH Herdr gives a session.
+export function cli(env: Record<string, string> = {}): Cli {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-agent-hub-cli-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const herdr = path.join(root, 'herdr');
@@ -50,6 +51,7 @@ export function cli(): Cli {
     HERDR_AGENT_HUB_DIR: path.join(root, 'state'),
     HERDR_BIN_PATH: herdr,
     PROMPTS: promptsLog,
+    ...env,
   };
   const pane = { HERDR_ENV: '1', HERDR_PANE_ID: 'p1', HERDR_WORKSPACE_ID: 'w1' };
 

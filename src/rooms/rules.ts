@@ -1,5 +1,5 @@
 // The router's decisions, as plain functions of what it knows: why a delivery waits, whether a join
-// is admitted, whether a stored member is still there.
+// is admitted, and where a stored member's pane is now.
 
 import type { Agent } from '#herdr';
 import type { Member } from '#store';
@@ -7,10 +7,10 @@ import type { Member } from '#store';
 const READY = new Set(['idle', 'done']);
 
 // Why a woken member's messages can't be delivered right now, or null if they can.
-// live: the member's agent in this tick's `herdr agent list`, null if Herdr hasn't recognized it.
-export function heldReason(live: Agent | null): string | null {
-  if (!live) {
-    return 'Herdr has not recognized its agent yet';
+// live: the member's pane as Herdr reports it now.
+export function heldReason(live: Agent): string | null {
+  if (!live.agent) {
+    return 'no agent is running in its pane';
   }
   if (live.agent_status === 'blocked') {
     return 'waiting on an approval/question in its pane';
@@ -37,16 +37,8 @@ export function admissionProblem(
   return dup ? `This agent already joined as @${dup.handle}.` : null;
 }
 
-// The agent a stored member is still running as, found by its terminal; undefined if the terminal
-// is gone, or now runs a different agent or a new session of it (then the member has left).
-export function stillThere(stored: Member, agents: Agent[]): Agent | undefined {
-  const live = agents.find((a) => a.terminal_id === stored.terminal_id);
-  if (!live || (live.agent && live.agent !== stored.agent)) {
-    return undefined;
-  }
-  const session = live.agent_session?.value;
-  if (session && stored.session && session !== stored.session) {
-    return undefined;
-  }
-  return live;
+// The member's pane in Herdr's list, whichever agent or session runs in it now (or none); undefined if
+// the pane closed or moved to another workspace.
+export function findPane(stored: Member, agents: Agent[]): Agent | undefined {
+  return agents.find((a) => a.pane_id === stored.pane_id);
 }

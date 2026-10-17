@@ -120,7 +120,7 @@ export class Store {
     return now && now.joined_at === m.joined_at && now.status === 'active' ? now : null;
   }
 
-  admit(pending: Member, agent: Pick<Member, 'terminal_id' | 'agent' | 'session'>): boolean {
+  admit(pending: Member, agent: Pick<Member, 'terminal_id' | 'agent'>): boolean {
     return this.change(pending, ['pending'], { status: 'active', ...agent, held: null });
   }
 
@@ -136,12 +136,13 @@ export class Store {
     });
   }
 
-  setHeld(m: Member, held: string | null): boolean {
-    return this.change(m, ['active'], { held });
+  // The member's pane now has another terminal (it moved) or runs another agent.
+  rebind(m: Member, agent: Pick<Member, 'terminal_id' | 'agent'>): boolean {
+    return this.change(m, ['active'], agent);
   }
 
-  setSession(m: Member, session: string): boolean {
-    return this.change(m, ['active'], { session });
+  setHeld(m: Member, held: string | null): boolean {
+    return this.change(m, ['active'], { held });
   }
 
   private change(m: Member, from: MemberStatus[], set: Partial<Member>): boolean {
@@ -170,7 +171,6 @@ export class Store {
       status: m.status,
       terminal_id: m.terminal_id,
       agent: m.agent,
-      session: m.session,
       reason: m.reason,
       held: m.held,
     };

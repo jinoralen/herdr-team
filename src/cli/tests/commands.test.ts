@@ -99,3 +99,21 @@ test('status shows the room, its members and what ticks did', async () => {
   expect(stdout).toContain('m3 @codex → @claude: hello there');
   expect(stdout).toContain('→ delivered m3 to @claude');
 });
+
+test("tick --startup clears the session's rooms, but only when it knows the session", async () => {
+  const unknown = cli();
+  await unknown.run(['tick']);
+  await unknown.run(['join', 'codex'], { inPane: true });
+  await unknown.run(['tick', '--startup']);
+  const kept = await unknown.run(['status'], { inPane: true });
+  expect(kept.stdout).toContain('@codex');
+  expect(kept.stdout).toContain('rooms were not cleared');
+
+  const session = cli({ HERDR_SOCKET_PATH: '/tmp/herdr-test.sock' });
+  await session.run(['tick']);
+  await session.run(['join', 'codex'], { inPane: true });
+  await session.run(['tick', '--startup']);
+  const cleared = await session.run(['status'], { inPane: true });
+  expect(cleared.stdout).toContain('Members:\n  (none)');
+  expect(cleared.stdout).toContain('Herdr started: rooms cleared');
+});

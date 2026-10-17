@@ -37,7 +37,7 @@ test('a pane posts to the room of the workspace it joined from', async () => {
 test('ticks with no rooms do not call Herdr', async () => {
   const { herdr, tick } = await installed();
   let calls = 0;
-  herdr.listAgents = async () => {
+  herdr.listPanes = async () => {
     calls++;
     return [];
   };

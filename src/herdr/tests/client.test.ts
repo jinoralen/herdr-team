@@ -41,24 +41,34 @@ test('herdr JSON errors become coded errors', async () => {
 
 test('missing binary is reported clearly', async () => {
   await assert.rejects(
-    cliHerdr({ ...process.env, HERDR_BIN_PATH: '/nonexistent/herdr' }).listAgents(),
+    cliHerdr({ ...process.env, HERDR_BIN_PATH: '/nonexistent/herdr' }).listPanes(),
     { code: 'missing_binary' },
   );
 });
 
-test('listAgents parses the agent list', async () => {
+test('listPanes parses the pane list, panes without an agent included', async () => {
   const { bin } = fakeBinary(
-    `console.log(JSON.stringify({ id: 'x', result: { type: 'agent_list', agents: [{ pane_id: 'w1:p1', terminal_id: 't1', agent: 'claude', agent_status: 'idle' }] } }));`,
+    `console.log(JSON.stringify({ id: 'x', result: { type: 'pane_list', panes: [{ pane_id: 'w1:p1', terminal_id: 't1', agent: 'claude', agent_status: 'idle' }, { pane_id: 'w1:p2', terminal_id: 't2', agent_status: 'unknown' }] } }));`,
   );
-  const agents = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listAgents();
-  assert.equal(agents[0]!.agent, 'claude');
+  const panes = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listPanes();
+  assert.deepEqual(
+    panes.map((p) => p.agent),
+    ['claude', undefined],
+  );
+});
+
+test('a closed pane is null', async () => {
+  const { bin } = fakeBinary(
+    `console.error('{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}'); process.exit(1);`,
+  );
+  assert.equal(await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).pane('w1:p9'), null);
 });
 
 test('malformed agent records are rejected before reaching the router', async () => {
   const { bin } = fakeBinary(
-    `console.log(JSON.stringify({ result: { agents: [{ pane_id: 'p', terminal_id: 42, agent: 'codex', agent_status: 'idle' }] } }));`,
+    `console.log(JSON.stringify({ result: { panes: [{ pane_id: 'p', terminal_id: 42, agent: 'codex', agent_status: 'idle' }] } }));`,
   );
-  await assert.rejects(cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listAgents(), {
+  await assert.rejects(cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listPanes(), {
     code: 'invalid_response',
   });
 });
