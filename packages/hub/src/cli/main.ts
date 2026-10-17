@@ -3,8 +3,8 @@
 // Agents run the room commands; Herdr runs `tick`.
 
 import { Command } from '@commander-js/extra-typings';
+import { cliHerdr } from '@herdr/herdr';
 import { join, leave, message, parseTo, SELF, skill, status } from '#agent';
-import { cliHerdr } from '#herdr';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
 

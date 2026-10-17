@@ -1,0 +1,11 @@
+{
+  "name": "@herdr/terminal",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Terminal text sanitizing and shell quoting",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "bun check"
+  }
+}

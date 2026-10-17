@@ -30,7 +30,7 @@ agent's turn ends checks with Herdr that a recognized agent is really in that pa
 | It runs [`leave`](leave.md) | **Left** |
 
 A member is identified by the pane it joined from, whichever agent runs in it
-([ADR 0009](../adr/0009-member-identity-is-launch-pane.md)), so it can only post as itself.
+([ADR 0009](../../adr/0009-member-identity-is-launch-pane.md)), so it can only post as itself.
 
 ## Common questions
 

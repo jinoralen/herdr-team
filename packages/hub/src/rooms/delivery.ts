@@ -4,8 +4,8 @@
 // everything a prompt depends on is read again just before it: the member, whose posts may go out,
 // the member's queue, and the agent's state in Herdr.
 
+import type { Agent } from '@herdr/herdr';
 import { formatDelivery } from '#agent';
-import type { Agent } from '#herdr';
 import type { Member, Queued } from '#store';
 import type { Router } from './router.ts';
 import { findPane, heldReason } from './rules.ts';

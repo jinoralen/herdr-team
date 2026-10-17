@@ -40,12 +40,12 @@ EOF
 
 | Command | Run by | What it does |
 |---|---|---|
-| [`join`](docs/commands/join.md) | agent | Register this pane in its workspace's room and get the guide |
-| [`message`](docs/commands/message.md) | agent | Post to the room; `--to` alone decides who gets it |
-| [`skill`](docs/commands/skill.md) | agent | Print the guide again, e.g. after context compaction |
-| [`leave`](docs/commands/leave.md) | agent | Leave the room; the others are told |
-| [`status`](docs/commands/status.md) | anyone | Members, what waits and why, recent activity |
-| [`tick`](docs/commands/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents |
+| [`join`](docs/commands/hub/join.md) | agent | Register this pane in its workspace's room and get the guide |
+| [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it |
+| [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
+| [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
+| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity |
+| [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents |
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
 
@@ -78,28 +78,49 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 
 | | |
 |---|---|
-| `bun test` | run the tests (straight from `src/`, no build) |
+| `bun test` | run package and repository tests from source |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
-| `bun run build` | compile `dist/herdr-agent-hub`; Herdr and agents run it, so rebuild after editing `src/` |
-| `bun run db:generate` | after changing the tables in `src/store/tables.ts`: regenerate the one migration, `drizzle/0000_init.sql` |
+| `bun run build` | compile `dist/herdr-agent-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
+| `bun run db:generate` | after changing the tables in `packages/hub/src/store/tables.ts`: regenerate the one migration, `packages/hub/drizzle/0000_init.sql` |
 | `bun run verify` | lint, type check, Knip, then the tests |
-| `bun check` | type check `src/` (Bun's built-in checker) |
+| `bun check` | type check all packages and repository tests (Bun's built-in checker) |
 | `bun run lint`, `bun run format` | Biome: check, or apply formatting and safe fixes |
 | `bun run knip` | Knip: unused files, exports and dependencies |
 
 ### Code layout
 
-Each folder under `src/` is a module. Other modules import it as `#<module>` (for example `import { Store } from '#store'`; Node's subpath imports, listed under `imports` in `package.json`), which means its `index.ts`: the list of what it offers. The rest of its files are internal. Biome enforces this (`noRestrictedImports`), and keeps Drizzle and `bun:sqlite` inside `store/`.
+This is a Bun workspace. Each package owns its source, dependencies and TypeScript configuration.
+The root owns shared tooling, the lockfile and repository tests. Build outputs remain in `dist/` so
+the Herdr plugin manifest and installed commands keep their paths.
 
-| Module | What it does | Uses |
+| Package | Responsibility | Runtime workspace dependencies |
+|---|---|---|
+| [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `herdr`, `terminal` |
+| [`@herdr/herdr`](packages/herdr/) | Herdr CLI client and validated response types | — |
+| [`@herdr/terminal`](packages/terminal/) | Terminal text sanitizing and shell quoting | — |
+
+Shared packages expose only their `index.ts` through package `exports`. Within a package, modules
+import each other as `#<module>` (for example `import { Store } from '#store'`; Node's subpath
+imports, listed under `imports` in the package's `package.json`), which means its `index.ts`: the
+list of what it offers. The rest of its files are internal. Biome enforces this
+(`noRestrictedImports`), and keeps Drizzle and `bun:sqlite` inside `store/`. Imports between
+packages use `@herdr/...` names and declared `workspace:*` dependencies.
+
+| Hub module | What it does | Uses |
 |---|---|---|
 | `cli/` | the command line (`main.ts`, the entry point) | all of the below |
 | `rooms/` | admitting members and delivering what is queued for them; one pass at a time under a lock | `agent`, `store`, `herdr` |
 | `agent/` | what agents run (`join`, `message`, `status`, …) and the text they read | `store` |
 | `store/` | the SQLite database: tables, migrations, queries | — |
-| `herdr/` | the Herdr CLI client and the shape of what Herdr reports | — |
 
-Each module keeps its tests in its own `tests/` folder (`rooms/tests/delivery.test.ts`, `store/tests/store.test.ts`, …), one file per subject. Tests may use their own module's internal files, but other modules only through `index.ts`. Their shared helpers (a fake Herdr, a fresh state directory) are in `testing/`. The command line is tested by running the real program in a child process against a fake `herdr` executable (`cli/tests/`).
+Each hub module keeps its tests in its own `tests/` folder (`rooms/tests/delivery.test.ts`, `store/tests/store.test.ts`, …), one file per subject. Tests may use their own module's internal files, but other modules only through `index.ts`. Their shared helpers (a fake Herdr, a fresh state directory) are in `testing/`. The command line is tested by running the real program in a child process against a fake `herdr` executable (`tests/cli/`).
+
+```bash
+bun run build:hub                           # build only hub
+bun run --filter @herdr/hub test            # hub's package tests
+bun run --filter '@herdr/*' typecheck       # check each package independently
+HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli
+```
 
 `bun install` also installs a git pre-commit hook ([lefthook](https://lefthook.dev), `lefthook.yml`) that runs Biome on staged files, the type check, Knip and the tests. Skip it once with `git commit --no-verify`.
 

@@ -1,7 +1,7 @@
 // The router's decisions, as plain functions of what it knows: why a delivery waits, whether a join
 // is admitted, and where a stored member's pane is now.
 
-import type { Agent } from '#herdr';
+import type { Agent } from '@herdr/herdr';
 import type { Member } from '#store';
 
 const READY = new Set(['idle', 'done']);

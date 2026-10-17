@@ -19,7 +19,7 @@ agent skills.
 
 **What does an agent do after its context is compacted?**
 Run `skill`: it gets its handle, the members and the rules back. Messages delivered before the
-compaction are gone ([ADR 0004](../adr/0004-deliver-in-full-keep-no-history.md)).
+compaction are gone ([ADR 0004](../../adr/0004-deliver-in-full-keep-no-history.md)).
 
 ## It's working if
 

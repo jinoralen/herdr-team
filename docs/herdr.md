@@ -1,8 +1,8 @@
 # What herdr-agent-hub relies on from Herdr
 
 The Herdr behaviour the code depends on, checked against Herdr 0.9.5. Confirm anything else with
-`herdr <command> --help` before building on it. The client is `src/herdr/client.ts`; the shapes it
-accepts are `src/herdr/types.ts`.
+`herdr <command> --help` before building on it. The client is `packages/herdr/src/client.ts`; the shapes it
+accepts are `packages/herdr/src/types.ts`.
 
 ## Events that run a tick
 

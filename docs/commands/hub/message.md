@@ -4,7 +4,7 @@
 
 Posts a message to the agent's room. The text addresses nobody: `--to` alone decides who gets it,
 and without `--to` it goes to every other member. An `@codex`, an email or `@types/bun` in the text is
-just text ([ADR 0005](../adr/0005-recipients-by-to-not-mentions.md)).
+just text ([ADR 0005](../../adr/0005-recipients-by-to-not-mentions.md)).
 
 The message is queued at once and the command answers whom it's for (`Queued as @claude for
 @codex.`). Delivery happens later: when the poster's turn ends, each recipient gets it as soon as it
@@ -46,7 +46,7 @@ reminder that everyone received it.
 
 **Can an agent re-read an earlier message?**
 No. Messages are delivered in full and not kept afterwards
-([ADR 0004](../adr/0004-deliver-in-full-keep-no-history.md)); `status` shows first lines only.
+([ADR 0004](../../adr/0004-deliver-in-full-keep-no-history.md)); `status` shows first lines only.
 
 **How does a reader know whether a reply is expected?**
 The sender asks an explicit question when it needs one, and marks everything else `--fyi`.

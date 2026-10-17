@@ -1,0 +1,15 @@
+{
+  "name": "@herdr/herdr",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Herdr CLI client and validated response types",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "bun check"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

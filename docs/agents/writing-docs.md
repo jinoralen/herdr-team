@@ -1,6 +1,6 @@
 # Writing command pages
 
-Every command has a human-facing **page** at `docs/commands/<command>.md`. README.md is the index: one
+Every command has a human-facing **page** at `docs/commands/hub/<command>.md`. README.md is the index: one
 line per command, linking to its page. A page orients one reader around one command: what it does,
 when to use it, and what to expect. It is not a copy of the code or of `--help`.
 
@@ -63,7 +63,7 @@ the one or two commands next to it, each with a because-clause.
 
 ## Done when
 
-- The page exists at `docs/commands/<command>.md`, and README.md links it with a one-line summary.
+- The page exists at `docs/commands/hub/<command>.md`, and README.md links it with a one-line summary.
 - `What it does` states the defining constraint.
 - `When to use it` says who runs it and when.
 - Every `Common questions` entry was asked somewhere; none is invented.

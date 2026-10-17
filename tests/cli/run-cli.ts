@@ -6,8 +6,13 @@ import { onTestFinished } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const MAIN = path.join(import.meta.dir, '..', 'main.ts');
+const MAIN = fileURLToPath(import.meta.resolve('@herdr/hub/cli'));
+const BIN_DIR: string | undefined = process.env.HERDR_TEST_BIN_DIR;
+const COMMAND: string[] = BIN_DIR
+  ? [path.resolve(BIN_DIR, 'herdr-agent-hub')]
+  : [process.execPath, MAIN];
 
 // The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
 const FAKE_HERDR = `#!/usr/bin/env bun
@@ -63,7 +68,7 @@ export function cli(env: Record<string, string> = {}): Cli {
       paneId = 'p1',
     }: { stdin?: string; inPane?: boolean; paneId?: string } = {},
   ): Promise<Result> {
-    const proc = Bun.spawn([process.execPath, MAIN, ...args], {
+    const proc = Bun.spawn([...COMMAND, ...args], {
       env: inPane ? { ...base, ...pane, HERDR_PANE_ID: paneId } : base,
       stdin: stdin === undefined ? 'ignore' : new Blob([stdin]),
       stdout: 'pipe',

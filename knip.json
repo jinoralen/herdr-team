@@ -1,5 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "project": ["src/**/*.ts"],
-  "ignoreBinaries": ["check"]
+  "ignoreBinaries": ["check"],
+  "workspaces": {
+    ".": {
+      "entry": ["tests/**/*.test.ts"],
+      "project": ["tests/**/*.ts"]
+    },
+    "packages/*": {
+      "project": ["src/**/*.ts"]
+    }
+  }
 }

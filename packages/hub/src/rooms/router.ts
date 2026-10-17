@@ -2,7 +2,7 @@
 // its members up to date with Herdr and delivers what waits for them, then lets it go. Posts are
 // queued by the agents' own `message` commands; the router only delivers them.
 
-import type { Agent, Herdr } from '#herdr';
+import type { Agent, Herdr } from '@herdr/herdr';
 import { type Member, type MemberStatus, Store } from '#store';
 import { deliver } from './delivery.ts';
 import { admitPending, restoreMembers } from './membership.ts';

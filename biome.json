@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["src/**", "test/**", "*.json"]
+    "includes": ["packages/**", "!packages/hub/drizzle", "tests/**", "*.json"]
   },
   "formatter": {
     "enabled": true,
@@ -71,7 +71,7 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.test.ts", "src/testing/**"],
+      "includes": ["**/*.test.ts", "packages/hub/src/testing/**"],
       "linter": {
         "rules": {
           "style": {
@@ -84,7 +84,7 @@
       }
     },
     {
-      "includes": ["src/**", "!src/store/**"],
+      "includes": ["packages/**", "!packages/hub/src/store/**"],
       "linter": {
         "rules": {
           "style": {
