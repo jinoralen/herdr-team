@@ -2,8 +2,9 @@
 
 When a prompt fails in a way where the text may already be in the agent's input (timeout, no turn
 started, the tick dying mid-prompt), the batch is not resent on its own: typing it again could double
-it. Before typing, the batch is marked "may not have arrived" and a warning for each author is queued
-(write-ahead); success undoes both. Marked messages go out again with the recipient's next delivery,
+it. Before typing, the batch is marked "may not have arrived" and a warning is queued for each author
+still in the room (write-ahead); success undoes both. FYI authors get no warning: they asked for no
+reply, so a lost FYI isn't worth waking them. Marked messages go out again with the recipient's next delivery,
 labelled "may repeat". The guarantee is no *unmarked* re-send, not "no duplicates".
 
 ## Considered options

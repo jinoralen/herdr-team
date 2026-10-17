@@ -5,8 +5,8 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
 
 ## Comments
 
-- Every file opens with a comment saying what it is, in domain words: "One room's rows: its
-  members and the messages waiting for them."
+- Every source file opens with a comment saying what it is, in domain words: "One room's rows:
+  its members and the messages waiting for them." Test files are named by their subject instead.
 - Comment a function, field or constant when its name leaves out the why or the contract: what a
   return value means (`// Returns true if another pass was requested meanwhile`), the race it
   guards, the reason for a limit. One or two plain sentences.
@@ -15,7 +15,7 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
 
 ## Values and types
 
-- Absent is `null`, never `undefined`: lookups return `T | null` (`.get() ?? null`).
+- Store lookups return `T | null` for absent (`.get() ?? null`), never `undefined`.
 - `type` aliases for data shapes; `interface` only for a boundary a fake implements (`Herdr`).
 - Name constants in UPPER_SNAKE_CASE with a comment saying why the value is what it is
   (`MAX_DESCRIPTION_CHARS`: a role, not a place for a brief).
@@ -24,8 +24,9 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
 
 ## Errors
 
-- An error an agent reads is a full sentence that says what to do next, naming the command with
-  `SELF` (the executable's full path): `Usage: ${SELF} join <agent type or description>`.
+- An error an agent reads is a full sentence saying what went wrong and, where there is a next
+  step, what to do; a command to run is spelt with `SELF` (the executable's full path):
+  `Usage: ${SELF} join <agent type or description>`.
 - Throw plain `Error` for agent-facing problems; `HerdrError` with a `code` for Herdr failures, so
   callers branch on `code`, not on message text.
 - The CLI prints `error: <message>` and sets `process.exitCode = 1`, letting the process end on
@@ -37,7 +38,8 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
 
 - Validate everything Herdr returns with Zod `safeParse`; on failure throw a `HerdrError`
   (`invalid_response`).
-- Pass agent-written text through `sanitizeForTerminal` before it reaches a pane.
+- Pass agent-written text (messages, descriptions) through `sanitizeForTerminal` before printing
+  it to a terminal.
 - Spawn processes with an argv array (`Bun.spawn([bin, ...args])`), so message text stays one
   argument and never meets a shell.
 
@@ -62,8 +64,8 @@ seconds. Review rounds kept finding stale reads, so:
 
 ## Docs move with behaviour
 
-- A change to delivery, membership, or any text agents read (guide, delivery header, reply hint,
-  errors) updates README.md in the same change, so the two never disagree.
+- A diff that changes a command's behaviour, or any text agents read (guide, delivery header,
+  reply hint, errors), includes the matching page update, per `docs/agents/writing-docs.md`.
 - A change that reverses a decision in `docs/adr/` updates or supersedes that ADR.
 
 ## Tests

@@ -73,7 +73,8 @@ _Avoid_: skill (that word means agent skills), instructions, manual
 ## Delivery
 
 **Tick**:
-One run of herdr-agent-hub started by Herdr on an agent state change; it runs passes and exits.
+One run of herdr-agent-hub started by Herdr on an agent or pane event, or at startup; it runs
+passes and exits.
 _Avoid_: daemon, worker, job
 
 **Pass**:
@@ -92,7 +93,8 @@ _Avoid_: push, send (for the hub's side)
 What one delivery carries: a recipient's queued items, in order, under one header.
 
 **Held**:
-Waiting because the recipient is busy or blocked on a dialog; the reason is logged once.
+Waiting because the recipient can't take a prompt now: busy, blocked on a dialog, not yet
+recognized by Herdr, or its input isn't ready. The reason is logged once.
 _Avoid_: stuck, blocked (as the state of the queue)
 
 **Unsure**:

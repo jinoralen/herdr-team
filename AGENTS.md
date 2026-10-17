@@ -2,8 +2,8 @@
 
 A Herdr plugin, powered by a one-shot CLI app compiled with Bun to a single executable. Herdr runs
 it (`tick`) when an agent changes state; agents run its commands (`join`, `message`, …). State
-lives in one SQLite database. No server, no UI. README.md covers usage and the module layout under
-`src/`.
+lives in one SQLite database. No server, no UI. README.md is the index: usage, the commands (each
+with its page in `docs/commands/`), and the module layout under `src/`.
 
 ## Bun
 
@@ -21,12 +21,15 @@ a new dependency. Bun's docs are in `node_modules/bun-types/docs/`.
   migration. State is disposable, so there is no upgrade path to write
   (`docs/adr/0010-state-is-disposable.md`).
 - Herdr's behaviour the code depends on (events, prompt outcomes, IDs): `docs/herdr.md`.
+- When you add, rename, remove or change the behaviour of a command, create or re-sync its page in
+  `docs/commands/` and its line in README.md, following `docs/agents/writing-docs.md`.
 
 ## Agent skills
 
 ### Issue tracker
-Specs and tickets live in local Markdown, with Status lines as triage labels.
-Read docs/agents/issue-tracker.md before creating, fetching or updating them.
+
+Specs and tickets are local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
-Read docs/agents/domain.md before exploring or changing domain behavior.
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
