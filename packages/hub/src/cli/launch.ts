@@ -40,7 +40,7 @@ export async function launch({
   }
   const binary = Bun.which(agent, { PATH: env.PATH });
   if (!binary) {
-    throw new Error(`Cannot start ${agent}: it is not on PATH. Install it and retry join.`);
+    throw new Error(`Cannot start ${agent}: it is not on PATH. Install it and retry ${SELF} join.`);
   }
   if (!process.execve) {
     throw new Error(
@@ -49,11 +49,13 @@ export async function launch({
   }
   const pane = await cliHerdr(env).pane(current);
   if (!pane) {
-    throw new Error('The current Herdr pane no longer exists. Run join from its current shell.');
+    throw new Error(
+      `The current Herdr pane no longer exists. Run ${SELF} join from its current shell.`,
+    );
   }
   if (pane.agent) {
     throw new Error(
-      'An agent is already running in this pane. Run join without --agent inside that agent.',
+      `An agent is already running in this pane. Run ${SELF} join without --agent inside that agent.`,
     );
   }
   description = sanitizeForTerminal(description).trim();

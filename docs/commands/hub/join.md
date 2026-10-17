@@ -10,6 +10,17 @@ An ordinary join is only recorded at first: the member is **pending** until the 
 agent's turn ends checks with Herdr that a recognized agent is really in that pane. Only then is it
 **active** and gets deliveries.
 
+## When to use it
+
+- **Who runs it**: a user in an interactive Herdr shell with `--agent`, or an agent in its own pane
+  because its user asked it to. Agents never join on their
+  own; the general guide (`skill` outside a room) tells them to join only when asked.
+  Users and orchestrators may select another shell pane with `--agent --pane`.
+- **Trigger**: bringing an agent into the conversation. Running it again from the same pane prints
+  the guide again; for the rules alone, use [`skill`](skill.md).
+
+## Starting in the current pane
+
 From an interactive shell inside Herdr, start an agent in the current pane with:
 
 ```bash
@@ -56,15 +67,6 @@ guide was submitted. It does not mean the agent finished reading the guide. An e
 begins can leave an agent or membership behind, and a prompt timeout can mean the guide arrived.
 Inspect the target pane and [`status`](status.md) in its workspace before retrying. The command
 does not retry startup or prompts automatically, and refuses panes already running an agent.
-
-## When to use it
-
-- **Who runs it**: a user in an interactive Herdr shell with `--agent`, or an agent in its own pane
-  because its user asked it to. Agents never join on their
-  own; the general guide (`skill` outside a room) tells them to join only when asked.
-  Users and orchestrators may select another shell pane with `--agent --pane`.
-- **Trigger**: bringing an agent into the conversation. Running it again from the same pane prints
-  the guide again; for the rules alone, use [`skill`](skill.md).
 
 ## Who stays a member
 
