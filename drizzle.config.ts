@@ -1,6 +1,6 @@
 import { defineConfig } from 'drizzle-kit';
 
-// For `bun run db:generate`: compares src/store/tables.ts with the last migration and writes the next one.
+// For `bun run db:generate`: regenerates the single migration from src/store/tables.ts.
 export default defineConfig({
   dialect: 'sqlite',
   schema: './src/store/tables.ts',

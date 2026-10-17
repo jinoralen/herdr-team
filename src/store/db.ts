@@ -9,7 +9,8 @@ import migration0000 from '../../drizzle/0000_init.sql' with { type: 'text' };
 import { log, service } from './tables.ts';
 
 // drizzle/ migrations, oldest first, built into the executable. The database's user_version is how
-// many of them it has; opening it applies the rest. `bun run db:generate` writes new ones.
+// many of them it has; opening it applies the rest. There is one: `bun run db:generate` regenerates
+// it, and a database from any other schema is set aside (docs/adr/0010-state-is-disposable.md).
 const MIGRATIONS: string[] = [migration0000];
 
 // Which migrations a database was built from: a checksum of their SQL, kept in its application_id.

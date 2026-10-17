@@ -20,7 +20,7 @@
     "knip": "knip",
     "verify": "biome check . && bun check && knip && bun test",
     "prepare": "lefthook install",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "rm -rf drizzle && drizzle-kit generate --name init"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

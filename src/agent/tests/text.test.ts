@@ -57,3 +57,15 @@ test('a delivery shows what each post answers, and marks FYI posts', () => {
     /@c \(FYI, no response requested; reply only with a correction or new evidence\):\nclosing/,
   );
 });
+
+// Herdr types a delivery into the pane as a bracketed paste; an ESC in the text could end the paste
+// early and turn the rest into keystrokes (Enter, Ctrl-C, a `!` shell line).
+test('delivery strips control characters, so message text cannot end the paste', () => {
+  const out = formatDelivery({
+    handle: 'codex',
+    entries: [entry('m1', 'pi', 'before\x1b[201~\r!touch /tmp/x\x03\nafter\tend')],
+  });
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
+  assert.doesNotMatch(out, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/);
+  assert.match(out, /before\[201~!touch \/tmp\/x\nafter\tend/);
+});
