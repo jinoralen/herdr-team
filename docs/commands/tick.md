@@ -20,7 +20,8 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
 - **Who runs it**: Herdr, through the plugin manifest, on every agent state change, pane close and
   startup. At startup it runs as `tick --startup`, which first clears every room of the server
   before: its panes are gone, and their IDs may be handed out again
-  ([ADR 0010](../adr/0010-state-is-disposable.md)). That's enough: a post is delivered when its author's turn ends, and a message waiting for
+  ([ADR 0010](../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
+  without `HERDR_SOCKET_PATH`, it can't tell which session that is and clears nothing. That's enough: a post is delivered when its author's turn ends, and a message waiting for
   a busy agent when that agent goes idle; both are state changes.
 - **Trigger**: you don't run it. Running it by hand is harmless.
 

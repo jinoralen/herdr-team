@@ -1,8 +1,8 @@
 # State is disposable relay state
 
 herdr-agent-hub relays messages; it doesn't store them. The database lives in a temp directory
-(`/tmp/herdr-agent-hub-<uid>`, cleared on reboot; a subdirectory per Herdr session other than the
-default one, since IDs are only unique within one server) and holds only members and undelivered
+(`/tmp/herdr-agent-hub-<uid>`, cleared on reboot; a subdirectory per Herdr session, named for its
+socket, since IDs are only unique within one server) and holds only members and undelivered
 messages, which go stale fast once their agents restart. Every room is cleared when Herdr's server
 starts, including after a live handoff: its panes are new, or at least can't be trusted to be the
 old ones. So there are no data migrations: the schema is one

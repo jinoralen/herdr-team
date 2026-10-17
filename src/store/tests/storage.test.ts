@@ -100,13 +100,14 @@ test('replacing an incompatible database waits for the replace lock held by anot
   );
 });
 
-test('each Herdr session gets its own state directory; the default one uses the base', () => {
+test('each Herdr session gets its own state directory, named for its socket', () => {
   const base = { HERDR_AGENT_HUB_DIR: '/tmp/hub' };
-  const defaultSocket = path.join(os.homedir(), '.config', 'herdr', 'herdr.sock');
-  assert.equal(rootDir(base), '/tmp/hub');
-  assert.equal(rootDir({ ...base, HERDR_SOCKET_PATH: defaultSocket }), '/tmp/hub');
-  const work = rootDir({ ...base, HERDR_SOCKET_PATH: '/tmp/herdr-work.sock' });
-  const play = rootDir({ ...base, HERDR_SOCKET_PATH: '/tmp/herdr-play.sock' });
-  assert.match(work, /^\/tmp\/hub\/session-[0-9a-f]+$/);
-  assert.notEqual(work, play);
+  assert.equal(rootDir(base), '/tmp/hub', 'outside Herdr');
+  const main = rootDir({ ...base, HERDR_SOCKET_PATH: '/home/u/.config/herdr/herdr.sock' });
+  const codex = rootDir({
+    ...base,
+    HERDR_SOCKET_PATH: '/home/u/.config/herdr/sessions/codex/herdr.sock',
+  });
+  assert.match(main, /^\/tmp\/hub\/session-[0-9a-f]+$/);
+  assert.notEqual(main, codex);
 });

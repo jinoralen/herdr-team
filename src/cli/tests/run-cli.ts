@@ -38,7 +38,8 @@ type Cli = {
   ) => Promise<Result>;
 };
 
-export function cli(): Cli {
+// env: more variables for every command, e.g. the HERDR_SOCKET_PATH Herdr gives a session.
+export function cli(env: Record<string, string> = {}): Cli {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-agent-hub-cli-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const herdr = path.join(root, 'herdr');
@@ -50,6 +51,7 @@ export function cli(): Cli {
     HERDR_AGENT_HUB_DIR: path.join(root, 'state'),
     HERDR_BIN_PATH: herdr,
     PROMPTS: promptsLog,
+    ...env,
   };
   const pane = { HERDR_ENV: '1', HERDR_PANE_ID: 'p1', HERDR_WORKSPACE_ID: 'w1' };
 

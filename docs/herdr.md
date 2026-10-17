@@ -49,7 +49,9 @@ Which of these mean "nothing was typed" decides re-sending: see `docs/adr/0006-n
 - `HERDR_ENV=1`, `HERDR_PANE_ID` and `HERDR_WORKSPACE_ID` are set in each pane's environment when its
   process starts, and never change for that process.
 - IDs are scoped to one server (one Herdr session): another session, or the next server, can hand
-  out the same `w1:p1`. `HERDR_SOCKET_PATH` names the session's server.
+  out the same `w1:p1`. Each session has its own socket (`herdr session list --json` shows
+  `socket_path`), and `HERDR_SOCKET_PATH` gives it to every pane and plugin command (checked on a
+  pane event in 0.9.5).
 - Closed tab and pane IDs are not reused within a server. A pane moved within its workspace (to
   another tab or split) keeps its ID; moved to another workspace, it gets a new workspace-qualified
   ID and keeps its `terminal_id`. Its process keeps the old IDs in its environment.

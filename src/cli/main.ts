@@ -102,6 +102,16 @@ program
     await runTick(options.startup ?? false);
   });
 
+// Without HERDR_SOCKET_PATH, a tick can't tell which Herdr session started, so clearing could empty
+// another session's rooms: the rooms are kept instead.
+function startupKnown(startup: boolean, log: (room: string | null, text: string) => void): boolean {
+  if (startup && !process.env.HERDR_SOCKET_PATH) {
+    log(null, '! tick --startup without HERDR_SOCKET_PATH: rooms were not cleared.');
+    return false;
+  }
+  return startup;
+}
+
 // Run by Herdr hooks. Output goes to Herdr's plugin log; what matters is logged for `status`.
 async function runTick(startup: boolean): Promise<void> {
   const root = rootDir();
@@ -111,7 +121,7 @@ async function runTick(startup: boolean): Promise<void> {
       root,
       herdr: cliHerdr(),
       log,
-      startup,
+      startup: startupKnown(startup, log),
     });
   } catch (error) {
     try {
