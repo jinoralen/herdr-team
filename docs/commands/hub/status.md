@@ -37,7 +37,7 @@ In `status`'s recent activity, and in Herdr's plugin log:
 ## Automation
 
 Use `status --json` for a machine-readable snapshot of the caller's workspace room.
-The object contains `version: 1`, `room`, and `members` (including left, gone and
+The object contains `room` and `members` (including left, gone and
 rejected records). Each member includes its handle, description, launch pane,
 join timestamp, status, terminal, agent, reason, held state, and `queuedFrom`.
 The snapshot is read in one transaction and makes no Herdr calls. It describes

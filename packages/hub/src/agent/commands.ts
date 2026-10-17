@@ -314,7 +314,6 @@ export function status({
   if (json) {
     return store.transaction(() =>
       JSON.stringify({
-        version: 1,
         room: workspace,
         members: (['pending', 'active', 'left', 'gone', 'rejected'] as const).flatMap((state) =>
           store.members(state).map((member) => ({

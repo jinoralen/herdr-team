@@ -124,7 +124,6 @@ test('JSON status exposes room membership and draining handles without Herdr cal
   assert.equal((await run(['tick'])).code, 0);
   assert.equal((await run(['join', '--handle', 'reviewer', 'reviews'], { inPane: true })).code, 0);
   const pending = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
-  assert.equal(pending.version, 1);
   assert.equal(pending.room, 'w1');
   assert.equal(pending.members[0].handle, 'reviewer');
   assert.equal(pending.members[0].status, 'pending');

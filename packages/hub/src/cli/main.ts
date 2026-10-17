@@ -130,7 +130,7 @@ program
       'yet and why, and the last things ticks did. Only reads; run it from any pane in\n' +
       'the workspace to see why a conversation stopped.',
   )
-  .option('--json', 'print a versioned membership snapshot for automation')
+  .option('--json', 'print a membership snapshot for automation')
   .action((options) => {
     console.log(status({ json: options.json }));
   });
