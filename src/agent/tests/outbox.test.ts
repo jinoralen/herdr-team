@@ -18,7 +18,7 @@ async function outbox() {
   });
   await tick({
     root,
-    herdr: { listAgents: async () => [], agent: async () => null, prompt: async () => {} },
+    herdr: { listPanes: async () => [], pane: async () => null, prompt: async () => {} },
   });
   return { store: (room = 'w1') => new Store(root, room), env };
 }

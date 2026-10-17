@@ -9,7 +9,7 @@ import path from 'node:path';
 
 const MAIN = path.join(import.meta.dir, '..', 'main.ts');
 
-// The fake herdr: agent list shows an idle codex and claude; prompts are appended to prompts.log.
+// The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
 const FAKE_HERDR = `#!/usr/bin/env bun
 const [cmd, sub, pane, text] = process.argv.slice(2);
 const out = (result) => console.log(JSON.stringify({ result }));
@@ -17,10 +17,10 @@ const agents = [
   { pane_id: 'p1', terminal_id: 't1', agent: 'codex', agent_status: 'idle' },
   { pane_id: 'p2', terminal_id: 't2', agent: 'claude', agent_status: 'idle' },
 ];
-if (cmd === 'agent' && sub === 'list') {
-  out({ agents });
-} else if (cmd === 'agent' && sub === 'get') {
-  out({ agent: agents.find((a) => a.pane_id === pane) });
+if (cmd === 'pane' && sub === 'list') {
+  out({ panes: agents });
+} else if (cmd === 'pane' && sub === 'get') {
+  out({ pane: agents.find((a) => a.pane_id === pane) });
 } else if (cmd === 'agent' && sub === 'prompt') {
   require('node:fs').appendFileSync(process.env.PROMPTS, pane + ': ' + text + '\\n');
   out({ type: 'ok' });

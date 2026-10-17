@@ -6,7 +6,7 @@ accepts are `src/herdr/types.ts`.
 
 ## Events that run a tick
 
-`herdr-plugin.toml` runs `dist/herdr-agent-hub tick` on startup and on `pane.agent_status_changed`,
+`herdr-plugin.toml` runs `dist/herdr-agent-hub tick` (with `--startup` on startup) and on `pane.agent_status_changed`,
 `pane.agent_detected`, `pane.closed` and `pane.exited`. These are the only wake-ups: nothing is
 delivered between them. `herdr plugin link` doesn't build; `herdr plugin install` runs the `[[build]]`
 steps. A tick's output goes to `herdr plugin log list --plugin herdr-agent-hub`.
@@ -21,6 +21,10 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
 - `herdr agent list` / `herdr agent get <pane>`: `pane_id`, `terminal_id`, `agent` (kind; null if
   not recognized), `agent_status` (`idle`, `working`, `blocked`, `done`, `unknown`),
   `interactive_ready`, `agent_session.value`. `get` fails with `agent_not_found` for an unknown pane.
+- They only show panes with an agent: once the agent exits, its pane drops out of `agent list` and
+  `agent get` fails with `agent_not_found`, as for a closed pane. So ticks read `herdr pane list` /
+  `herdr pane get <pane>` instead: the same fields for every open pane, `agent` absent when none is
+  recognized, and `pane get` fails with `pane_not_found` once the pane closed. Checked in 0.9.5.
 - `agent_session` may appear some time after the agent is detected; a new value in the same terminal
   is a new conversation.
 - Only agents Herdr recognizes can join; `agent` is null for a plain shell.
@@ -44,6 +48,10 @@ Which of these mean "nothing was typed" decides re-sending: see `docs/adr/0006-n
 
 - `HERDR_ENV=1`, `HERDR_PANE_ID` and `HERDR_WORKSPACE_ID` are set in each pane's environment when its
   process starts, and never change for that process.
-- Closed tab and pane IDs are not reused. A moved pane gets a new workspace-qualified ID; its
-  process keeps the old one in its environment, so the hub follows agents by `terminal_id`.
+- IDs are scoped to one server (one Herdr session): another session, or the next server, can hand
+  out the same `w1:p1`. `HERDR_SOCKET_PATH` names the session's server.
+- Closed tab and pane IDs are not reused within a server. A pane moved within its workspace (to
+  another tab or split) keeps its ID; moved to another workspace, it gets a new workspace-qualified
+  ID and keeps its `terminal_id`. Its process keeps the old IDs in its environment.
+- Both lists report each pane's `workspace_id` and `tab_id` too.
 - Workspace IDs are Herdr's; one could in principle be reused for a new workspace.

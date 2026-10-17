@@ -10,9 +10,9 @@ test('a tick that finds the lock taken asks the holder to run again, so nothing 
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
   let release = () => {};
-  const realList = herdr.listAgents;
+  const realList = herdr.listPanes;
   let first = true;
-  herdr.listAgents = function () {
+  herdr.listPanes = function () {
     if (!first) {
       return realList.call(this);
     }
@@ -52,8 +52,8 @@ test('a pass that was waiting on Herdr when it lost the lock delivers nothing', 
   await say('p2', 'queued');
   herdr.set('p1', { agent_status: 'idle' });
   let release = () => {};
-  const realList = herdr.listAgents;
-  herdr.listAgents = function () {
+  const realList = herdr.listPanes;
+  herdr.listPanes = function () {
     return new Promise((r) => {
       release = () => r(realList.call(this));
     });

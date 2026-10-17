@@ -52,15 +52,15 @@ test('agent_blocked from prompt is retried later', async () => {
 });
 
 test('a pane Herdr no longer knows gets nothing, and nothing is marked unsure', async () => {
-  const { herdr, say, joinAs, tick, store } = await installed();
+  const { herdr, say, joinAs, tick, store, logs } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
   herdr.failNext = new HerdrError('agent_not_found', 'agent target p1 not found');
   await say('p2', 'hello');
-  assert.match(herdr.promptsTo('p2')[0]!.text, /could not be delivered/);
+  assert.ok(logs.includes('… @claude is no longer in Herdr; nothing was sent.'));
   assert.deepEqual(unsureFor(store(), 'claude'), []);
   await tick();
-  assert.equal(herdr.promptsTo('p1').length, 0, 'dropped rather than retried');
+  assert.match(herdr.promptsTo('p1')[0]!.text, /hello/, 'delivered once the pane answers again');
 });
 
 test('an uncertain delivery is not resent; its author is told, and it is repeated with the next message', async () => {

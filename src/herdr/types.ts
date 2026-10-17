@@ -14,9 +14,11 @@ export const AgentSchema = z.object({
 export type Agent = z.infer<typeof AgentSchema>;
 
 // Implemented by the CLI client (client.ts), and by a fake in tests.
+// A pane and the agent Herdr sees in it (agent is absent or null for none). Panes, not agents, are
+// listed: Herdr's agent list leaves out a pane whose agent exited, which is then still a member's.
 export interface Herdr {
-  listAgents(): Promise<Agent[]>;
-  // One pane's agent as it is now; null if Herdr has no agent there.
-  agent(paneId: string): Promise<Agent | null>;
+  listPanes(): Promise<Agent[]>;
+  // One pane as it is now; null if it closed.
+  pane(paneId: string): Promise<Agent | null>;
   prompt(paneId: string, text: string): Promise<void>;
 }

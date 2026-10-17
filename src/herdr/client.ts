@@ -87,29 +87,29 @@ async function run(
 export function cliHerdr(env = process.env): Herdr {
   const bin = env.HERDR_BIN_PATH || 'herdr';
   return {
-    async listAgents(): Promise<Agent[]> {
-      const result = await run(bin, ['agent', 'list'], { timeout: 10000, env });
-      const parsed = z.object({ agents: z.array(AgentSchema) }).safeParse(result);
+    async listPanes(): Promise<Agent[]> {
+      const result = await run(bin, ['pane', 'list'], { timeout: 10000, env });
+      const parsed = z.object({ panes: z.array(AgentSchema) }).safeParse(result);
       if (!parsed.success) {
-        throw new HerdrError('invalid_response', 'agent list has invalid agents data');
+        throw new HerdrError('invalid_response', 'pane list has invalid panes data');
       }
-      return parsed.data.agents;
+      return parsed.data.panes;
     },
-    async agent(paneId: string): Promise<Agent | null> {
+    async pane(paneId: string): Promise<Agent | null> {
       let result: unknown;
       try {
-        result = await run(bin, ['agent', 'get', paneId], { timeout: 10000, env });
+        result = await run(bin, ['pane', 'get', paneId], { timeout: 10000, env });
       } catch (caught) {
-        if ((caught as HerdrError).code === 'agent_not_found') {
+        if ((caught as HerdrError).code === 'pane_not_found') {
           return null;
         }
         throw caught;
       }
-      const parsed = z.object({ agent: AgentSchema }).safeParse(result);
+      const parsed = z.object({ pane: AgentSchema }).safeParse(result);
       if (!parsed.success) {
-        throw new HerdrError('invalid_response', 'agent get has invalid agent data');
+        throw new HerdrError('invalid_response', 'pane get has invalid pane data');
       }
-      return parsed.data.agent;
+      return parsed.data.pane;
     },
     // Waits until the agent starts a turn (or stops at a question), so a delivery is confirmed
     // before the next one. Herdr reports agent_prompt_stalled if no turn starts within 5s.

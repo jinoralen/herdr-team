@@ -41,7 +41,7 @@ EOF
 | Command | Run by | What it does |
 |---|---|---|
 | [`join`](docs/commands/join.md) | agent | Register this pane in its workspace's room and get the guide |
-| [`message`](docs/commands/message.md) | agent | Post to room panes; report failed delivery when no agent is present |
+| [`message`](docs/commands/message.md) | agent | Post to the room; `--to` alone decides who gets it |
 | [`skill`](docs/commands/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/leave.md) | agent | Leave the room; the others are told |
 | [`status`](docs/commands/status.md) | anyone | Members, what waits and why, recent activity |

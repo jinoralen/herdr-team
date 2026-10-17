@@ -10,7 +10,8 @@ The conversation space of one Herdr workspace; every agent that joins from that 
 _Avoid_: channel, chat, workspace (when meaning the conversation)
 
 **Member**:
-A pane registered in a room; its current agent sends and receives messages. The user is never a member.
+A pane that joined a room; whichever agent runs in it sends and receives messages. The user is
+never a member.
 _Avoid_: participant, peer, client
 
 **Handle**:
@@ -35,7 +36,7 @@ A member confirmed in Herdr, to whom messages are delivered.
 A member that left by its own command.
 
 **Gone**:
-A member removed because its pane closed.
+A member removed because its pane closed or moved to another workspace.
 _Avoid_: dead, disconnected
 
 **Rejected**:
@@ -64,7 +65,8 @@ A room's own announcement that a member joined or left; it wakes nobody.
 _Avoid_: event, system message
 
 **Warning**:
-A notice to a message's author that delivery failed or may not have reached a recipient; it does wake the author.
+A notice to a message's author that it was dropped for, or may not have reached, a recipient; it
+does wake the author.
 
 **Guide**:
 The rules for talking in a room, printed on joining and again by the `skill` command.
@@ -93,7 +95,9 @@ _Avoid_: push, send (for the hub's side)
 What one delivery carries: a recipient's queued items, in order, under one header.
 
 **Held**:
-Waiting because the recipient can't take a prompt now: busy, blocked on a dialog, or its input isn't ready. The reason is logged once.
+Waiting because the recipient can't take a prompt now: busy, blocked on a dialog, its input isn't
+ready, or no agent is running in its pane (then only notices and warnings wait; posts are dropped).
+The reason is logged once.
 _Avoid_: stuck, blocked (as the state of the queue)
 
 **Unsure**:

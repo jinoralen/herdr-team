@@ -136,6 +136,11 @@ export class Store {
     });
   }
 
+  // The member's pane now has another terminal (it moved) or runs another agent.
+  rebind(m: Member, agent: Pick<Member, 'terminal_id' | 'agent'>): boolean {
+    return this.change(m, ['active'], agent);
+  }
+
   setHeld(m: Member, held: string | null): boolean {
     return this.change(m, ['active'], { held });
   }

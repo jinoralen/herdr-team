@@ -7,8 +7,6 @@ import { type Member, type MemberStatus, Store } from '#store';
 import { deliver } from './delivery.ts';
 import { admitPending, restoreMembers } from './membership.ts';
 
-// live: the pane in this tick's `herdr agent list`, including panes without a recognized agent.
-export type RuntimeMember = Member & { live: Agent | null };
 type Log = (text: string) => void;
 // active: whether this router may still act; the tick passes a check that it still holds the lock.
 type RouterOptions = {
@@ -25,8 +23,8 @@ export class Router {
   herdr: Herdr;
   log: Log;
   store: Store;
-  members = new Map<string, RuntimeMember>(); // handle -> active member, with its live agent
-  // Whether this pass has Herdr's agent list. Without it, nobody can be found, so nothing is delivered.
+  members = new Map<string, Member>(); // handle -> active member whose pane Herdr lists
+  // Whether this pass has Herdr's pane list. Without it, nobody can be found, so nothing is delivered.
   private synced = false;
   active: () => boolean;
 
@@ -44,7 +42,7 @@ export class Router {
     this.store = new Store(root, room);
   }
 
-  // Brings membership up to date. agents: this tick's `herdr agent list`, shared by all rooms;
+  // Brings membership up to date. agents: this tick's `herdr pane list`, shared by all rooms;
   // null while Herdr is unreachable, and then nothing changes and nothing is delivered.
   sync(agents: Agent[] | null): void {
     if (!agents || !this.active()) {
@@ -61,10 +59,8 @@ export class Router {
     }
   }
 
-  addRuntime(member: Member, live: Agent | null): RuntimeMember {
-    const runtime: RuntimeMember = { ...member, live };
-    this.members.set(member.handle, runtime);
-    return runtime;
+  addMember(member: Member): void {
+    this.members.set(member.handle, member);
   }
 
   // The member gets nothing more; the others are told.

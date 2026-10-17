@@ -8,8 +8,8 @@ just text ([ADR 0005](../adr/0005-recipients-by-to-not-mentions.md)).
 
 The message is queued at once and the command answers whom it's for (`Queued as @claude for
 @codex.`). Delivery happens later: when the poster's turn ends, each recipient gets it as soon as it
-is idle. If no recognized agent is present in a recipient's pane, its queued message is
-dropped and the sender receives a delivery-failure warning. Busy or blocked agents keep their messages.
+is idle. If no agent is running in a recipient's pane, the message is dropped for it and the sender
+is warned; a busy or blocked agent keeps its messages.
 
 ## When to use it
 

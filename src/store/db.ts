@@ -3,6 +3,7 @@
 
 import { Database } from 'bun:sqlite';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
 import migration0000 from '../../drizzle/0000_init.sql' with { type: 'text' };
@@ -31,9 +32,22 @@ function uid(): number {
   return process.getuid();
 }
 
+// One state directory per Herdr session (server): pane and workspace IDs are only unique within one.
 export function rootDir(env = process.env): string {
   // /tmp is writable from Codex's default workspace-write sandbox; override with HERDR_AGENT_HUB_DIR.
-  return path.resolve(env.HERDR_AGENT_HUB_DIR || path.join('/tmp', `herdr-agent-hub-${uid()}`));
+  const base = env.HERDR_AGENT_HUB_DIR || path.join('/tmp', `herdr-agent-hub-${uid()}`);
+  const session = sessionDir(env.HERDR_SOCKET_PATH);
+  return path.resolve(base, ...(session ? [session] : []));
+}
+
+// The default session (its socket, or no socket given) uses the base directory itself; any other
+// session a subdirectory named for its socket.
+function sessionDir(socket: string | undefined): string | null {
+  const defaultSocket = path.join(os.homedir(), '.config', 'herdr', 'herdr.sock');
+  if (!socket || path.resolve(socket) === defaultSocket) {
+    return null;
+  }
+  return `session-${Bun.hash.crc32(path.resolve(socket)).toString(16)}`;
 }
 
 export function dbPath(root: string): string {

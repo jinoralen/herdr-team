@@ -1,6 +1,6 @@
 // The SQLite database shared by ticks and agent commands. Only this module knows
 // it is SQLite, queried through Drizzle.
-export { busyRooms } from './all-rooms.ts';
+export { busyRooms, clearRooms } from './all-rooms.ts';
 export { MAX_MESSAGE_CHARS } from './constraints.ts';
 export { dbPath, filesDir, rootDir } from './db.ts';
 export { isLockHeld, saveServiceState, serviceState, serviceTransaction } from './lock.ts';

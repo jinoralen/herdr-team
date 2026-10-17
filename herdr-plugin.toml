@@ -14,9 +14,9 @@ command = ["bun", "install", "--frozen-lockfile"]
 [[build]]
 command = ["bun", "run", "build"]
 
-# Herdr started (or a new server took over): continue every room.
+# Herdr started (or a new server took over): its panes are new, so every room starts empty.
 [[startup]]
-command = ["dist/herdr-agent-hub", "tick"]
+command = ["dist/herdr-agent-hub", "tick", "--startup"]
 
 # An agent went idle (deliver to it; an agent that just posted ended its turn), started working,
 # or got stuck on a question.
@@ -24,7 +24,7 @@ command = ["dist/herdr-agent-hub", "tick"]
 on = "pane.agent_status_changed"
 command = ["dist/herdr-agent-hub", "tick"]
 
-# Agents are recognized again after Herdr restarts.
+# Herdr recognized an agent in a pane (e.g. one just started there).
 [[events]]
 on = "pane.agent_detected"
 command = ["dist/herdr-agent-hub", "tick"]

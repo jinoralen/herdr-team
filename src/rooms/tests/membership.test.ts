@@ -1,8 +1,8 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { join, leave, message } from '#agent';
+import { join, leave, message, status } from '#agent';
 import { Store } from '#store';
-import { installed } from '#testing';
+import { installed, kinds } from '#testing';
 
 test('a replacement agent and new session keep the pane membership', async () => {
   const { herdr, say, joinAs, handles } = await installed();
@@ -29,24 +29,25 @@ test('an empty pane keeps membership but drops messages and tells the sender', a
   herdr.set('p1', { agent: null, agent_status: 'unknown' });
   await say('p2', 'hello');
   assert.deepEqual(handles(), ['claude', 'codex']);
-  assert.deepEqual(store().queued('claude'), []);
-  assert.match(herdr.promptsTo('p2')[0]!.text, /could not be delivered: no agent/);
+  assert.deepEqual(kinds(store(), 'claude'), ['joined'], 'the post is dropped; the notice waits');
+  assert.match(herdr.promptsTo('p2')[0]!.text, /was not delivered: no agent is running/);
   herdr.set('p1', { agent: 'claude', agent_status: 'idle' });
   await tick();
   assert.equal(herdr.promptsTo('p1').length, 0, 'dropped message never reappears');
 });
 
-test('a moved pane keeps receiving under its new pane id, and can still post', async () => {
-  const { herdr, say, joinAs, tick, settle } = await installed();
+test('a pane moved to another workspace leaves its room', async () => {
+  const { herdr, joinAs, tick, handles, store } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
-  herdr.set('p1', { pane_id: 'w2:p7' });
+  herdr.set('p1', { pane_id: 'w2:p7' }); // same terminal, new workspace-qualified id
   await tick();
-  await say('p1', '@codex hi'); // agent env still has the original pane id
-  assert.equal(herdr.promptsTo('p2').length, 1);
-  settle();
-  await say('p2', '@claude ping');
-  assert.equal(herdr.promptsTo('w2:p7').length, 1);
+  assert.deepEqual(handles(), ['codex']);
+  assert.match(
+    store().queued('codex').at(-1)!.text,
+    /@claude left: its pane moved to another workspace/,
+  );
+  assert.deepEqual(handles('w2'), [], 'not joined to the new workspace');
 });
 
 test('leave removes the member', async () => {
@@ -127,13 +128,65 @@ test('while Herdr is unreachable, an established room keeps posts for later', as
   assert.match(herdr.promptsTo('p2')[0]!.text, /sent during the outage/);
 });
 
-test('FYI posts to an empty pane are dropped and their sender is warned', async () => {
-  const { herdr, env, joinAs, tick, store } = await installed();
+test('FYI posts to an empty pane wait for a post, then are dropped with it', async () => {
+  const { herdr, env, joinAs, tick, store, settle } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
+  await joinAs('p3', 'pi');
+  settle();
   herdr.set('p1', { agent: null });
   message({ text: 'FYI only', fyi: true, env: env('p2') });
   await tick();
+  assert.deepEqual(kinds(store(), 'claude'), ['joined', 'joined', 'fyi'], 'an FYI wakes nobody');
+  assert.equal(herdr.promptsTo('p2').length, 0);
+  message({ text: '@claude question', env: env('p3') });
+  await tick();
+  assert.deepEqual(kinds(store(), 'claude'), ['joined', 'joined'], 'posts dropped; notices wait');
+  assert.match(herdr.promptsTo('p2')[0]!.text, /was not delivered/);
+  assert.match(herdr.promptsTo('p3')[0]!.text, /was not delivered/);
+});
+
+test('status shows the agent running in the pane now', async () => {
+  const { herdr, joinAs, tick, env } = await installed();
+  await joinAs('p1', 'claude');
+  herdr.set('p1', { agent: 'pi' });
+  await tick();
+  assert.match(status({ env: env('p1') }), /@claude — claude \[pi,/);
+  herdr.set('p1', { agent: null });
+  await tick();
+  assert.match(
+    status({ env: env('p1') }),
+    /@claude — claude \[pi,/,
+    'an empty pane keeps the last',
+  );
+});
+
+test('a busy or blocked replacement agent keeps its queued messages', async () => {
+  const { herdr, say, joinAs, tick, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  herdr.set('p1', { agent: 'pi', agent_session: { value: 'new' }, agent_status: 'working' });
+  await say('p2', 'one');
+  herdr.set('p1', { agent_status: 'blocked' });
+  await tick();
+  assert.equal(herdr.promptsTo('p1').length, 0);
+  assert.deepEqual(kinds(store(), 'claude'), ['joined', 'message'], 'kept, not dropped');
+  herdr.set('p1', { agent_status: 'idle' });
+  await tick();
+  assert.match(herdr.promptsTo('p1')[0]!.text, /one/);
+});
+
+test('Herdr starting clears every room, and agents join again', async () => {
+  const { joinAs, say, tick, handles, store, env } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  await say('p2', 'before the restart');
+  await tick({ startup: true });
+  assert.deepEqual(handles(), []);
   assert.deepEqual(store().queued('claude'), []);
-  assert.match(herdr.promptsTo('p2')[0]!.text, /could not be delivered/);
+  assert.match(status({ env: env('p1') }), /Herdr started: rooms cleared/);
+  assert.throws(() => message({ text: 'hi', env: env('p1') }), /has not joined/);
+  join({ description: 'claude', env: env('p1') });
+  await tick();
+  assert.deepEqual(handles(), ['claude']);
 });

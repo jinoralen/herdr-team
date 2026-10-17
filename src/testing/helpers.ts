@@ -17,24 +17,28 @@ export const entry = (id: string, from: string, text: string): Entry => ({
   re: null,
 });
 
+// What waits for a member, by kind, oldest first.
+export const kinds = (store: Store, handle: string): string[] =>
+  store.queued(handle).map((q) => q.kind);
+
 // Herdr as the router sees it, with agents the tests set up.
 class FakeHerdr implements Herdr {
   agents: Agent[] = [];
   prompts: { pane: string; text: string }[] = [];
   failNext: Error | null = null;
-  // While down, `herdr agent list` fails, as when Herdr is unreachable or restarting.
+  // While down, `herdr pane list` fails, as when Herdr is unreachable or restarting.
   down = false;
 
-  async listAgents(): Promise<Agent[]> {
+  async listPanes(): Promise<Agent[]> {
     if (this.down) {
-      throw new HerdrError('timeout', 'herdr agent list timed out');
+      throw new HerdrError('timeout', 'herdr pane list timed out');
     }
     return structuredClone(this.agents);
   }
 
-  async agent(pane: string): Promise<Agent | null> {
+  async pane(pane: string): Promise<Agent | null> {
     if (this.down) {
-      throw new HerdrError('timeout', 'herdr agent get timed out');
+      throw new HerdrError('timeout', 'herdr pane get timed out');
     }
     return structuredClone(this.agents.find((a) => a.pane_id === pane) ?? null);
   }

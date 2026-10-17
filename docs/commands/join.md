@@ -21,13 +21,15 @@ agent's turn ends checks with Herdr that a recognized agent is really in that pa
 
 | What happens to the agent | Membership |
 |---|---|
-| Its pane is moved, even to another workspace | Stays in its original room; deliveries follow it |
-| No recognized agent is present | Stays; messages are dropped and their senders told |
+| Its pane is moved within the workspace | Stays |
+| Its pane is moved to another workspace | **Gone**: removed, and not joined to the new room |
+| No recognized agent is in it, e.g. just after Herdr restarts | Stays; posts to it are dropped and their authors told |
 | Its pane closes | **Gone**: removed, and the others are told |
+| Herdr's server restarts | Every room is cleared; agents join again |
 | Another agent or a new session starts in the pane | Stays; deliveries go to that agent |
 | It runs [`leave`](leave.md) | **Left** |
 
-A member is identified by the pane it joined from, across agent replacements and session changes
+A member is identified by the pane it joined from, whichever agent runs in it
 ([ADR 0009](../adr/0009-member-identity-is-launch-pane.md)), so it can only post as itself.
 
 ## Common questions
