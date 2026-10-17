@@ -14,6 +14,7 @@ function callerPane(env: NodeJS.ProcessEnv): string {
 
 export async function launch({
   agent,
+  model,
   handle,
   description,
   prompt,
@@ -21,6 +22,7 @@ export async function launch({
   env = process.env,
 }: {
   agent: string;
+  model?: string;
   handle: string;
   description: string;
   prompt?: string;
@@ -30,9 +32,10 @@ export async function launch({
   if (!['codex', 'claude', 'pi'].includes(agent)) {
     throw new Error('Supported agents are codex, claude and pi.');
   }
+  const args = modelArgs(model);
   const task = initialTask(prompt);
   if (target && target !== env.HERDR_PANE_ID) {
-    return launchInPane({ agent, handle, description, task, pane: target, env });
+    return launchInPane({ agent, model, handle, description, task, pane: target, env });
   }
   const current = callerPane(env);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -67,5 +70,22 @@ export async function launch({
   const inherited = Object.fromEntries(
     Object.entries(env).filter((entry) => entry[1] !== undefined),
   );
-  return process.execve(binary, [binary, '--', initial], inherited);
+  return process.execve(binary, [binary, ...args, '--', initial], inherited);
+}
+
+function modelArgs(model: string | undefined): string[] {
+  if (model === undefined) {
+    return [];
+  }
+  if (
+    !model ||
+    model.startsWith('-') ||
+    /\s/u.test(model) ||
+    sanitizeForTerminal(model) !== model
+  ) {
+    throw new Error(
+      'Use a nonempty model identifier without a leading hyphen, spaces or control characters.',
+    );
+  }
+  return ['--model', model];
 }

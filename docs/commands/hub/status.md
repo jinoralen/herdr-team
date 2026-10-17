@@ -34,6 +34,19 @@ In `status`'s recent activity, and in Herdr's plugin log:
   FYIs, notices and messages marked as possibly undelivered may stay: they wait for the next
   message that wakes the member.
 
+## Automation
+
+Use `status --json` for a machine-readable snapshot of the caller's workspace room.
+The object contains `room` and `members` (including left, gone and
+rejected records). Each member includes its handle, description, launch pane,
+join timestamp, status, terminal, agent, reason, held state, and `queuedFrom`.
+The snapshot is read in one transaction and makes no Herdr calls. It describes
+recorded membership, not live pane health.
+
+A handle is reusable when its status is left, gone or rejected and `queuedFrom`
+is false. Orchestrators closing a pane must wait for a tick to mark it gone and
+for outgoing messages to drain before joining a replacement with that handle.
+
 ## Where it fits
 
 The debugging view over [`message`](message.md) and [`tick`](tick.md). To stop a runaway

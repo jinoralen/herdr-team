@@ -305,9 +305,25 @@ export function leave({ env = process.env }: CommandOptions = {}): string {
 
 // What the current workspace's room is doing, for debugging: its members, what waits for each, and
 // the latest activity. Only reads the database, like the other agent commands.
-export function status({ env = process.env }: CommandOptions = {}): string {
+export function status({
+  env = process.env,
+  json = false,
+}: CommandOptions & { json?: boolean } = {}): string {
   const { workspace } = caller(env);
   const store = new Store(rootDir(env), workspace);
+  if (json) {
+    return store.transaction(() =>
+      JSON.stringify({
+        room: workspace,
+        members: (['pending', 'active', 'left', 'gone', 'rejected'] as const).flatMap((state) =>
+          store.members(state).map((member) => ({
+            ...member,
+            queuedFrom: store.hasQueuedFrom(member.handle),
+          })),
+        ),
+      }),
+    );
+  }
   const active = store.members('active');
   const pending = store.members('pending');
   const lines = [

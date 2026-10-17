@@ -44,7 +44,7 @@ EOF
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
-| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity |
+| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` for automation |
 | [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents |
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
@@ -60,6 +60,7 @@ This starts `codex` in the current pane with the join guide as its initial promp
 Add `--pane w1:p3` to start in another existing shell pane and return after membership is confirmed
 and the guide is submitted. Its workspace supplies the room. Pane creation and layout stay with
 the caller, such as compose.
+Add `--model <id>` to select a model when starting an agent.
 Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
 the guide. The description remains the short role shown to peers.
 

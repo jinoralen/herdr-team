@@ -28,6 +28,7 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
 - `agent_session` may appear some time after the agent is detected; a new value in the same terminal
   is a new conversation.
 - `join --agent --pane` uses `herdr agent start <name> --kind <kind> --pane <pane> --timeout 120000`.
+  Optional harness arguments follow `--`, e.g. `-- --model <id>` (checked with the installed CLI).
   The pane must be at an interactive shell prompt. Success means the expected agent was detected
   in the same terminal and is ready for input. The client allows 130 seconds for this operation.
   The hub then confirms membership and submits the room guide through `agent prompt`.

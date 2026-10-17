@@ -87,7 +87,15 @@ async function run(
 export function cliHerdr(env = process.env): Herdr {
   const bin = env.HERDR_BIN_PATH || 'herdr';
   return {
-    async startAgent({ kind, paneId }: { kind: string; paneId: string }): Promise<Agent> {
+    async startAgent({
+      kind,
+      paneId,
+      args = [],
+    }: {
+      kind: string;
+      paneId: string;
+      args?: string[];
+    }): Promise<Agent> {
       const result = await run(
         bin,
         [
@@ -100,6 +108,7 @@ export function cliHerdr(env = process.env): Herdr {
           paneId,
           '--timeout',
           '120000',
+          ...(args.length ? ['--', ...args] : []),
         ],
         { timeout: 130000, env },
       );

@@ -44,7 +44,12 @@ console.log(JSON.stringify({result: {pane: {
     LAUNCH_RESULT: result,
     LAUNCH_MARKER: 'preserved',
   };
-  async function start(agent: string, extra: Record<string, string> = {}, prompt?: string) {
+  async function start(
+    agent: string,
+    extra: Record<string, string> = {},
+    prompt?: string,
+    model?: string,
+  ) {
     const chunks: Buffer[] = [];
     const proc = Bun.spawn(
       [
@@ -57,6 +62,7 @@ console.log(JSON.stringify({result: {pane: {
         '--description',
         'reviews architecture',
         ...(prompt === undefined ? [] : ['--prompt', prompt]),
+        ...(model === undefined ? [] : ['--model', model]),
       ],
       {
         env: { ...env, ...extra },
@@ -144,4 +150,16 @@ test('same-pane startup appends the initial task after the guide without changin
   assert.ok(args[0].endsWith(`Your initial task:\n${task}`));
   assert.ok(args[0].indexOf('as @reviewer.') < args[0].indexOf('Your initial task:'));
   assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /Review the cache/);
+});
+
+test('terminal join forwards model selection before the initial prompt', async () => {
+  for (const agent of ['codex', 'claude', 'pi']) {
+    const { start, result } = await shell();
+    const model = agent === 'claude' ? 'sonnet[1m]' : 'example-v1';
+    const launched = await start(agent, {}, undefined, model);
+    assert.equal(launched.code, 23, launched.output);
+    const record = await Bun.file(result).json();
+    assert.deepEqual(record.args.slice(0, 2), ['--model', model]);
+    assert.match(record.args.at(-1), /as @reviewer/);
+  }
 });
