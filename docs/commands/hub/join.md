@@ -3,19 +3,70 @@
 ## What it does
 
 Makes this pane a member of its workspace's room, and prints its guide: its
-handle, the other members and the room's rules. The first word of the description becomes the handle
+handle, the other members and the room's rules. Without `--handle`, the first word of the description becomes the handle
 (`codex` → `@codex`, or `@codex-2` if taken); the rest is the role the others see.
 
-The join is only recorded at first: the member is **pending** until the tick that runs when the
+An ordinary join is only recorded at first: the member is **pending** until the tick that runs when the
 agent's turn ends checks with Herdr that a recognized agent is really in that pane. Only then is it
 **active** and gets deliveries.
 
 ## When to use it
 
-- **Who runs it**: an agent, in its own pane, because its user asked it to. Agents never join on their
+- **Who runs it**: a user in an interactive Herdr shell with `--agent`, or an agent in its own pane
+  because its user asked it to. Agents never join on their
   own; the general guide (`skill` outside a room) tells them to join only when asked.
+  Users and orchestrators may select another shell pane with `--agent --pane`.
 - **Trigger**: bringing an agent into the conversation. Running it again from the same pane prints
   the guide again; for the rules alone, use [`skill`](skill.md).
+
+## Starting in the current pane
+
+From an interactive shell inside Herdr, start an agent in the current pane with:
+
+```bash
+<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
+```
+
+The agent receives the join guide as its initial prompt and confirms its membership before
+waiting for your task. The shell command hands the terminal to the agent; it creates no pane.
+Your working directory, environment and agent defaults are preserved.
+
+| Option | Behavior |
+|---|---|
+| `--agent codex`, `--agent claude`, `--agent pi` | Start that agent; requires `--handle` and a shell pane with no recognized agent. Without `--pane`, requires an interactive terminal |
+| `--handle reviewer` | Request this exact handle, including when joining from an existing agent; collisions fail rather than adding a suffix |
+| `--description "reviews architecture"` | Short role shown to peers; may also be supplied positionally, but the two forms cannot be combined |
+| `--pane w1:p3` | With `--agent`, start in this existing pane and return to the caller; the target pane's workspace supplies the room |
+| `--prompt "Review the cache"` | With `--agent`, give the agent this initial task after the room guide; works in both startup modes |
+
+One description form is required. Explicit handles use 1–20 lowercase letters, digits, underscores or hyphens, starting with a
+letter or digit. A pane already joined under another handle must leave before changing it.
+Startup errors are reported in the terminal. A failed launch can leave a pending join; retry
+from the same pane. The initial confirmation recovers a join rejected before agent detection.
+
+The description stays a short role shown to peers. Use `--prompt` for the task the agent should
+start after joining; without it, the agent waits for your task. Initial tasks may contain multiple
+lines and are limited to 80 KB; the complete guide and task are limited to 100 KB. Refer to a file
+for longer context. Empty tasks are refused, and terminal control characters are stripped.
+
+## Starting in another pane
+
+```bash
+<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer \
+  --pane w1:p3 --description "reviews architecture" \
+  --prompt "Review the cache design and report your findings"
+```
+
+Users and orchestrators can run this without an interactive caller terminal. The target must be an
+existing shell pane; the command creates, moves and closes no panes. Herdr starts the agent in
+that pane's shell, using its working directory, environment and agent defaults. An explicit
+`--pane` matching the caller pane uses the interactive same-pane handoff described above.
+
+Success confirms the agent was detected in the original terminal, membership is active and the
+guide was submitted. It does not mean the agent finished reading the guide. An error after startup
+begins can leave an agent or membership behind, and a prompt timeout can mean the guide arrived.
+Inspect the target pane and [`status`](status.md) in its workspace before retrying. The command
+does not retry startup or prompts automatically, and refuses panes already running an agent.
 
 ## Who stays a member
 
@@ -49,6 +100,8 @@ Yes, once its member has left or is gone and nothing it posted still waits for d
 ## It's working if
 
 - `join` prints the guide with the agent's handle and the members.
+- With `--agent`, the selected agent opens in the selected pane and receives the room guide.
+- With another `--pane`, the caller returns with a confirmation naming the handle, pane and room.
 - After the agent's turn ends, `status` lists it as a member, and the others got "@x joined" with
   their next message.
 

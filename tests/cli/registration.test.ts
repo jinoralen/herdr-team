@@ -43,3 +43,28 @@ test('help and guest instructions describe the room', async () => {
   expect(guide.code).toBe(0);
   expect(guide.stdout).toContain('Join only if your user asked you to');
 });
+
+test('named descriptions work for ordinary joins and cannot be mixed with positional descriptions', async () => {
+  const { run } = cli();
+  await run(['tick']);
+  const mixed = await run(['join', '--description', 'reviews', 'other role'], { inPane: true });
+  expect(mixed.code).toBe(1);
+  expect(mixed.stderr).toContain('Use either --description or a positional description');
+  expect((await run(['status'], { inPane: true })).stdout).not.toContain('@reviews');
+  const joined = await run(
+    ['join', '--handle', 'reviewer', '--description', 'reviews architecture'],
+    { inPane: true },
+  );
+  expect(joined.code).toBe(0);
+  expect(joined.stdout).toContain('as @reviewer.');
+  expect((await run(['status'], { inPane: true })).stdout).toContain('reviews architecture');
+});
+
+test('an explicit handle does not replace the required description', async () => {
+  const { run } = cli();
+  await run(['tick']);
+  const joined = await run(['join', '--handle', 'reviewer'], { inPane: true });
+  expect(joined.code).toBe(1);
+  expect(joined.stderr).toContain("missing required argument 'description'");
+  expect((await run(['status'], { inPane: true })).stdout).not.toContain('@reviewer');
+});

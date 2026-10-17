@@ -18,7 +18,14 @@ async function outbox() {
   });
   await tick({
     root,
-    herdr: { listPanes: async () => [], pane: async () => null, prompt: async () => {} },
+    herdr: {
+      listPanes: async () => [],
+      pane: async () => null,
+      prompt: async () => {},
+      startAgent: async () => {
+        throw new Error('Unexpected agent startup.');
+      },
+    },
   });
   return { store: (room = 'w1') => new Store(root, room), env };
 }

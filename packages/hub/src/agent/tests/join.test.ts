@@ -22,6 +22,37 @@ test('join is idempotent for the same pane', async () => {
   assert.deepEqual(handles(), ['codex']);
 });
 
+test('an explicit handle is exact, idempotent and cannot rename a joined pane', async () => {
+  const { env, store } = await installed();
+  const options = { description: 'reviews architecture', handle: 'reviewer', env: env('p1') };
+  assert.match(join(options), /as @reviewer\./);
+  assert.match(join(options), /as @reviewer\./);
+  assert.throws(() => join({ ...options, handle: 'other' }), /already joined as @reviewer/);
+  assert.throws(() => join({ ...options, env: env('p2') }), /already in use/);
+  assert.equal(store().member('reviewer-2'), null);
+  assert.equal(store().memberByPane('p2'), null);
+});
+
+test('invalid explicit handles fail without joining', async () => {
+  const { env, store } = await installed();
+  for (const handle of ['', '@reviewer', 'UPPER', '-reviewer', 'a'.repeat(21), 'two words']) {
+    assert.throws(() => join({ description: 'reviewer', handle, env: env('p1') }), /A handle must/);
+  }
+  assert.equal(store().memberByPane('p1'), null);
+});
+
+test('confirmation recovers a terminal join rejected before agent detection', async () => {
+  const { env, tick, herdr, store } = await installed();
+  const options = { description: 'reviews architecture', handle: 'reviewer', env: env('p1') };
+  join(options);
+  await tick();
+  assert.equal(store().member('reviewer')!.status, 'rejected');
+  herdr.addAgent('p1', 'codex');
+  assert.match(join(options), /as @reviewer\./);
+  await tick();
+  assert.equal(store().member('reviewer')!.status, 'active');
+});
+
 test('a joining agent can post before its turn ends; the post goes out once it is admitted', async () => {
   const { herdr, env, joinAs, tick } = await installed();
   await joinAs('p1', 'claude');

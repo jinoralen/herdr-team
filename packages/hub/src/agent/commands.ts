@@ -86,8 +86,14 @@ function newMember(description: string, pane: string): Omit<Member, 'handle'> {
 // sees no agent in its pane) by the tick that runs when its turn ends; its posts are delivered after.
 export function join({
   description,
+  handle,
   env = process.env,
-}: CommandOptions & { description: string }): string {
+}: CommandOptions & { description: string; handle?: string }): string {
+  if (handle !== undefined && !/^[a-z0-9][a-z0-9_-]{0,19}$/.test(handle)) {
+    throw new Error(
+      'A handle must be 1–20 lowercase letters, digits, underscores or hyphens, starting with a letter or digit.',
+    );
+  }
   if (!description?.trim()) {
     throw new Error(`Usage: ${SELF} join <agent type or description>`);
   }
@@ -100,13 +106,23 @@ export function join({
   const store = new Store(rootDir(env), workspace);
   requireInstalled(store);
 
-  const handle = store.transaction(() => {
+  const joinedHandle = store.transaction(() => {
     // Re-joining from the same pane is idempotent: just print the instructions again.
     const existing = store.memberByPane(pane);
     if (existing) {
+      if (handle !== undefined && handle !== existing.handle) {
+        throw new Error(
+          `This pane already joined as @${existing.handle}. Leave before choosing another handle.`,
+        );
+      }
       return existing.handle;
     }
-    const candidate = freeHandle(store, slug(description));
+    const candidate = freeHandle(store, handle ?? slug(description));
+    if (handle !== undefined && candidate !== handle) {
+      throw new Error(
+        `Handle @${handle} is already in use or has undelivered posts. Choose another handle.`,
+      );
+    }
     const member = { ...newMember(description, pane), handle: candidate };
     store.saveMember(member);
     // Queued now, so it comes before anything the agent posts; held until the join is confirmed.
@@ -115,7 +131,7 @@ export function join({
     return candidate;
   });
 
-  return instructionsFor(store, handle, true);
+  return instructionsFor(store, joinedHandle, true);
 }
 
 function instructionsFor(store: Store, handle: string, justJoined: boolean): string {
