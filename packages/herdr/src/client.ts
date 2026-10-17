@@ -101,7 +101,7 @@ export function cliHerdr(env = process.env): Herdr {
         [
           'agent',
           'start',
-          `hub-${crypto.randomUUID()}`,
+          `hub-${crypto.randomUUID().slice(0, 28)}`,
           '--kind',
           kind,
           '--pane',
