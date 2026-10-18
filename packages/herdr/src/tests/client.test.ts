@@ -88,7 +88,7 @@ console.log(JSON.stringify({ result: { agent: {
   assert.equal(agent.terminal_id, 't3');
   const args = JSON.parse(fs.readFileSync(out, 'utf8'));
   assert.deepEqual(args.slice(0, 2), ['agent', 'start']);
-  assert.match(args[2], /^hub-/);
+  assert.match(args[2], /^hub-[a-z0-9_-]{1,28}$/);
   assert.deepEqual(args.slice(3), ['--kind', 'codex', '--pane', 'w2:p3', '--timeout', '120000']);
 });
 

@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "bun run build:hub",
+    "build": "bun run build:hub && bun run build:compose",
     "dev": "bun run --filter @herdr/hub dev",
     "typecheck": "bun check",
     "lint": "biome check .",
@@ -14,14 +14,17 @@
     "verify": "biome check . && bun check && knip && bun test",
     "prepare": "lefthook install",
     "db:generate": "bun run --filter @herdr/hub db:generate",
-    "build:hub": "bun run --filter @herdr/hub build"
+    "build:hub": "bun run --filter @herdr/hub build",
+    "build:compose": "bun run --filter @herdr/compose build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/bun": "latest",
     "knip": "6.41.0",
     "lefthook": "2.2.2",
-    "@herdr/hub": "workspace:*"
+    "@herdr/hub": "workspace:*",
+    "@herdr/compose": "workspace:*",
+    "@herdr/herdr": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^7"

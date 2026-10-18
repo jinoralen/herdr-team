@@ -63,7 +63,7 @@ function failure(args: string[], killed: boolean, stdout: string, stderr: string
   return new HerdrError('process_exit', (stderr || stdout).trim().slice(0, 500));
 }
 
-async function run(
+export async function run(
   bin: string,
   args: string[],
   { timeout, env }: { timeout: number; env: NodeJS.ProcessEnv },
@@ -101,7 +101,7 @@ export function cliHerdr(env = process.env): Herdr {
         [
           'agent',
           'start',
-          `hub-${crypto.randomUUID()}`,
+          `hub-${crypto.randomUUID().slice(0, 28)}`,
           '--kind',
           kind,
           '--pane',

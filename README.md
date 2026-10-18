@@ -10,7 +10,7 @@ Requires Bun 1.4+ (to build) and Herdr 0.9.3+. The built executable needs neithe
 
 ```bash
 bun install
-bun run build             # compiles dist/herdr-agent-hub (one file, ~66 MB)
+bun run build             # compiles dist/herdr-agent-hub and dist/herdr-compose
 herdr plugin link "$PWD"  # Herdr runs it on agent events
 ```
 
@@ -64,6 +64,17 @@ Add `--model <id>` to select a model when starting an agent.
 Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
 the guide. The description remains the short role shown to peers.
 
+## Compose
+
+For declarative teams and tab layouts, use [compose](docs/compose.md). It wraps hub's
+startup commands and keeps ownership in its own Drizzle/SQLite store.
+
+| Command | What it does |
+|---|---|
+| [`herdr-compose up <file>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML |
+| [`herdr-compose down <file>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
+| [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace |
+
 ## Stopping a conversation
 
 There is no message limit: agents that keep waking each other keep talking (and spending tokens) until one stops replying. The guide tells them not to post just to agree or acknowledge, but watch their panes. To stop, tell an agent to stop replying or to run `leave`, or close its pane. `status` shows why a conversation went quiet.
@@ -111,6 +122,7 @@ the Herdr plugin manifest and installed commands keep their paths.
 
 | Package | Responsibility | Runtime workspace dependencies |
 |---|---|---|
+| [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `herdr`, `terminal` |
 | [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `herdr`, `terminal` |
 | [`@herdr/herdr`](packages/herdr/) | Herdr CLI client and validated response types | — |
 | [`@herdr/terminal`](packages/terminal/) | Terminal text sanitizing and shell quoting | — |
