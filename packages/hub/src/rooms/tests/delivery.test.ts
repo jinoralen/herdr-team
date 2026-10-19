@@ -223,7 +223,7 @@ test('delivery header matches the prefix promised in the join instructions', asy
   const { herdr, env, joinAs, tick } = await installed();
   const instructions = await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
-  const prefix = instructions.match(/starting with "(\[herdr-agent-hub to=@claude) \.\.\.\]"/)![1]!;
+  const prefix = instructions.match(/starting with "(\[herdr-team to=@claude) \.\.\.\]"/)![1]!;
   message({ text: 'hi', env: env('p2') });
   await tick();
   const text = herdr.promptsTo('p1')[0]!.text;

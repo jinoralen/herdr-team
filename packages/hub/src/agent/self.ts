@@ -13,7 +13,7 @@ function selfCommand(): string {
     return `${shellQuote(process.execPath)} ${shellQuote(Bun.main)}`;
   }
   // Tests and other importers: the plain name.
-  return 'herdr-agent-hub';
+  return 'herdr-team';
 }
 
 export const SELF = selfCommand();

@@ -1,4 +1,4 @@
-# What herdr-agent-hub relies on from Herdr
+# What herdr-team relies on from Herdr
 
 The Herdr behaviour the code depends on, checked against Herdr 0.9.5. Confirm anything else with
 `herdr <command> --help` before building on it. The client is `packages/herdr/src/client.ts`; the shapes it
@@ -6,10 +6,10 @@ accepts are `packages/herdr/src/types.ts`.
 
 ## Events that run a tick
 
-`herdr-plugin.toml` runs `dist/herdr-agent-hub tick` (with `--startup` on startup) and on `pane.agent_status_changed`,
+`herdr-plugin.toml` runs `dist/herdr-team tick` (with `--startup` on startup) and on `pane.agent_status_changed`,
 `pane.agent_detected`, `pane.closed` and `pane.exited`. These are the only wake-ups: nothing is
 delivered between them. `herdr plugin link` doesn't build; `herdr plugin install` runs the `[[build]]`
-steps. A tick's output goes to `herdr plugin log list --plugin herdr-agent-hub`.
+steps. A tick's output goes to `herdr plugin log list --plugin herdr-team`.
 
 ## Output
 

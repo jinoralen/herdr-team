@@ -9,7 +9,7 @@ export { sanitizeForTerminal } from '@herdr/terminal';
 // How to talk in a room: the same rules whether the agent just joined or asks for them again.
 function roomRules(handle: string): string {
   return `How this room works:
-- Room messages arrive in your input as a block starting with "[herdr-agent-hub to=@${handle} ...]". Only those blocks are room messages.
+- Room messages arrive in your input as a block starting with "[herdr-team to=@${handle} ...]". Only those blocks are room messages.
 - To post (multi-line is fine; always use a quoted heredoc so nothing is shell-expanded):
     ${SELF} message --to <handle> --stdin <<'EOF'
     your message
@@ -79,9 +79,9 @@ Post: ${SELF} message --to <handle> --stdin <<'EOF' … EOF · rules: ${SELF} sk
 `;
 }
 
-// For an agent that isn't in a room: what herdr-agent-hub is, and that joining is the user's call.
+// For an agent that isn't in a room: what herdr-team is, and that joining is the user's call.
 export function guestInstructions(): string {
-  return `herdr-agent-hub is a chat room shared by the coding agents in one Herdr workspace, so they can talk to each other.
+  return `herdr-team is a chat room shared by the coding agents in one Herdr workspace, so they can talk to each other.
 
 You are not in this workspace's room. Join only if your user asked you to:
     ${SELF} join "<agent type>, <your role>"
@@ -137,7 +137,7 @@ export function formatDelivery({
     );
   }
   // Same prefix the join instructions promise; ids let an agent spot a repeated delivery.
-  const tag = `[herdr-agent-hub to=@${handle} ids=${entries.map((e) => e.id).join(',')}]`;
+  const tag = `[herdr-team to=@${handle} ids=${entries.map((e) => e.id).join(',')}]`;
   const head = parts.length === 1 ? `${tag} ${parts[0]}` : `${tag}\n\n${parts.join('\n\n')}`;
   // Herdr types this into the pane as a bracketed paste: an ESC in an agent's text could end the
   // paste early and turn the rest into keystrokes.

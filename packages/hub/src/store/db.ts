@@ -26,7 +26,7 @@ export type Db = BunSQLiteDatabase & { $client: Database };
 // platforms (Linux, macOS) always have one.
 function uid(): number {
   if (!process.getuid) {
-    throw new Error('herdr-agent-hub needs Linux or macOS (process.getuid is missing).');
+    throw new Error('herdr-team needs Linux or macOS (process.getuid is missing).');
   }
   return process.getuid();
 }
@@ -35,8 +35,8 @@ function uid(): number {
 // only unique within one. Herdr gives every pane and plugin command HERDR_SOCKET_PATH; without it
 // (run by hand outside Herdr), the base directory itself.
 export function rootDir(env = process.env): string {
-  // /tmp is writable from Codex's default workspace-write sandbox; override with HERDR_AGENT_HUB_DIR.
-  const base = env.HERDR_AGENT_HUB_DIR || path.join('/tmp', `herdr-agent-hub-${uid()}`);
+  // /tmp is writable from Codex's default workspace-write sandbox; override with HERDR_TEAM_STATE_DIR.
+  const base = env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${uid()}`);
   const socket = env.HERDR_SOCKET_PATH;
   if (!socket) {
     return path.resolve(base);
@@ -95,7 +95,7 @@ export function openDb(root: string): Db {
   transaction(db, () => {
     migrate(db);
     if (setAside) {
-      const text = `! ${dbPath(root)} was made by an incompatible herdr-agent-hub build; moved it to ${setAside} and started fresh. Agents must join again.`;
+      const text = `! ${dbPath(root)} was made by an incompatible herdr-team build; moved it to ${setAside} and started fresh. Agents must join again.`;
       db.insert(log).values({ room: null, at: Date.now(), text }).run();
       console.error(text);
     }

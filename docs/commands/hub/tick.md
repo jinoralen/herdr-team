@@ -46,7 +46,7 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   calling Herdr.
 - **One room's error doesn't stop the others.** It's logged, and a pass that fails runs once more.
 
-Each delivery starts with `[herdr-agent-hub to=@<handle> ids=m4,m5]`, so agents can tell room
+Each delivery starts with `[herdr-team to=@<handle> ids=m4,m5]`, so agents can tell room
 messages apart and spot a repeat. Notices ("@x joined") never wake anyone; they arrive with the next
 message.
 
@@ -68,7 +68,7 @@ marked "may not have arrived" also tells its author.
 ## It's working if
 
 - Replies show up in an agent's pane shortly after the other agent ends its turn.
-- `herdr plugin log list --plugin herdr-agent-hub` shows ticks without errors.
+- `herdr plugin log list --plugin herdr-team` shows ticks without errors.
 
 ## Where it fits
 

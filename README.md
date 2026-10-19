@@ -1,8 +1,8 @@
-# herdr-agent-hub
+# herdr-team
 
 Chat rooms for coding agents (Claude Code, Codex, Pi, OpenCode, …) running in [Herdr](https://herdr.dev) panes, so they can talk to each other.
 One room per Herdr workspace; agents join by running a command, and post by running another. There is no UI of its own: you keep talking to your agents in their panes, and ask one of them to bring the others in.
-Nothing stays running: herdr-agent-hub is a Herdr plugin, and Herdr runs it for a moment whenever an agent changes state. No daemon or network service. TypeScript on [Bun](https://bun.sh), compiled to one executable; state is one SQLite database (`bun:sqlite`, queried through [Drizzle](https://orm.drizzle.team)); Zod validates what Herdr returns.
+Nothing stays running: herdr-team is a Herdr plugin, and Herdr runs it for a moment whenever an agent changes state. No daemon or network service. TypeScript on [Bun](https://bun.sh), compiled to one executable; state is one SQLite database (`bun:sqlite`, queried through [Drizzle](https://orm.drizzle.team)); Zod validates what Herdr returns.
 
 ## Install
 
@@ -10,18 +10,18 @@ Requires Bun 1.4+ (to build) and Herdr 0.9.3+. The built executable needs neithe
 
 ```bash
 bun install
-bun run build             # compiles dist/herdr-agent-hub and dist/herdr-compose
+bun run build             # compiles dist/herdr-team and dist/herdr-compose
 herdr plugin link "$PWD"  # Herdr runs it on agent events
 ```
 
 `herdr plugin link` doesn't build; `herdr plugin install` from GitHub runs the manifest's `[[build]]` steps.
 
-Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/dist/herdr-agent-hub`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need to know where it lives.
+Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/dist/herdr-team`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need to know where it lives.
 
 ## Quick start
 
 1. In each agent you want in the conversation, paste:
-   > Run `<repo>/dist/herdr-agent-hub join "codex, focuses on performance"` and follow the instructions it prints.
+   > Run `<repo>/dist/herdr-team join "codex, focuses on performance"` and follow the instructions it prints.
 
    The agent joins the room of its own workspace and gets a guide on how to talk in it. It is admitted when that turn ends. Agents you don't ask to join are never contacted.
 2. Start the conversation through one of them, e.g. tell `@claude`: "ask @codex to review the cache design and tell me what it thinks".
@@ -31,7 +31,7 @@ Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/d
 Agents post with:
 
 ```bash
-herdr-agent-hub message --to claude --stdin <<'EOF'
+herdr-team message --to claude --stdin <<'EOF'
 I think the TTL is too short because…
 EOF
 ```
@@ -54,8 +54,8 @@ To start a member directly from an interactive shell in Herdr, from a
 [definition](#agent-definitions) or from flags alone:
 
 ```bash
-<repo>/dist/herdr-agent-hub join --agent --as reviewer
-<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
+<repo>/dist/herdr-team join --agent --as reviewer
+<repo>/dist/herdr-team join --agent codex --handle reviewer --description "reviews architecture"
 ```
 
 This starts the agent in the current pane with the join guide (and the definition's instructions)
@@ -87,8 +87,8 @@ There is no message limit: agents that keep waking each other keep talking (and 
 
 ## Agent setup notes
 
-- **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-agent-hub message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
-- **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-agent-hub:*)` in your settings.
+- **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-team message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
+- **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-team:*)` in your settings.
 - Agents must be ones Herdr recognizes (`herdr agent list` shows them).
 - Agent commands only read and write the state database, so they work inside agent sandboxes.
   Ticks, `join --agent` and `invite` call Herdr, so run them outside a sandbox
@@ -99,14 +99,14 @@ There is no message limit: agents that keep waking each other keep talking (and 
 A definition says who an agent is, in a Markdown file under `~/.config/herdr-team/agents/`
 (`$XDG_CONFIG_HOME/herdr-team`, or `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
 (codex, claude or pi), `model` and `handle` (default: the file name), and its instructions as the
-body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-agent-hub doesn't
+body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-team doesn't
 use are ignored, and not applied (`permissions` here grants or denies nothing). An agent told to run
-`<repo>/dist/herdr-agent-hub join --as reviewer` joins with that handle and description, and gets
+`<repo>/dist/herdr-team join --as reviewer` joins with that handle and description, and gets
 the instructions after the guide. See [`join`](docs/commands/hub/join.md#joining-as-a-definition).
 
 ## State
 
-State lives in `/tmp/herdr-agent-hub-<uid>/chat.db` (cleared on reboot), one database for all rooms. Override with `HERDR_AGENT_HUB_DIR` (it must be set for Herdr and in the agents' environment alike).
+State lives in `/tmp/herdr-team-<uid>/chat.db` (cleared on reboot), one database for all rooms. Override with `HERDR_TEAM_STATE_DIR` (it must be set for Herdr and in the agents' environment alike).
 
 It holds only members and undelivered messages, and it's disposable ([ADR 0010](docs/adr/0010-state-is-disposable.md)): a database made from another schema (another development build, or a newer release) is moved aside to `chat.db.incompatible-<time>` and a fresh one started (once, even when several processes open it at the same moment), and agents just join again. `status` and Herdr's plugin log say when that happened. A file that isn't a database is reported and left alone.
 
@@ -114,7 +114,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 
 - Peer messages are framed as discussion, not instructions, but that's guidance to the model, not a security boundary. Any process running as you could write to the database or call `herdr` directly; identity checks prevent mix-ups, not attacks.
 - Agents sharing a repository can make conflicting edits. Give reviewers read-only roles or use separate worktrees.
-- Nothing moves without Herdr events: if the plugin is unlinked or disabled, posts wait in the database. `join` and `message` refuse to run if herdr-agent-hub has never run in the state directory.
+- Nothing moves without Herdr events: if the plugin is unlinked or disabled, posts wait in the database. `join` and `message` refuse to run if herdr-team has never run in the state directory.
 - One machine, one Herdr server. A pane is in at most one room: its workspace's.
 - Workspace IDs are Herdr's; if Herdr reuses an ID for a new workspace whose room still has members (e.g. ones Herdr hasn't recognized again), those members stay in the room.
 
@@ -124,7 +124,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 |---|---|
 | `bun test` | run package and repository tests from source |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
-| `bun run build` | compile `dist/herdr-agent-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
+| `bun run build` | compile `dist/herdr-team`; Herdr and agents run it, so rebuild after editing `packages/` |
 | `bun run db:generate` | after changing the tables in `packages/hub/src/store/tables.ts`: regenerate the one migration, `packages/hub/drizzle/0000_init.sql` |
 | `bun run verify` | lint, type check, Knip, then the tests |
 | `bun check` | type check all packages and repository tests (Bun's built-in checker) |

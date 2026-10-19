@@ -11,7 +11,7 @@ test('two agents exchange a multiline message through real CLI processes', async
   const posted = await run(['message', '--stdin'], { inPane: true, stdin: text });
   expect(posted.code).toBe(0);
   expect((await run(['tick'])).code).toBe(0);
-  expect(prompts()).toContain('p2: [herdr-agent-hub to=@claude');
+  expect(prompts()).toContain('p2: [herdr-team to=@claude');
   expect(prompts()).toContain(text);
   expect(prompts()).not.toContain('p1:');
   const status = await run(['status'], { inPane: true, paneId: 'p2' });

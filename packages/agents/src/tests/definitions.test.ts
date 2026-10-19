@@ -60,7 +60,7 @@ test('a path (with a slash or ending in .md) is read from the caller cwd, its ha
   assert.equal(loadDefinition(path.join(dir, 'lead.md'), options).handle, 'lead');
 });
 
-test('keys herdr-agent-hub does not use are ignored, so files from other tools load as they are', () => {
+test('keys herdr-team does not use are ignored, so files from other tools load as they are', () => {
   const opencode = `---
 description: Read-only task reviewer.
 mode: subagent

@@ -32,9 +32,9 @@ export class Hub {
   readonly words: string[];
   readonly command: string;
   constructor(private readonly env: NodeJS.ProcessEnv) {
-    this.words = env.HERDR_AGENT_HUB_BIN
-      ? [env.HERDR_AGENT_HUB_BIN]
-      : words('herdr-agent-hub', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
+    this.words = env.HERDR_TEAM_HUB_BIN
+      ? [env.HERDR_TEAM_HUB_BIN]
+      : words('herdr-team', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
     this.command = this.words.map(shellQuote).join(' ');
   }
   private snapshot(): Membership[] {

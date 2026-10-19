@@ -9,7 +9,7 @@ test('join registers the pane, assigns handles and returns instructions', async 
   const { joinAs, handles } = await installed();
   const out = await joinAs('w1:p1', 'claude reviewer');
   assert.match(out, /as @claude\./);
-  assert.match(out, /herdr-agent-hub message --to <handle> --stdin <<'EOF'/);
+  assert.match(out, /herdr-team message --to <handle> --stdin <<'EOF'/);
   const out2 = await joinAs('w1:p2', 'claude implementer');
   assert.match(out2, /as @claude-2\./);
   assert.match(out2, /@claude — claude reviewer/);
@@ -77,7 +77,7 @@ test('a join is refused when Herdr sees no agent in the pane, and the agent lear
   );
 });
 
-test('agent commands explain when herdr-agent-hub has never run (plugin not installed)', async () => {
+test('agent commands explain when herdr-team has never run (plugin not installed)', async () => {
   const { env } = setup();
   assert.throws(
     () => join({ description: 'x', env: env('w1:p1') }),
@@ -88,7 +88,7 @@ test('agent commands explain when herdr-agent-hub has never run (plugin not inst
 test('commands refuse to run outside Herdr', async () => {
   const { root } = await installed();
   assert.throws(
-    () => message({ text: 'hi', env: { HERDR_AGENT_HUB_DIR: root } }),
+    () => message({ text: 'hi', env: { HERDR_TEAM_STATE_DIR: root } }),
     /inside a Herdr pane/,
   );
 });

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { sanitizeForTerminal } from '@herdr/terminal';
 import { z } from 'zod';
 
-// Only the keys herdr-agent-hub uses. Others (OpenCode's `permissions`, Claude Code's `tools`, …)
+// Only the keys herdr-team uses. Others (OpenCode's `permissions`, Claude Code's `tools`, …)
 // are dropped, so files written for other tools load as they are.
 const Frontmatter = z.object({
   description: z

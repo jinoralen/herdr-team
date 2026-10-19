@@ -14,7 +14,7 @@ function registration() {
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: workspace,
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: root,
   });
   return { root, env };
 }

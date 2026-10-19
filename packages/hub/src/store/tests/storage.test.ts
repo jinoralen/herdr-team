@@ -69,7 +69,7 @@ test('a database from an incompatible build is set aside, and the hub starts fre
   kept.close();
   assert.match(
     readLog(root, 'w1', 5)[0]!.text,
-    /incompatible herdr-agent-hub build.*Agents must join again/,
+    /incompatible herdr-team build.*Agents must join again/,
   );
 });
 
@@ -101,7 +101,7 @@ test('replacing an incompatible database waits for the replace lock held by anot
 });
 
 test('each Herdr session gets its own state directory, named for its socket', () => {
-  const base = { HERDR_AGENT_HUB_DIR: '/tmp/hub' };
+  const base = { HERDR_TEAM_STATE_DIR: '/tmp/hub' };
   assert.equal(rootDir(base), '/tmp/hub', 'outside Herdr');
   const main = rootDir({ ...base, HERDR_SOCKET_PATH: '/home/u/.config/herdr/herdr.sock' });
   const codex = rootDir({

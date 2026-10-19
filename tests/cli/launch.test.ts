@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
-  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 
 async function shell() {
@@ -39,7 +39,7 @@ console.log(JSON.stringify({result: {pane: {
     HERDR_ENV: '1',
     HERDR_PANE_ID: 'p1',
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: path.join(fixture.root, 'state'),
+    HERDR_TEAM_STATE_DIR: path.join(fixture.root, 'state'),
     HERDR_BIN_PATH: path.join(fixture.root, 'herdr'),
     LAUNCH_RESULT: result,
     LAUNCH_MARKER: 'preserved',

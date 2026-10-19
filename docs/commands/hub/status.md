@@ -28,7 +28,7 @@ authors told).
 
 **Where are errors from ticks?**
 In `status`'s recent activity, and in Herdr's plugin log:
-`herdr plugin log list --plugin herdr-agent-hub`.
+`herdr plugin log list --plugin herdr-team`.
 
 ## It's working if
 

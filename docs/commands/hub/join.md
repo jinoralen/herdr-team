@@ -49,8 +49,8 @@ A missing definition lists the ones in the folder.
 From an interactive shell inside Herdr, start an agent in the current pane with:
 
 ```bash
-<repo>/dist/herdr-agent-hub join --agent --as reviewer
-<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
+<repo>/dist/herdr-team join --agent --as reviewer
+<repo>/dist/herdr-team join --agent codex --handle reviewer --description "reviews architecture"
 ```
 
 With [`--as`](#joining-as-a-definition), the definition supplies the kind, model, handle and

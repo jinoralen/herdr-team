@@ -10,7 +10,7 @@ test('skill gives a member its own guide again, and anyone else the general one'
   const mine = skill({ env: env('p1') });
   assert.match(mine, /You are @claude in chat room "w1"/);
   assert.match(mine, /@codex — codex implementer/);
-  assert.match(mine, /starting with "\[herdr-agent-hub to=@claude \.\.\.\]"/);
+  assert.match(mine, /starting with "\[herdr-team to=@claude \.\.\.\]"/);
   assert.match(mine, /Answering a question is never --fyi/);
   assert.match(
     mine,

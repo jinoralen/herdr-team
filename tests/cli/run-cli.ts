@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const MAIN = fileURLToPath(import.meta.resolve('@herdr/hub/cli'));
 const BIN_DIR: string | undefined = process.env.HERDR_TEST_BIN_DIR;
 const COMMAND: string[] = BIN_DIR
-  ? [path.resolve(BIN_DIR, 'herdr-agent-hub')]
+  ? [path.resolve(BIN_DIR, 'herdr-team')]
   : [process.execPath, MAIN];
 
 // The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
@@ -36,7 +36,7 @@ type Result = { stdout: string; stderr: string; code: number };
 type Cli = {
   root: string;
   prompts: () => string;
-  // Runs `herdr-agent-hub <args>`, as an agent in pane p1 when inPane is set.
+  // Runs `herdr-team <args>`, as an agent in pane p1 when inPane is set.
   run: (
     args: string[],
     options?: { stdin?: string; inPane?: boolean; paneId?: string },
@@ -45,7 +45,7 @@ type Cli = {
 
 // env: more variables for every command, e.g. the HERDR_SOCKET_PATH Herdr gives a session.
 export function cli(env: Record<string, string> = {}): Cli {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-agent-hub-cli-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-cli-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const herdr = path.join(root, 'herdr');
   fs.writeFileSync(herdr, FAKE_HERDR, { mode: 0o755 });
@@ -53,7 +53,7 @@ export function cli(env: Record<string, string> = {}): Cli {
   const base = {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
-    HERDR_AGENT_HUB_DIR: path.join(root, 'state'),
+    HERDR_TEAM_STATE_DIR: path.join(root, 'state'),
     HERDR_BIN_PATH: herdr,
     PROMPTS: promptsLog,
     ...env,

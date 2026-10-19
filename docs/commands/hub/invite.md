@@ -16,8 +16,8 @@ an agent already runs: that is refused, with the line to paste into that agent i
   already running, tell it to run `join --as …` (the refusal prints the exact line).
 
 ```bash
-<repo>/dist/herdr-agent-hub invite w1:p3 --as reviewer --prompt "Review the cache design"
-<repo>/dist/herdr-agent-hub invite w1:p3 --agent codex --handle reviewer --description "reviews architecture"
+<repo>/dist/herdr-team invite w1:p3 --as reviewer --prompt "Review the cache design"
+<repo>/dist/herdr-team invite w1:p3 --agent codex --handle reviewer --description "reviews architecture"
 ```
 
 ## Options

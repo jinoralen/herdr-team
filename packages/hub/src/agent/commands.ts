@@ -55,11 +55,11 @@ function slug(description: string): string {
   );
 }
 
-// Ticks are run by the herdr-agent-hub Herdr plugin. If none ever ran, posts would wait forever.
+// Ticks are run by the herdr-team Herdr plugin. If none ever ran, posts would wait forever.
 function requireInstalled(store: Store): void {
   if (!serviceState(store.root).heartbeat) {
     throw new Error(
-      `herdr-agent-hub has never run here (${store.root}). Install it as a Herdr plugin: herdr plugin link <herdr-agent-hub directory>`,
+      `herdr-team has never run here (${store.root}). Install it as a Herdr plugin: herdr plugin link <herdr-team directory>`,
     );
   }
 }

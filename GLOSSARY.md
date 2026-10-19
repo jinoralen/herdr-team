@@ -1,4 +1,4 @@
-# herdr-agent-hub
+# herdr-team
 
 Chat rooms that let coding agents running in Herdr panes talk to each other, while their user keeps
 talking to each agent in its own pane.
@@ -25,7 +25,7 @@ _Avoid_: brief, bio
 **Definition**:
 A Markdown file in `~/.config/herdr-team/agents/` saying who an agent is: frontmatter with its
 description, harness (`kind`), model and handle, and its instructions as the body. The same shape as
-OpenCode's and Claude Code's agent files; keys herdr-agent-hub doesn't use are ignored.
+OpenCode's and Claude Code's agent files; keys herdr-team doesn't use are ignored.
 _Avoid_: profile, persona, agent config
 
 **Instructions**:
@@ -96,7 +96,7 @@ _Avoid_: skill (that word means agent skills), instructions, manual
 ## Delivery
 
 **Tick**:
-One run of herdr-agent-hub started by Herdr on an agent or pane event, or at startup; it runs
+One run of herdr-team started by Herdr on an agent or pane event, or at startup; it runs
 passes and exits.
 _Avoid_: daemon, worker, job
 

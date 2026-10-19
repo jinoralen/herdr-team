@@ -21,7 +21,7 @@ const oneOf = (values: readonly string[]): SQL => sql.raw(values.map((v) => `'${
 
 // One tick at a time serves every room; this single row is its lock and heartbeat.
 // owner is a per-tick token, so a tick that lost the lock notices instead of carrying on.
-// heartbeat > 0 also shows that herdr-agent-hub has run here at all (the Herdr plugin is installed).
+// heartbeat > 0 also shows that herdr-team has run here at all (the Herdr plugin is installed).
 // dirty: a tick was requested while another held the lock; the holder runs once more before releasing.
 // last_message_id: the id of the newest message (m1, m2, … across all rooms), so ids are never reused.
 export const service = sqliteTable(
@@ -112,8 +112,8 @@ export const queue = sqliteTable(
   ],
 );
 
-// What ticks and posts report, for `herdr-agent-hub status`. room is null for notices about
-// herdr-agent-hub as a whole.
+// What ticks and posts report, for `herdr-team status`. room is null for notices about
+// herdr-team as a whole.
 export const log = sqliteTable('log', {
   id: integer().primaryKey({ autoIncrement: true }),
   room: text(),

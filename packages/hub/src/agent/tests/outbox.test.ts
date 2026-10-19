@@ -14,7 +14,7 @@ async function outbox() {
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: root,
   });
   await tick({
     root,

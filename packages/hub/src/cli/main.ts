@@ -191,7 +191,7 @@ program
   .summary('bring rooms up to date once (run by Herdr)')
   .description(
     'Bring every room up to date once: admit joins, handle posts, deliver messages\n' +
-      'to agents that are idle, then exit. The herdr-agent-hub Herdr plugin runs it when an\n' +
+      'to agents that are idle, then exit. The herdr-team Herdr plugin runs it when an\n' +
       'agent changes state; running it by hand is harmless.',
   )
   .option('--startup', "Herdr's server just started: clear every room first (agents join again)")

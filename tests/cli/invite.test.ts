@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
-  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 const JOIN = [
   'invite',

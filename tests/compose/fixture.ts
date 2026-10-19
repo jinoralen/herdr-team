@@ -94,7 +94,7 @@ else if (a[0] === 'tab' && a[1] === 'create') {
   );
   fs.chmodSync(fake, 0o755);
   const hub = process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
   const env = {
     PATH: process.env.PATH ?? '',
@@ -102,12 +102,12 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     HERDR_ENV: '1',
     HERDR_PANE_ID: 'lead',
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: path.join(root, 'hub'),
+    HERDR_TEAM_STATE_DIR: path.join(root, 'hub'),
     HERDR_COMPOSE_DIR: path.join(root, 'compose'),
     HERDR_BIN_PATH: fake,
     HERDR_TEAM_DIR: path.join(root, 'team'),
     FAKE_STATE: state,
-    ...(process.env.HERDR_TEST_BIN_DIR ? { HERDR_AGENT_HUB_BIN: hub[0] } : {}),
+    ...(process.env.HERDR_TEST_BIN_DIR ? { HERDR_TEAM_HUB_BIN: hub[0] } : {}),
   };
   async function tick(): Promise<void> {
     const proc = Bun.spawn([...hub, 'tick'], { env, stdout: 'pipe', stderr: 'pipe' });

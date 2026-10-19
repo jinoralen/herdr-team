@@ -50,6 +50,6 @@ the database; losing ownership requires manual cleanup of the remaining panes.
 A separate SQLite lock serializes `up`/`down`; ownership updates commit after each
 step. Labelled allocations allow retry to find panes after a lost creation response.
 
-Compiled compose finds the sibling `herdr-agent-hub` executable. Set
-`HERDR_AGENT_HUB_BIN` to override it. Source runs locate hub's exported CLI.
+Compiled compose finds the sibling `herdr-team` executable. Set
+`HERDR_TEAM_HUB_BIN` to override it. Source runs locate hub's exported CLI.
 Compose only reads `status --json` and invokes `join`; it never opens hub's database.

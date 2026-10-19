@@ -276,6 +276,6 @@ test('a team is found by name in the herdr-team folder, and use: paths are relat
 // The hub executable compose itself runs.
 async function hubCommand(): Promise<string[]> {
   return process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 }

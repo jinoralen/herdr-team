@@ -18,7 +18,7 @@ async function routing() {
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: root,
   });
   // Exercise routing in isolation. Production delivery is wired through locked passes later.
   async function pass() {
