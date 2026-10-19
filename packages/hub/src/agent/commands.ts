@@ -15,6 +15,7 @@ import {
   Store,
   serviceState,
 } from '#store';
+import { copyAttachments, planAttachments, withAttachments } from './attachments.ts';
 import { leadingMention } from './recipients.ts';
 import { SELF } from './self.ts';
 import {
@@ -207,13 +208,23 @@ function resolveMembership(env: NodeJS.ProcessEnv): { store: Store; member: Memb
 
 // to: the handles from --to; without it, the post goes to every other member.
 // re: the id of the message it answers (--re). fyi: no reply needed, so it wakes nobody (--fyi).
+// attach: files to copy under files/ and list at the end of the post, resolved against cwd.
 export function message({
   text,
   to,
   re,
   fyi = false,
+  attach = [],
+  cwd = process.cwd(),
   env = process.env,
-}: CommandOptions & { text: string; to?: string[]; re?: string; fyi?: boolean }): string {
+}: CommandOptions & {
+  text: string;
+  to?: string[];
+  re?: string;
+  fyi?: boolean;
+  attach?: string[];
+  cwd?: string;
+}): string {
   if (typeof text !== 'string' || !text.trim()) {
     throw new Error('Message is empty. Pass text or use --stdin.');
   }
@@ -221,18 +232,32 @@ export function message({
     throw new Error('Message contains a NUL byte.');
   }
   const { store, member } = resolveMembership(env);
-  if (text.length > MAX_MESSAGE_CHARS) {
-    throw new Error(tooLong(store.root, member.handle, text.length));
+  const attachments = planAttachments({
+    paths: attach,
+    root: store.root,
+    handle: member.handle,
+    cwd,
+  });
+  const post = withAttachments(text, attachments);
+  if (post.length > MAX_MESSAGE_CHARS) {
+    throw new Error(tooLong(store.root, member.handle, post.length));
   }
   requireInstalled(store);
   const others = store.handles().filter((h) => h !== member.handle);
   const recipients = checkRecipients(to, others);
   const answers = re === undefined ? null : checkRe(store, re);
-  const id = store.enqueue(member.handle, text, recipients, {
+  copyAttachments(attachments);
+  const id = store.enqueue(member.handle, post, recipients, {
     kind: fyi ? 'fyi' : 'message',
     re: answers,
   });
-  const tags = [answers ? `re ${answers}` : '', fyi ? 'fyi' : ''].filter(Boolean).join(', ');
+  const tags = [
+    answers ? `re ${answers}` : '',
+    fyi ? 'fyi' : '',
+    attachments.length ? `${attachments.length} attached` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
   appendLog(
     store.root,
     store.room,
@@ -316,12 +341,12 @@ function tooLong(root: string, handle: string, length: number): string {
   // Unique even for several long posts in the same millisecond.
   const stamp = new Date().toISOString().replace(/[-:.]/g, '');
   const file = `${filesDir(root)}/${handle}-${stamp}-${crypto.randomUUID().slice(0, 8)}.md`;
-  return `Not queued: the message is too long (${length} chars, max ${MAX_MESSAGE_CHARS}). Save the full text to a file the others can read, then post a short message with its path:
+  return `Not queued: the message is too long (${length} chars, max ${MAX_MESSAGE_CHARS}). Save the full text to a file, then post a short summary with the file attached:
     cat > ${file} <<'EOF'
     the full text
     EOF
-    ${SELF} message [--to <handle>] --stdin <<'EOF'
-    <a short summary>. Details: ${file}
+    ${SELF} message [--to <handle>] --attach ${file} --stdin <<'EOF'
+    <a short summary>
     EOF`;
 }
 

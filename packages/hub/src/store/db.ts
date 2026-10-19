@@ -48,7 +48,8 @@ export function dbPath(root: string): string {
   return path.join(root, 'chat.db');
 }
 
-// Where agents put content too long for a message, and post its path instead. Created on demand.
+// Where attached files are copied, and where agents save content too long for a message. Created
+// on demand.
 export function filesDir(root: string): string {
   const dir = path.join(root, 'files');
   ensureDir(dir);

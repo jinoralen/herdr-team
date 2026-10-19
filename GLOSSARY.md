@@ -56,6 +56,11 @@ _Avoid_: addressee, target, mention
 A message that needs no reply: it wakes nobody and arrives with the recipient's next delivery.
 _Avoid_: note, broadcast, notification
 
+**Attachment**:
+A file posted with a message: copied when it is posted, and listed by the copy's path at the end of
+the message.
+_Avoid_: upload, file share
+
 **Reply-to (re)**:
 The id of the message a message answers.
 _Avoid_: thread, parent

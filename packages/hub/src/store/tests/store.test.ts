@@ -22,7 +22,7 @@ test('message refuses empty, too long and NUL text', async () => {
       );
       assert.ok(file.startsWith(`${root}/files/claude-`), file);
       assert.ok(fs.existsSync(path.dirname(file)), 'the directory is there to write into');
-      assert.match(error.message, /message \[--to <handle>\] --stdin <<'EOF'\n.*Details: /);
+      assert.match(error.message, /message \[--to <handle>\] --attach (\S+) --stdin <<'EOF'\n/);
       return true;
     },
   );
