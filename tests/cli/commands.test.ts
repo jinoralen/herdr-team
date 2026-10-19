@@ -50,7 +50,7 @@ test('an unknown command lists the commands and answers the usual guesses', asyn
   const { run } = cli();
   const typo = await run(['mesage', 'hi']);
   expect(typo.code).toBe(1);
-  expect(typo.stderr).toContain('Commands: join, message, skill, leave, status, tick.');
+  expect(typo.stderr).toContain('Commands: join, invite, message, skill, leave, status, tick.');
   expect(typo.stderr).toMatch(/Agents: run `.* skill`/);
   const inbox = await run(['inbox']);
   expect(inbox.code).toBe(1);
@@ -73,7 +73,7 @@ test('help separates the agent commands, and join the options only users start a
   );
   expect(own).toContain('--handle');
   expect(own).not.toContain('--agent');
-  expect(starting).toMatch(/--agent[\s\S]*--model[\s\S]*--pane[\s\S]*--prompt/);
+  expect(starting).toMatch(/--agent[\s\S]*--model[\s\S]*--prompt/);
 });
 
 test('--version prints the version', async () => {

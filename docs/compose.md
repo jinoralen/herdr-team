@@ -2,7 +2,7 @@
 
 Compose creates a team from YAML and reconciles its panes on explicit `up` calls.
 There is no watcher. Hub starts and joins each helper through its ordinary
-`join --agent --pane --prompt [--model]` command. It owns all membership and delivery.
+`invite <pane> --agent --prompt [--model]` command. It owns all membership and delivery.
 
 ```sh
 bun run build

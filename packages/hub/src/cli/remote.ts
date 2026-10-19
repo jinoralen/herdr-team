@@ -1,8 +1,45 @@
-// Starts and enrolls a member in an existing shell pane, leaving pane ownership to the caller.
+// `invite`: starts and enrolls a member in an existing shell pane, leaving pane ownership to the
+// caller. A pane where an agent already runs is never typed into: the caller gets the line to paste.
 import { type Agent, cliHerdr } from '@herdr/herdr';
-import { join, sanitizeForTerminal } from '#agent';
+import { shellQuote } from '@herdr/terminal';
+import { join, SELF, sanitizeForTerminal } from '#agent';
 import { rootDir, Store } from '#store';
-import { memberPrompt } from './prompt.ts';
+import { initialTask, memberPrompt } from './prompt.ts';
+import { resolveStart, type Start } from './start.ts';
+
+export function invite({
+  pane,
+  as,
+  prompt,
+  env = process.env,
+  ...given
+}: Partial<Start> & {
+  pane: string;
+  as?: string;
+  prompt?: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const start = resolveStart(given, as, env);
+  if (!['codex', 'claude', 'pi'].includes(start.agent)) {
+    throw new Error('Supported agents are codex, claude and pi.');
+  }
+  return launchInPane({ ...start, as, task: initialTask(prompt), pane, env });
+}
+
+// What to ask an agent already running in the pane to run instead.
+function joinLine({
+  as,
+  handle,
+  description,
+}: {
+  as?: string;
+  handle: string;
+  description: string;
+}): string {
+  return as === undefined
+    ? `${SELF} join --handle ${shellQuote(handle)} -- ${shellQuote(description)}`
+    : `${SELF} join --as ${shellQuote(as)}`;
+}
 
 function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
   if (
@@ -16,7 +53,7 @@ function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
   }
 }
 
-export async function launchInPane({
+async function launchInPane({
   agent,
   as,
   model,
@@ -44,7 +81,7 @@ export async function launchInPane({
   }
   if (pane.agent) {
     throw new Error(
-      'An agent is already running in the target pane. Choose an available shell pane.',
+      `${target} already runs ${pane.agent}. Ask it to run: ${joinLine({ as, handle, description })}\nor invite a shell pane.`,
     );
   }
   const targetEnv = {

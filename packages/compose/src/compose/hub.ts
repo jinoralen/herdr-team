@@ -68,7 +68,7 @@ export class Hub {
     agent: { kind: string; model?: string; handle: string; prompt: string },
     pane: string,
   ): Promise<void> {
-    const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
+    const proc = Bun.spawn([...this.words, 'invite', pane, ...this.agentArgs(agent)], {
       env: this.env,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -82,9 +82,17 @@ export class Hub {
       throw new Error(stderr.trim() || stdout.trim());
     }
   }
+  // Starts the lead in the caller's own pane; helpers go to their panes through invite.
   startArgs(agent: { kind: string; model?: string; handle: string; prompt: string }): string[] {
+    return ['join', ...this.agentArgs(agent)];
+  }
+  private agentArgs(agent: {
+    kind: string;
+    model?: string;
+    handle: string;
+    prompt: string;
+  }): string[] {
     return [
-      'join',
       '--agent',
       agent.kind,
       '--handle',

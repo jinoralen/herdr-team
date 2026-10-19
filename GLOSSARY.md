@@ -33,6 +33,11 @@ A definition's body: the standing role of an agent that joined as that definitio
 guide and repeated by `skill`.
 _Avoid_: system prompt, guide (the guide is the room's rules)
 
+**Invite**:
+Starting an agent in another, existing shell pane so it joins that pane's room (`invite <pane>`).
+Never done to a pane where an agent already runs.
+_Avoid_: spawn, add (a member)
+
 **User**:
 The human who runs the agents and talks to each in its own pane, never through the room.
 _Avoid_: operator, owner

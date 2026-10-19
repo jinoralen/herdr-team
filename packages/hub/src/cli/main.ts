@@ -9,6 +9,7 @@ import { version } from '#package';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
 import { launch } from './launch.ts';
+import { invite } from './remote.ts';
 import { unknownCommand } from './unknown.ts';
 
 const program = new Command()
@@ -42,11 +43,9 @@ function joinDescription(
 function checkStartOptions(options: {
   agent?: string | true;
   model?: string;
-  pane?: string;
   prompt?: string;
 }): void {
   for (const [flag, value] of [
-    ['--pane', options.pane],
     ['--prompt', options.prompt],
     ['--model', options.model],
   ] as const) {
@@ -66,10 +65,9 @@ program
       'Prints instructions for the agent on how to use the room.\n' +
       'Running it again from the same pane prints the instructions again.\n' +
       '\n' +
-      'Users, not agents: from an interactive Herdr shell, use --agent and --handle\n' +
-      'to start an agent in this pane with the room guide as its initial prompt.\n' +
-      'Add --pane to start in another existing shell pane and return after\n' +
-      'confirmation and guide submission.',
+      'Users, not agents: from an interactive Herdr shell, use --agent (and --as or\n' +
+      '--handle) to start an agent in this pane with the room guide as its initial\n' +
+      'prompt. To start one in another pane, use invite.',
   )
   .argument('[description...]', 'the agent type, then its role (or use --description)')
   .option(
@@ -81,7 +79,6 @@ program
   .optionsGroup('Starting an agent (run by the user from a shell, not by agents):')
   .option('--agent [type]', "start codex, claude or pi here; with --as, the definition's kind")
   .option('--model <id>', 'model for the agent being started (requires --agent)')
-  .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
   .option('--prompt <text>', 'initial task after joining (requires --agent)')
   .action(async (description, options) => {
     const role = joinDescription(description, options.description, options.as);
@@ -94,12 +91,31 @@ program
         handle: options.handle,
         description: role,
         prompt: options.prompt,
-        pane: options.pane,
       });
       console.log(output);
     } else {
       console.log(join({ as: options.as, description: role, handle: options.handle }));
     }
+  });
+
+program
+  .command('invite')
+  .summary('start an agent in another shell pane and bring it into its room')
+  .description(
+    'Start an agent in an existing Herdr shell pane, wait until it is a member of\n' +
+      "that pane's room, submit its guide and return. Run by a user, or by a lead\n" +
+      'agent bringing in helpers; only the pane given is ever touched. A pane where\n' +
+      'an agent already runs is refused, with the line to paste into that agent.',
+  )
+  .argument('<pane>', 'the shell pane to start the agent in, e.g. w1:p3')
+  .option('--as <definition>', 'start a definition from ~/.config/herdr-team/agents (name or path)')
+  .option('--agent <type>', "codex, claude or pi; with --as, overrides the definition's kind")
+  .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
+  .option('--description <text>', 'short role shown to the other members')
+  .option('--model <id>', 'model for the agent, passed to it unchanged')
+  .option('--prompt <text>', 'initial task after the guide')
+  .action(async (pane, options) => {
+    console.log(await invite({ pane, ...options }));
   });
 
 program

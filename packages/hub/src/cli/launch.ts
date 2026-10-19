@@ -1,10 +1,9 @@
 // Starts a room member in the user's current Herdr shell pane, with its guide as the first prompt.
-import { loadDefinition } from '@herdr/agents';
 import { cliHerdr } from '@herdr/herdr';
 import { shellQuote } from '@herdr/terminal';
 import { join, SELF, sanitizeForTerminal } from '#agent';
 import { initialTask, memberPrompt } from './prompt.ts';
-import { launchInPane } from './remote.ts';
+import { resolveStart, type Start } from './start.ts';
 
 function callerPane(env: NodeJS.ProcessEnv): string {
   if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
@@ -13,41 +12,14 @@ function callerPane(env: NodeJS.ProcessEnv): string {
   return env.HERDR_PANE_ID;
 }
 
-type Start = { agent: string; model?: string; handle: string; description: string };
-
-// What to start: the flags given, and the definition (--as) for the ones left out.
-function resolveStart(
-  given: Partial<Start>,
-  as: string | undefined,
-  env: NodeJS.ProcessEnv,
-): Start {
-  const definition = as === undefined ? null : loadDefinition(as, { env });
-  const agent = given.agent ?? definition?.kind;
-  if (!agent) {
-    throw new Error(
-      definition
-        ? `The definition ${as} has no kind. Add kind: codex, claude or pi to it, or pass --agent <kind>.`
-        : 'Starting an agent requires --agent <codex|claude|pi>, or --as a definition with a kind.',
-    );
-  }
-  const handle = given.handle ?? definition?.handle;
-  const description = given.description ?? definition?.description;
-  if (!handle || !description) {
-    throw new Error('Starting an agent requires --handle <handle>, or --as a definition.');
-  }
-  return { agent, model: given.model ?? definition?.model, handle, description };
-}
-
 export async function launch({
   as,
   prompt,
-  pane: target,
   env = process.env,
   ...given
 }: Partial<Start> & {
   as?: string;
   prompt?: string;
-  pane?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<string> {
   const start = resolveStart(given, as, env);
@@ -58,9 +30,6 @@ export async function launch({
   }
   const args = modelArgs(model);
   const task = initialTask(prompt);
-  if (target && target !== env.HERDR_PANE_ID) {
-    return launchInPane({ agent, as, model, handle, description, task, pane: target, env });
-  }
   const current = callerPane(env);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Starting an agent requires an interactive terminal.');
@@ -98,19 +67,7 @@ export async function launch({
   return process.execve(binary, [binary, ...args, '--', initial], inherited);
 }
 
+// The model was checked by resolveStart.
 function modelArgs(model: string | undefined): string[] {
-  if (model === undefined) {
-    return [];
-  }
-  if (
-    !model ||
-    model.startsWith('-') ||
-    /\s/u.test(model) ||
-    sanitizeForTerminal(model) !== model
-  ) {
-    throw new Error(
-      'Use a nonempty model identifier without a leading hyphen, spaces or control characters.',
-    );
-  }
-  return ['--model', model];
+  return model === undefined ? [] : ['--model', model];
 }

@@ -41,6 +41,7 @@ EOF
 | Command | Run by | What it does |
 |---|---|---|
 | [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--as` joins as a definition, `--agent` starts an agent with the guide |
+| [`invite`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in another shell pane and bring it into its room; `--as` a definition |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
@@ -60,9 +61,9 @@ To start a member directly from an interactive shell in Herdr, from a
 This starts the agent in the current pane with the join guide (and the definition's instructions)
 as its initial prompt: the definition's `kind`, or `codex`, `claude` or `pi` given to `--agent`,
 which also overrides it. The executable must be on PATH. Explicit handles fail on collisions.
-Add `--pane w1:p3` to start in another existing shell pane and return after membership is confirmed
-and the guide is submitted. Its workspace supplies the room. Pane creation and layout stay with
-the caller, such as compose.
+To start one in another existing shell pane instead, and return once its membership is confirmed
+and the guide submitted, use [`invite w1:p3`](docs/commands/hub/invite.md) with the same options.
+Pane creation and layout stay with the caller, such as compose.
 Add `--model <id>` to select a model when starting an agent.
 Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
 the guide. The description remains the short role shown to peers.
@@ -88,7 +89,8 @@ There is no message limit: agents that keep waking each other keep talking (and 
 - **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-agent-hub:*)` in your settings.
 - Agents must be ones Herdr recognizes (`herdr agent list` shows them).
 - Agent commands only read and write the state database, so they work inside agent sandboxes.
-  Ticks and the user-facing `join --agent` mode call Herdr outside the sandbox.
+  Ticks, `join --agent` and `invite` call Herdr, so run them outside a sandbox
+  ([ADR 0011](docs/adr/0011-invite-starts-agents-in-named-panes.md)).
 
 ## Agent definitions
 
