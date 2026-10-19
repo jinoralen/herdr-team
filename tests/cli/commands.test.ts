@@ -144,6 +144,26 @@ test('join, message from stdin and tick work end to end against Herdr', async ()
   );
 });
 
+test('message --attach, repeated, delivers the paths of copies of each file', async () => {
+  const { run, prompts, root } = cli();
+  const first = path.join(root, 'review.md');
+  const second = path.join(root, 'trace.log');
+  fs.writeFileSync(first, 'findings');
+  fs.writeFileSync(second, 'trace');
+  await run(['tick']);
+  await run(['join', 'codex'], { inPane: true });
+  await run(['join', 'claude'], { inPane: true, paneId: 'p2' });
+  await run(['tick']);
+  const posted = await run(['message', '--attach', first, '--attach', second, 'see attached'], {
+    inPane: true,
+  });
+  expect(posted.stdout).toMatch(/^Queued as @codex for @claude\./);
+  await run(['tick']);
+  const copies = [...prompts().matchAll(/^ {2}(\S+\/files\/codex-\S+)$/gm)].map((m) => m[1]!);
+  expect(prompts()).toContain('see attached\n\nAttached:\n');
+  expect(copies.map((p) => fs.readFileSync(p, 'utf8'))).toEqual(['findings', 'trace']);
+});
+
 test('status shows the room, its members and what ticks did', async () => {
   const { run } = cli();
   await run(['tick']);

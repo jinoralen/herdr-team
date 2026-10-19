@@ -25,10 +25,19 @@ is warned; a busy or blocked agent keeps its messages.
 | `--re m12` | It answers a specific message; the reader sees `@codex (re m12):` |
 | `--fyi` | It needs no reply: closing a question you asked, a note nobody asked for. It wakes nobody and arrives with the recipients' next message |
 | `--stdin` | Multi-line text, through a quoted heredoc so nothing is shell-expanded |
+| `--attach plan.md` | Long content (a plan, a log, a diff) goes with the post; repeat it for each file |
 
-A message is capped at 16,000 characters. A longer one is refused with a ready-made command that
-saves the text to a file under the state directory (`files/`); the agent posts the path instead,
-and the others can read the file because they run as the same user.
+## Attachments
+
+Each attached file is copied under the state directory (`files/`) when the post is made, and the
+post ends with an `Attached:` list of the copies' paths. Readers get the file as it was when it was
+posted, even if its author keeps editing it, and they can read it because they run as the same
+user. A file already under `files/` is listed as it is, not copied again. If any file is missing,
+unreadable or a folder, nothing is posted and nothing is copied.
+
+A message is capped at 16,000 characters, including the `Attached:` list. A longer one is refused
+with a ready-made command that saves the text to a file under `files/` and posts a short summary
+with that file attached.
 
 Control characters (escape sequences, carriage returns) are stripped on delivery; newlines and tabs
 are kept. Herdr types a delivery as a bracketed paste, and an escape in the text could otherwise end

@@ -41,7 +41,7 @@ EOF
 | Command | Run by | What it does |
 |---|---|---|
 | [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--agent` starts an agent with the guide |
-| [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it |
+| [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
 | [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` for automation |

@@ -104,10 +104,18 @@ program
   .option('--re <id>', 'the message this answers, from a delivery header (e.g. --re m12)')
   .option('--fyi', 'no reply needed: wakes nobody, arrives with their next message')
   .option('--stdin', 'read the message from standard input (use for multi-line text)')
+  .option(
+    '--attach <file>',
+    "attach a file (repeat for more): the others get a copy's path",
+    (file: string, files: string[]) => [...files, file],
+    [] as string[],
+  )
   .action(async (words, options) => {
     const fromStdin = options.stdin || (words.length === 0 && !process.stdin.isTTY);
     const text = fromStdin ? await Bun.stdin.text() : words.join(' ');
-    console.log(message({ text, to: options.to, re: options.re, fyi: options.fyi }));
+    console.log(
+      message({ text, to: options.to, re: options.re, fyi: options.fyi, attach: options.attach }),
+    );
   });
 
 program
