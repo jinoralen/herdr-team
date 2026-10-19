@@ -59,6 +59,22 @@ ${others.length ? others.join('\n') : '  (nobody else yet)'}
 ${roomRules(handle)}${outro}`;
 }
 
+// For the top of `--help` in a member's pane: enough to post without reading the whole guide.
+export function memberOrientation({
+  handle,
+  room,
+  others,
+}: {
+  handle: string;
+  room: string;
+  others: string[];
+}): string {
+  const company = others.length ? others.map((h) => `@${h}`).join(', ') : 'nobody else yet';
+  return `You are @${handle} in chat room "${room}", with ${company}.
+Post: ${SELF} message --to <handle> --stdin <<'EOF' … EOF · rules: ${SELF} skill
+`;
+}
+
 // For an agent that isn't in a room: what herdr-agent-hub is, and that joining is the user's call.
 export function guestInstructions(): string {
   return `herdr-agent-hub is a chat room shared by the coding agents in one Herdr workspace, so they can talk to each other.

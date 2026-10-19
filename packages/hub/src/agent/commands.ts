@@ -3,8 +3,10 @@
 // delivers it.
 // An agent's room is its Herdr workspace, so none of these take a room name.
 
+import fs from 'node:fs';
 import {
   appendLog,
+  dbPath,
   filesDir,
   MAX_MESSAGE_CHARS,
   type Member,
@@ -15,7 +17,12 @@ import {
 } from '#store';
 import { leadingMention } from './recipients.ts';
 import { SELF } from './self.ts';
-import { guestInstructions, memberInstructions, sanitizeForTerminal } from './text.ts';
+import {
+  guestInstructions,
+  memberInstructions,
+  memberOrientation,
+  sanitizeForTerminal,
+} from './text.ts';
 
 type CommandOptions = { env?: NodeJS.ProcessEnv };
 
@@ -152,6 +159,33 @@ export function skill({ env = process.env }: CommandOptions = {}): string {
   const store = new Store(rootDir(env), env.HERDR_WORKSPACE_ID);
   const member = store.memberByPane(env.HERDR_PANE_ID);
   return member ? instructionsFor(store, member.handle, false) : guestInstructions();
+}
+
+// For the top of `--help` in a pane that joined: who it is, and how to post. Empty anywhere else.
+// Help must always print, so it never creates the database, and a database it can't read is
+// left to the commands that need it.
+export function orientation({ env = process.env }: CommandOptions = {}): string {
+  if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
+    return '';
+  }
+  const root = rootDir(env);
+  if (!fs.existsSync(dbPath(root))) {
+    return '';
+  }
+  try {
+    const store = new Store(root, env.HERDR_WORKSPACE_ID);
+    const member = store.memberByPane(env.HERDR_PANE_ID);
+    if (!member) {
+      return '';
+    }
+    const others = store
+      .members('active')
+      .map((m) => m.handle)
+      .filter((h) => h !== member.handle);
+    return memberOrientation({ handle: member.handle, room: store.room, others });
+  } catch {
+    return '';
+  }
 }
 
 // A joined member, or one whose join the next tick will confirm.

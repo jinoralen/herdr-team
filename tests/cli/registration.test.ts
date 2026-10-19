@@ -38,7 +38,7 @@ test('help and guest instructions describe the room', async () => {
   await run(['tick']);
   const help = await run([]);
   expect(help.code).toBe(0);
-  expect(help.stdout).toContain('Commands:');
+  expect(help.stdout).toContain('Agent commands:');
   const guide = await run(['skill']);
   expect(guide.code).toBe(0);
   expect(guide.stdout).toContain('Join only if your user asked you to');
