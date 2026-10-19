@@ -1,7 +1,6 @@
 name: review
 lead:
-  kind: codex
-  prompt: Coordinate the reviewers and report findings to the user.
+  use: ./agents/coordinator.md
 shared:
   prompt: Review only; do not edit the shared checkout.
 tabs:
@@ -9,12 +8,10 @@ tabs:
     layout: columns
 agents:
   architecture:
-    kind: claude
+    use: ./agents/architecture-reviewer.md
     tab: reviewers
     cwd: ..
-    prompt: Review architecture when the lead assigns work. Report to the lead.
   correctness:
-    kind: codex
+    use: ./agents/correctness-reviewer.md
     tab: reviewers
     cwd: ..
-    prompt: Review correctness when the lead assigns work. Report to the lead.

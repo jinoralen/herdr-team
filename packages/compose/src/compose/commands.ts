@@ -13,7 +13,7 @@ import {
 import { recoverAllocations } from './allocation.ts';
 import { Hub } from './hub.ts';
 import { isCallerMember, prepareLead, type UpResult } from './lead.ts';
-import { deploymentName, loadPlan, type ManifestPlan } from './manifest.ts';
+import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './manifest.ts';
 import {
   cleanupTabs,
   createAgent,
@@ -25,18 +25,20 @@ import {
   save,
 } from './resources.ts';
 
+// file: a team name (teams/<name>.yaml in the herdr-team folder) or a path.
 // Linux caps one argv entry at 128 KiB; reserve space for the member guide.
 const MAX_HELPER_CONTEXT_BYTES = 80_000;
 
 type Options = { file: string; herdr: LayoutHerdr; env?: NodeJS.ProcessEnv };
 
 export async function up({
-  file,
+  file: team,
   herdr,
   env = process.env,
   interactive = true,
 }: Options & { interactive?: boolean }): Promise<UpResult> {
   const { pane, workspace } = requirePaneContext(env);
+  const file = resolveTeam(team, env);
   const root = rootDir(env);
   const hub = new Hub(env);
   hub.check();
@@ -45,7 +47,7 @@ export async function up({
     const member = hub.memberByPane(pane);
     const joined = isCallerMember(member, current);
     const leadHandle = joined && member ? member.handle : 'lead';
-    const plan = await loadPlan(file, leadHandle);
+    const plan = await loadPlan(file, leadHandle, env);
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, current);
     const lead = prepareLead({ plan, file, hub, pane, current, leadHandle, interactive });
@@ -273,7 +275,7 @@ async function moveToTab(
 
 export async function down({ file, herdr, env = process.env }: Options): Promise<string> {
   const { pane, workspace } = requirePaneContext(env);
-  const name = await deploymentName(file);
+  const name = await deploymentName(resolveTeam(file, env));
   const root = rootDir(env);
   const hub = new Hub(env);
   return withDeploymentLock(root, async () => {

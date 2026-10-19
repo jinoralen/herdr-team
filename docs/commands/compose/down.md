@@ -2,7 +2,7 @@
 
 ## What it does
 
-Closes the helpers owned by the deployment named in `down <file>`. The lead and
+Closes the helpers owned by the deployment named in `down <team>` (a team name or file). The lead and
 unrelated panes remain. Only the manifest's name is needed, including if context files disappeared.
 
 ## When to use it

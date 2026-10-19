@@ -46,7 +46,7 @@ export function prepareLead({
   }
   if (!running && !plan.lead) {
     throw new Error(
-      'No agent is running in this pane. Add lead.kind (codex, claude or pi) to the YAML file before running up from a shell.',
+      'No agent is running in this pane. Add a lead (lead: use: <definition with a kind>) to the team file before running up from a shell.',
     );
   }
   const joined = validateLeadHandle(hub, pane, leadHandle, current, plan);

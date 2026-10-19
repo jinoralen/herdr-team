@@ -1,6 +1,7 @@
 // A team's desired agents and simple tab layout. Resolve file context before changing any panes.
 import fs from 'node:fs';
 import path from 'node:path';
+import { type Definition, loadDefinition, teamFile } from '@herdr/agents';
 import { sanitizeForTerminal } from '@herdr/terminal';
 import { z } from 'zod';
 
@@ -10,25 +11,17 @@ const Shared = z.strictObject({
   prompt: z.string().default(''),
   files: z.array(z.string()).default([]),
 });
-const Model = z
-  .string()
-  .refine(
-    (model) =>
-      model.length > 0 &&
-      !model.startsWith('-') &&
-      !/\s/u.test(model) &&
-      sanitizeForTerminal(model) === model,
-    'Use a nonempty model identifier without a leading hyphen, spaces or control characters.',
-  );
+// Who an agent is lives in its definition (name, or path relative to the team file); the team adds
+// where it runs and this team's task.
+const Use = z.string().min(1);
 const Lead = z.strictObject({
-  kind: z.enum(['codex', 'claude', 'pi']),
-  model: Model.optional(),
+  use: Use,
   prompt: z.string().default(''),
 });
-export type LeadConfig = z.infer<typeof Lead>;
+// The lead as hub starts it: its definition's file and kind, and this team's task.
+export type LeadConfig = { definition: string; kind: string; prompt: string };
 const Agent = z.strictObject({
-  kind: z.enum(['codex', 'claude', 'pi']),
-  model: Model.optional(),
+  use: Use,
   handle: Key.optional(),
   tab: Key,
   cwd: z.string().default('.'),
@@ -42,6 +35,8 @@ const Manifest = z.strictObject({
   agents: z.record(Key, Agent),
 });
 export type DesiredAgent = {
+  // The definition's file, passed to hub's invite --as.
+  definition: string;
   kind: string;
   model?: string;
   handle: string;
@@ -57,6 +52,27 @@ export type ManifestPlan = {
   agents: Record<string, DesiredAgent>;
 };
 
+// A team by name (teams/<name>.yaml in the herdr-team folder) or path.
+export function resolveTeam(ref: string, env: NodeJS.ProcessEnv = process.env): string {
+  return teamFile(ref, { env });
+}
+
+// A definition that can start an agent: it has a kind.
+function startable(
+  use: string,
+  base: string,
+  env: NodeJS.ProcessEnv,
+  who: string,
+): Definition & { kind: string } {
+  const definition = loadDefinition(use, { env, cwd: base });
+  if (!definition.kind) {
+    throw new Error(
+      `${who} uses ${definition.file}, which has no kind. Add kind: codex, claude or pi to it.`,
+    );
+  }
+  return { ...definition, kind: definition.kind };
+}
+
 export async function deploymentName(file: string): Promise<string> {
   const raw = Bun.YAML.parse(await Bun.file(file).text());
   const parsed = z.object({ name: Key }).safeParse(raw);
@@ -65,7 +81,11 @@ export async function deploymentName(file: string): Promise<string> {
   }
   return parsed.data.name;
 }
-export async function loadPlan(file: string, leadHandle = 'lead'): Promise<ManifestPlan> {
+export async function loadPlan(
+  file: string,
+  leadHandle = 'lead',
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<ManifestPlan> {
   const parsed = Manifest.safeParse(Bun.YAML.parse(await Bun.file(file).text()));
   if (!parsed.success) {
     throw new Error(`Invalid team YAML: ${parsed.error.message}`);
@@ -84,6 +104,7 @@ export async function loadPlan(file: string, leadHandle = 'lead'): Promise<Manif
     if (!Object.hasOwn(config.tabs, a.tab)) {
       throw new Error(`Agent ${key} names unknown tab ${a.tab}.`);
     }
+    const definition = startable(a.use, base, env, `Agent ${key}`);
     const handle = a.handle ?? key;
     if (handles.has(handle)) {
       throw new Error(`Handle @${handle} is used by more than one agent.`);
@@ -99,18 +120,56 @@ export async function loadPlan(file: string, leadHandle = 'lead'): Promise<Manif
         .filter(Boolean)
         .join('\n\n'),
     );
-    const cwd = path.resolve(base, a.cwd);
-    if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
-      throw new Error(`Working directory ${cwd} is missing or is not a directory.`);
-    }
-    const fingerprint = new Bun.CryptoHasher('sha256')
-      .update(
-        JSON.stringify(
-          [a.kind, handle, cwd, prompt, a.model].filter((value) => value !== undefined),
-        ),
-      )
-      .digest('hex');
-    agents[key] = { kind: a.kind, model: a.model, handle, cwd, prompt, tab: a.tab, fingerprint };
+    agents[key] = desiredAgent({
+      definition,
+      handle,
+      cwd: path.resolve(base, a.cwd),
+      prompt,
+      tab: a.tab,
+    });
   }
-  return { name: config.name, lead: config.lead, tabs: config.tabs, agents };
+  return { name: config.name, lead: leadConfig(config.lead, base, env), tabs: config.tabs, agents };
+}
+
+function leadConfig(
+  lead: z.infer<typeof Lead> | undefined,
+  base: string,
+  env: NodeJS.ProcessEnv,
+): LeadConfig | undefined {
+  if (!lead) {
+    return undefined;
+  }
+  const { file, kind } = startable(lead.use, base, env, 'The lead');
+  return { definition: file, kind, prompt: lead.prompt };
+}
+
+// One helper as compose keeps it. The definition's contents are in the fingerprint, so editing it
+// replaces the helper like a prompt change.
+function desiredAgent({
+  definition,
+  handle,
+  cwd,
+  prompt,
+  tab,
+}: {
+  definition: Definition & { kind: string };
+  handle: string;
+  cwd: string;
+  prompt: string;
+  tab: string;
+}): DesiredAgent {
+  if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+    throw new Error(`Working directory ${cwd} is missing or is not a directory.`);
+  }
+  const { kind, model, description, instructions } = definition;
+  const fingerprint = new Bun.CryptoHasher('sha256')
+    .update(
+      JSON.stringify(
+        [kind, handle, cwd, prompt, model, description, instructions].filter(
+          (value) => value !== undefined,
+        ),
+      ),
+    )
+    .digest('hex');
+  return { definition: definition.file, kind, model, handle, cwd, prompt, tab, fingerprint };
 }

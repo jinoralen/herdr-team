@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadDefinition } from '../index.ts';
+import { loadDefinition, teamFile } from '../index.ts';
 
 // A fresh folder holding the given files, removed after the test.
 function folder(files: Record<string, string>): string {
@@ -29,6 +29,7 @@ test('a name loads agents/<name>.md from HERDR_TEAM_DIR', () => {
   const dir = folder({ 'agents/reviewer.md': REVIEWER });
   const definition = loadDefinition('reviewer', { env: { HERDR_TEAM_DIR: dir } });
   assert.deepEqual(definition, {
+    file: path.join(dir, 'agents', 'reviewer.md'),
     handle: 'reviewer',
     description: 'reviews architecture, read-only',
     kind: 'claude',
@@ -75,6 +76,7 @@ Load \`task-review\`.
 `;
   const dir = folder({ 'agents/task-reviewer.md': opencode });
   assert.deepEqual(loadDefinition('task-reviewer', { env: { HERDR_TEAM_DIR: dir } }), {
+    file: path.join(dir, 'agents', 'task-reviewer.md'),
     handle: 'task-reviewer',
     description: 'Read-only task reviewer.',
     model: 'openai/gpt-5.6-terra',
@@ -140,5 +142,25 @@ test('a definition saved with CRLF line endings loads like one with LF', () => {
   assert.equal(
     definition.instructions,
     'Review architecture when the lead assigns work.\nReport to the lead.',
+  );
+});
+
+test('a team name is teams/<name>.yaml in the folder; a path is read from the caller cwd', () => {
+  const dir = folder({
+    'teams/review.yaml': 'name: review\n',
+    'teams/audit.yml': '',
+    'local.yaml': '',
+  });
+  const options = { env: { HERDR_TEAM_DIR: dir }, cwd: dir };
+  assert.equal(teamFile('review', options), path.join(dir, 'teams', 'review.yaml'));
+  assert.equal(teamFile('local.yaml', options), path.join(dir, 'local.yaml'));
+  assert.equal(teamFile('./teams/audit.yml', options), path.join(dir, 'teams', 'audit.yml'));
+  assert.throws(
+    () => teamFile('reviw', options),
+    new Error(`No team "reviw" in ${path.join(dir, 'teams')}. Teams there: audit, review.`),
+  );
+  assert.throws(
+    () => teamFile('./none.yaml', options),
+    new Error(`No team file ${path.join(dir, 'none.yaml')}.`),
   );
 });

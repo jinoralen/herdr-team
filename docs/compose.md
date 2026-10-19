@@ -2,33 +2,38 @@
 
 Compose creates a team from YAML and reconciles its panes on explicit `up` calls.
 There is no watcher. Hub starts and joins each helper through its ordinary
-`invite <pane> --agent --prompt [--model]` command. It owns all membership and delivery.
+`invite <pane> --as <definition> --prompt` command. It owns all membership and delivery.
 
 ```sh
 bun run build
-<repo>/dist/herdr-compose up examples/team.yaml
+<repo>/dist/herdr-compose up examples/team.yaml   # a path, or
+<repo>/dist/herdr-compose up review              # ~/.config/herdr-team/teams/review.yaml
 <repo>/dist/herdr-compose status
-<repo>/dist/herdr-compose down examples/team.yaml
+<repo>/dist/herdr-compose down review
 ```
 
 Run these inside a Herdr workspace with the hub plugin installed. From a running
 agent, `up` prints coordinator instructions and preserves that agent. From an
-interactive shell, `lead.kind` starts the lead through hub in the caller's pane.
+interactive shell, `lead.use` starts the lead through hub in the caller's pane.
 The lead pane belongs to the user and is never closed by compose.
 
-A manifest has a `name`, optional `lead` (`kind`, `model`, `prompt`), `shared`
+A team names its agents' [definitions](commands/hub/join.md#joining-as-a-definition) and adds
+where they run. A manifest has a `name`, optional `lead` (`use`, `prompt`), `shared`
 (`prompt`, `files`), named `tabs` (`layout: rows` or `columns`), and named `agents`.
-Each agent has `kind` (codex, claude or pi), optional `model` and `handle`, `tab`,
-optional `cwd` and `prompt`. Handles default to agent keys. Keys and handles are
+Each agent has `use` (a definition: a name from `~/.config/herdr-team/agents/`, or a path),
+optional `handle`, `tab`, optional `cwd` and `prompt` (this team's task). Kind, model, the
+description peers see and the instructions come from the definition, which needs a `kind`;
+`kind` and `model` in the team file are refused. Handles default to agent keys, not the
+definition's handle, so two agents may use one definition. Keys and handles are
 1–20 lowercase letters, digits, underscores or hyphens, starting with a letter.
-Model values pass unchanged to the harness, including aliases such as `sonnet[1m]`;
-empty values, leading hyphens, whitespace and control characters are refused.
-All paths resolve relative to the manifest. Shared file contents are included
+Team files live in `~/.config/herdr-team/teams/` (`$XDG_CONFIG_HOME/herdr-team`, or
+`HERDR_TEAM_DIR`), and `up <name>` finds them there. All paths, `use` included, resolve
+relative to the manifest. Shared file contents are included
 in helpers' initial context; shared and agent prompts together define their purpose.
 
 An unchanged `up` preserves healthy conversations without prompting again.
-Changes to kind, model, handle, cwd, purpose or shared file contents replace the
-helper. Layout changes move existing terminals. Removed entries close owned panes.
+Changes to its definition (kind, model, description, instructions), handle, cwd,
+purpose or shared file contents replace the helper. Layout changes move existing terminals. Removed entries close owned panes.
 Only panes recorded as owned are closed; unrelated panes in managed tabs remain.
 
 Replacement uses hub's ordinary handle rules: after closing the old pane, `up`

@@ -71,12 +71,14 @@ the guide. The description remains the short role shown to peers.
 ## Compose
 
 For declarative teams and tab layouts, use [compose](docs/compose.md). It wraps hub's
-startup commands and keeps ownership in its own Drizzle/SQLite store.
+startup commands and keeps ownership in its own Drizzle/SQLite store. A team file lists its agents
+by [definition](#agent-definitions) (`use: reviewer`) plus where they run; see
+[`examples/team.yaml`](examples/team.yaml) and its `examples/agents/`.
 
 | Command | What it does |
 |---|---|
-| [`herdr-compose up <file>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML |
-| [`herdr-compose down <file>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
+| [`herdr-compose up <team>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML, by name (`~/.config/herdr-team/teams/`) or file |
+| [`herdr-compose down <team>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
 | [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace |
 
 ## Stopping a conversation
@@ -137,7 +139,7 @@ the Herdr plugin manifest and installed commands keep their paths.
 
 | Package | Responsibility | Runtime workspace dependencies |
 |---|---|---|
-| [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `herdr`, `terminal` |
+| [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `agents`, `herdr`, `terminal` |
 | [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `agents`, `herdr`, `terminal` |
 | [`@herdr/herdr`](packages/herdr/) | Herdr CLI client and validated response types | — |
 | [`@herdr/agents`](packages/agents/) | Agent definitions: finds and parses the Markdown files in `~/.config/herdr-team/agents/` | `terminal` |

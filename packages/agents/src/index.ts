@@ -33,6 +33,8 @@ const Frontmatter = z.object({
 const HANDLE = /^[a-z0-9][a-z0-9_-]{0,19}$/;
 
 export type Definition = {
+  // The file it was read from, absolute: what to pass to another process.
+  file: string;
   handle: string;
   description: string;
   kind?: 'codex' | 'claude' | 'pi';
@@ -52,41 +54,78 @@ function teamDir(env: NodeJS.ProcessEnv): string {
   return path.join(config, 'herdr-team');
 }
 
-// A name is a file in the folder's agents/; anything with a slash or ending in .md is a path.
-function definitionFile(ref: string, env: NodeJS.ProcessEnv, cwd: string): string {
-  if (!ref.includes('/') && !ref.endsWith('.md')) {
-    return path.join(teamDir(env), 'agents', `${ref}.md`);
+// The two kinds of file in the folder: definitions in agents/, compose teams in teams/.
+const KINDS = {
+  definition: {
+    dir: 'agents',
+    ext: ['.md'],
+    what: 'agent definition',
+    listed: 'Definitions',
+    first: 'frontmatter with a description (and kind to start one), then its instructions',
+  },
+  team: {
+    dir: 'teams',
+    ext: ['.yaml', '.yml'],
+    what: 'team',
+    listed: 'Teams',
+    first: 'a compose team',
+  },
+} as const;
+type Kind = (typeof KINDS)[keyof typeof KINDS];
+
+const isPath = (ref: string, kind: Kind): boolean =>
+  ref.includes('/') || kind.ext.some((ext) => ref.endsWith(ext));
+
+// A name is a file in the folder (agents/<name>.md, teams/<name>.yaml); a ref with a slash or the
+// file's extension is a path from cwd, a definition's extension optional.
+function locate(ref: string, kind: Kind, env: NodeJS.ProcessEnv, cwd: string): string {
+  if (!isPath(ref, kind)) {
+    const dir = path.join(teamDir(env), kind.dir);
+    const names = kind.ext.map((ext) => path.join(dir, `${ref}${ext}`));
+    const file = names.find((name) => fs.existsSync(name));
+    if (!file) {
+      throw missing(ref, kind, dir, names[0] as string);
+    }
+    return file;
   }
-  return path.resolve(cwd, ref.endsWith('.md') ? ref : `${ref}.md`);
+  const hasExt = kind.ext.some((ext) => ref.endsWith(ext));
+  const file = path.resolve(cwd, hasExt || kind === KINDS.team ? ref : `${ref}${kind.ext[0]}`);
+  if (!fs.existsSync(file)) {
+    throw new Error(`No ${kind.what} file ${file}.`);
+  }
+  return file;
 }
 
-// What to do when a definition isn't there: the names that are, or how to write the first one.
-function missing(ref: string, file: string): Error {
-  if (ref.includes('/') || ref.endsWith('.md')) {
-    return new Error(`No agent definition file ${file}.`);
-  }
-  const dir = path.dirname(file);
+// What to do when a name isn't there: the names that are, or how to write the first one.
+function missing(ref: string, kind: Kind, dir: string, first: string): Error {
   const names = fs.existsSync(dir)
     ? fs
         .readdirSync(dir)
-        .filter((name) => name.endsWith('.md'))
-        .map((name) => name.slice(0, -3))
+        .flatMap((name) => {
+          const ext = kind.ext.find((e) => name.endsWith(e));
+          return ext ? [name.slice(0, -ext.length)] : [];
+        })
         .sort()
     : [];
   const next = names.length
-    ? `Definitions there: ${names.join(', ')}.`
-    : `Create ${file}: frontmatter with a description (and kind to start one), then its instructions.`;
-  return new Error(`No agent definition "${ref}" in ${dir}. ${next}`);
+    ? `${kind.listed} there: ${names.join(', ')}.`
+    : `Create ${first}: ${kind.first}.`;
+  return new Error(`No ${kind.what} "${ref}" in ${dir}. ${next}`);
+}
+
+// A compose team file, by name or path.
+export function teamFile(
+  ref: string,
+  { env = process.env, cwd = process.cwd() }: Options = {},
+): string {
+  return locate(ref, KINDS.team, env, cwd);
 }
 
 export function loadDefinition(
   ref: string,
   { env = process.env, cwd = process.cwd() }: Options = {},
 ): Definition {
-  const file = definitionFile(ref, env, cwd);
-  if (!fs.existsSync(file)) {
-    throw missing(ref, file);
-  }
+  const file = locate(ref, KINDS.definition, env, cwd);
   const fail = (problem: string): Error => new Error(`Agent definition ${file}: ${problem}.`);
   // Files saved on Windows (or by editors set to CRLF) parse the same.
   const text = fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
@@ -107,6 +146,7 @@ export function loadDefinition(
     );
   }
   return {
+    file,
     handle,
     description: meta.description,
     ...(meta.kind && { kind: meta.kind }),

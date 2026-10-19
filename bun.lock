@@ -30,6 +30,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@commander-js/extra-typings": "15.0.0",
+        "@herdr/agents": "workspace:*",
         "@herdr/herdr": "workspace:*",
         "@herdr/terminal": "workspace:*",
         "commander": "15.0.0",
