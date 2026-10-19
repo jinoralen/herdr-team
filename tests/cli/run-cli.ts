@@ -10,9 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const MAIN = fileURLToPath(import.meta.resolve('@herdr/hub/cli'));
 const BIN_DIR: string | undefined = process.env.HERDR_TEST_BIN_DIR;
-const COMMAND: string[] = BIN_DIR
-  ? [path.resolve(BIN_DIR, 'herdr-team')]
-  : [process.execPath, MAIN];
+const COMMAND: string[] = BIN_DIR ? [path.resolve(BIN_DIR, 'herdr-hub')] : [process.execPath, MAIN];
 
 // The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
 const FAKE_HERDR = `#!/usr/bin/env bun
@@ -36,7 +34,7 @@ type Result = { stdout: string; stderr: string; code: number };
 type Cli = {
   root: string;
   prompts: () => string;
-  // Runs `herdr-team <args>`, as an agent in pane p1 when inPane is set.
+  // Runs `herdr-hub <args>`, as an agent in pane p1 when inPane is set.
   run: (
     args: string[],
     options?: { stdin?: string; inPane?: boolean; paneId?: string },

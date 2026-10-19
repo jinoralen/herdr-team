@@ -94,7 +94,7 @@ else if (a[0] === 'tab' && a[1] === 'create') {
   );
   fs.chmodSync(fake, 0o755);
   const hub = process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
   const env = {
     PATH: process.env.PATH ?? '',
@@ -102,8 +102,7 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     HERDR_ENV: '1',
     HERDR_PANE_ID: 'lead',
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_TEAM_STATE_DIR: path.join(root, 'hub'),
-    HERDR_COMPOSE_DIR: path.join(root, 'compose'),
+    HERDR_TEAM_STATE_DIR: path.join(root, 'state'),
     HERDR_BIN_PATH: fake,
     HERDR_TEAM_DIR: path.join(root, 'team'),
     FAKE_STATE: state,

@@ -14,6 +14,7 @@ import { recoverAllocations } from './allocation.ts';
 import { Hub } from './hub.ts';
 import { isCallerMember, prepareLead, type UpResult } from './lead.ts';
 import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './manifest.ts';
+import { dryRunText, keepAgent, needsTab, planChanges } from './plan.ts';
 import {
   cleanupTabs,
   createAgent,
@@ -25,20 +26,23 @@ import {
   save,
 } from './resources.ts';
 
-// file: a team name (teams/<name>.yaml in the herdr-team folder) or a path.
 // Linux caps one argv entry at 128 KiB; reserve space for the member guide.
 const MAX_HELPER_CONTEXT_BYTES = 80_000;
 
-type Options = { file: string; herdr: LayoutHerdr; env?: NodeJS.ProcessEnv };
+// file: a team name (teams/<name>.yaml in the herdr-team folder) or a path. Without it, up reads
+// herdr-team.yaml in the current folder, and down takes the workspace's only deployment.
+type Options = { file?: string; herdr: LayoutHerdr; env?: NodeJS.ProcessEnv };
 
 export async function up({
   file: team,
   herdr,
   env = process.env,
+  cwd = process.cwd(),
   interactive = true,
-}: Options & { interactive?: boolean }): Promise<UpResult> {
+  dryRun = false,
+}: Options & { cwd?: string; interactive?: boolean; dryRun?: boolean }): Promise<UpResult> {
   const { pane, workspace } = requirePaneContext(env);
-  const file = resolveTeam(team, env);
+  const file = resolveTeam(team, env, cwd);
   const root = rootDir(env);
   const hub = new Hub(env);
   hub.check();
@@ -59,14 +63,27 @@ export async function up({
       retired: [],
       allocations: [],
     };
-    const r: Runtime = { hub, root, state, herdr, lines: [] };
+    const r: Runtime = { hub, root, state, herdr, lines: [], dry: dryRun };
     preflight(r, plan, states);
+    const changes = await planChanges(r, plan);
+    if (dryRun) {
+      return {
+        output: sanitizeForTerminal(dryRunText(plan.name, changes, lead.launch)),
+        changes,
+        deployment: plan.name,
+      };
+    }
     await recoverAllocations(r);
     await reconcile(r, plan);
     const summary = sanitizeForTerminal(
       r.lines.join('\n') || `Deployment ${plan.name} is unchanged.`,
     );
-    return { output: `${summary}\n\n${lead.output}`, launch: lead.launch };
+    return {
+      output: `${summary}\n\n${lead.output}`,
+      launch: lead.launch,
+      changes,
+      deployment: plan.name,
+    };
   });
 }
 
@@ -142,31 +159,6 @@ async function reconcile(r: Runtime, plan: ManifestPlan): Promise<void> {
   save(r);
 }
 
-async function keepAgent(r: Runtime, key: string, plan: ManifestPlan): Promise<boolean> {
-  const old = r.state.agents[key];
-  const desired = plan.agents[key];
-  if (!old || !desired || old.fingerprint !== desired.fingerprint || old.phase !== 'ready') {
-    return false;
-  }
-  const agents = await r.herdr.listPanes();
-  const panes = await r.herdr.listPaneTopology();
-  const member = r.hub.member(old.handle);
-  const live = agents.find((a) => a.terminal_id === old.terminal);
-  if (old.session && live?.agent_session?.value && old.session !== live.agent_session.value) {
-    return false;
-  }
-  if (!old.session && live?.agent_session?.value) {
-    old.session = live.agent_session.value;
-    save(r);
-  }
-  return !!(
-    member?.joined_at === old.joinedAt &&
-    ['active', 'pending'].includes(member.status) &&
-    live?.agent === desired.kind &&
-    paneFor(panes, old)
-  );
-}
-
 async function retireTab(r: Runtime, key: string): Promise<void> {
   const tab = r.state.tabs[key];
   if (!tab) {
@@ -207,25 +199,6 @@ async function arrangeTab(
   for (const agentKey of order) {
     anchor = await placeAgent(r, plan, agentKey, tab, anchor);
   }
-}
-
-function needsTab(
-  tab: ManagedTab | undefined,
-  panes: Pane[],
-  layout: string,
-  order: string[],
-  state: Deployment,
-): boolean {
-  if (!tab || tab.layout !== layout || JSON.stringify(tab.order) !== JSON.stringify(order)) {
-    return true;
-  }
-  const present = panes.some((p) => p.tab_id === tab.id);
-  const missing = order.some((a) => !state.agents[a]);
-  const outside = order.some((a) => {
-    const live = panes.find((p) => p.terminal_id === state.agents[a]?.terminal);
-    return !!live && live.tab_id !== tab.id;
-  });
-  return !present || (!tab.root && missing) || outside;
 }
 
 async function placeAgent(
@@ -273,28 +246,60 @@ async function moveToTab(
   r.lines.push(`Moved pane ${pane.pane_id}.`);
 }
 
-export async function down({ file, herdr, env = process.env }: Options): Promise<string> {
+// json: the outcome as JSON: the deployment taken down (null if none) and the handles removed.
+export async function down({
+  file,
+  herdr,
+  env = process.env,
+  json = false,
+}: Options & { json?: boolean }): Promise<string> {
   const { pane, workspace } = requirePaneContext(env);
-  const name = await deploymentName(resolveTeam(file, env));
+  const name = file === undefined ? undefined : await deploymentName(resolveTeam(file, env));
   const root = rootDir(env);
   const hub = new Hub(env);
-  return withDeploymentLock(root, async () => {
+  const outcome = await withDeploymentLock(root, async (): Promise<DownOutcome> => {
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, await callerAgent(herdr, hub, pane));
-    const state = states.find((s) => s.name === name);
+    const state = name === undefined ? onlyDeployment(states) : states.find((s) => s.name === name);
     if (!state) {
-      return `Deployment ${name} is already down.`;
+      return name === undefined
+        ? { deployment: null, removed: [], text: 'No deployments in this workspace.' }
+        : { deployment: name, removed: [], text: `Deployment ${name} is already down.` };
     }
+    const removed = Object.values(state.agents).map((a) => a.handle);
     const r: Runtime = { hub, root, state, herdr, lines: [] };
-    await recoverAllocations(r);
-    for (const key of Object.keys(state.agents)) {
-      await removeAgent(r, key);
-    }
-    for (const key of Object.keys(state.tabs)) {
-      await retireTab(r, key);
-    }
-    await cleanupTabs(r);
-    deleteDeployment(root, state);
-    return sanitizeForTerminal(`Deployment ${name} is down.\n${r.lines.join('\n')}`);
+    await tearDown(r);
+    return {
+      deployment: state.name,
+      removed,
+      text: sanitizeForTerminal(`Deployment ${state.name} is down.\n${r.lines.join('\n')}`),
+    };
   });
+  const { text, ...result } = outcome;
+  return json ? JSON.stringify(result) : text;
+}
+
+type DownOutcome = { deployment: string | null; removed: string[]; text: string };
+
+// Close every helper and tab the deployment owns, then forget it.
+async function tearDown(r: Runtime): Promise<void> {
+  await recoverAllocations(r);
+  for (const key of Object.keys(r.state.agents)) {
+    await removeAgent(r, key);
+  }
+  for (const key of Object.keys(r.state.tabs)) {
+    await retireTab(r, key);
+  }
+  await cleanupTabs(r);
+  deleteDeployment(r.root, r.state);
+}
+
+// down without a team: the workspace's only deployment, or none; it can't guess between several.
+function onlyDeployment(states: Deployment[]): Deployment | undefined {
+  if (states.length > 1) {
+    throw new Error(
+      `This workspace has ${states.length} deployments: ${states.map((s) => s.name).join(', ')}. Name the one to take down.`,
+    );
+  }
+  return states[0];
 }

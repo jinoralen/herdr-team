@@ -1,5 +1,6 @@
 // Keeps the member guide ahead of the user's initial task in both startup modes.
-import { sanitizeForTerminal } from '#agent';
+import { shellQuote } from '@herdr/terminal';
+import { SELF, sanitizeForTerminal } from '#agent';
 
 // Leave room for the guide below Linux's 128 KiB limit for a single argv entry.
 const MAX_TASK_BYTES = 80_000;
@@ -27,4 +28,27 @@ export function memberPrompt(guide: string, task: string): string {
     );
   }
   return prompt;
+}
+
+// The join a started agent confirms with.
+export function joinLine({
+  as,
+  handle,
+  description,
+}: {
+  as?: string;
+  handle?: string;
+  description?: string;
+}): string {
+  const agent = as === undefined ? '' : ` ${shellQuote(as)}`;
+  const named = handle === undefined ? '' : ` --handle ${shellQuote(handle)}`;
+  const role = description === undefined ? '' : ` --description ${shellQuote(description)}`;
+  return `${SELF} join${agent}${named}${role}`;
+}
+
+// For an agent already running in a pane: the definition alone is enough, else handle and role.
+export function pasteLine(start: { as?: string; handle: string; description: string }): string {
+  return start.as === undefined
+    ? joinLine({ handle: start.handle, description: start.description })
+    : joinLine({ as: start.as });
 }

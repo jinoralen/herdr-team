@@ -26,8 +26,8 @@ test('up starts through hub, keeps healthy conversations and moves layout withou
   history = (await f.read()).calls;
   assert.equal(history.filter((a: string[]) => a[1] === 'start').length, 1);
   assert.equal(history.filter((a: string[]) => a[1] === 'prompt').length, 1);
-  assert.ok(fs.existsSync(path.join(f.root, 'compose', 'compose.db')));
-  assert.ok(fs.existsSync(path.join(f.root, 'hub', 'chat.db')));
+  assert.ok(fs.existsSync(path.join(f.root, 'state', 'compose', 'compose.db')));
+  assert.ok(fs.existsSync(path.join(f.root, 'state', 'hub', 'chat.db')));
 });
 
 test('changed purpose waits for hub to retire the old membership before replacing', async () => {
@@ -59,7 +59,7 @@ test('down retains unrelated panes and ownership survives hub state removal', as
       },
     ],
   });
-  fs.rmSync(path.join(f.root, 'hub'), { recursive: true });
+  fs.rmSync(path.join(f.root, 'state', 'hub'), { recursive: true });
   await down(f);
   assert.deepEqual((await f.read()).panes.map((p: { pane_id: string }) => p.pane_id).sort(), [
     'foreign',
@@ -132,7 +132,7 @@ test('status reports ownership without Herdr access and down needs no context fi
   const f = await fixture();
   await up(f);
   const before = (await f.read()).calls.length;
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready\)/);
+  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
   assert.equal((await f.read()).calls.length, before);
   await Bun.write(f.file, 'name: test\nshared:\n  files: [missing.md]\n');
   await down(f);
@@ -185,9 +185,9 @@ for (const swap of [false, true]) {
     );
     await f.tick();
     await up(f);
-    assert.match(status({ env: f.env }), /reviewer=@auditor \(ready\)/);
+    assert.match(status({ env: f.env }), /reviewer=@auditor \(ready; room: \w+\)/);
     if (swap) {
-      assert.match(status({ env: f.env }), /auditor=@reviewer \(ready\)/);
+      assert.match(status({ env: f.env }), /auditor=@reviewer \(ready; room: \w+\)/);
     }
     const starts = (await f.read()).calls.filter((args) => args[1] === 'start').length;
     await up(f);
@@ -267,15 +267,130 @@ test('a team is found by name in the herdr-team folder, and use: paths are relat
   );
   fs.writeFileSync(path.join(teams, 'test.yaml'), yaml);
   await up({ ...f, file: 'test' });
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready\)/);
+  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
   const prompt = (await f.read()).calls.find((a: string[]) => a[1] === 'prompt')![3]!;
   assert.match(prompt, /Your instructions:\nHelp\./);
   assert.match(await down({ ...f, file: 'test' }), /is down/);
 });
 
+test('up without a team reads herdr-team.yaml in the current folder only', async () => {
+  const f = await fixture();
+  const project = path.join(f.root, 'project');
+  fs.mkdirSync(path.join(project, 'nested'), { recursive: true });
+  fs.mkdirSync(path.join(f.root, 'team', 'teams'), { recursive: true });
+  fs.writeFileSync(path.join(f.root, 'team', 'teams', 'review.yaml'), 'name: review\n');
+  await assert.rejects(
+    up({ ...f, file: undefined, cwd: project }),
+    new RegExp(`No herdr-team\\.yaml in ${project}\\. Teams in .*teams: review; name one\\.`),
+  );
+  fs.copyFileSync(f.file, path.join(project, 'herdr-team.yaml'));
+  await assert.rejects(
+    up({ ...f, file: undefined, cwd: path.join(project, 'nested') }),
+    /No herdr-team/,
+  );
+  await up({ ...f, file: undefined, cwd: project });
+  assert.match(status({ env: f.env }), /Deployment test: reviewer=@reviewer \(ready; room: \w+\)/);
+});
+
+test('down without a team takes down the only deployment, and names them when there are several', async () => {
+  const f = await fixture();
+  assert.equal(await down({ ...f, file: undefined }), 'No deployments in this workspace.');
+  await up(f);
+  const other = path.join(f.root, 'other.yaml');
+  fs.writeFileSync(other, 'name: other\ntabs: {}\nagents: {}\n');
+  await up({ ...f, file: other });
+  await assert.rejects(
+    down({ ...f, file: undefined }),
+    /This workspace has 2 deployments: (other, test|test, other)\. Name the one to take down\./,
+  );
+  await down({ ...f, file: other });
+  assert.match(await down({ ...f, file: undefined }), /Deployment test is down\./);
+});
+
+test('up --dry-run says what it would do and why, and changes nothing', async () => {
+  const f = await fixture();
+  const fresh = await up({ ...f, dryRun: true });
+  assert.equal(
+    fresh.output,
+    'Dry run of test; nothing was changed.\nLay out tab helpers in a new tab.\nStart @reviewer (reviewer) in tab helpers.',
+  );
+  assert.equal(status({ env: f.env }), 'No deployments in this workspace.');
+  await up(f);
+  const before = (await f.read()).calls.length;
+  assert.match((await up({ ...f, dryRun: true })).output, /Deployment test is unchanged\./);
+  await f.write('Review security');
+  await f.define(
+    'reviewer',
+    '---\ndescription: reviews security\nkind: codex\nmodel: example-v1\n---\nReview.\n',
+  );
+  const changed = await up({ ...f, dryRun: true });
+  assert.match(
+    changed.output,
+    /Replace @reviewer \(reviewer\): its definition changed, its prompt changed\./,
+  );
+  assert.deepEqual(changed.changes, [
+    {
+      action: 'replace',
+      agent: 'reviewer',
+      handle: 'reviewer',
+      reasons: ['its definition changed', 'its prompt changed'],
+    },
+  ]);
+  const after = (await f.read()).calls.slice(before);
+  assert.equal(
+    after.some((a: string[]) => ['create', 'start', 'close', 'move', 'prompt'].includes(a[1]!)),
+    false,
+  );
+  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
+});
+
+test("status shows each helper's room membership, and JSON for status, down and up", async () => {
+  const f = await fixture();
+  await up(f);
+  const listed = JSON.parse(status({ env: f.env, json: true }));
+  assert.equal(listed.deployments[0].name, 'test');
+  assert.deepEqual(
+    { ...listed.deployments[0].agents[0], pane: 'p' },
+    { key: 'reviewer', handle: 'reviewer', phase: 'ready', pane: 'p', room: 'active' },
+  );
+  fs.rmSync(path.join(f.root, 'state', 'hub'), { recursive: true });
+  await f.tick();
+  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: not a member\)/);
+  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file, '--dry-run', '--json'], {
+    env: f.env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const planned = JSON.parse(await new Response(cli.stdout).text());
+  assert.equal(await cli.exited, 0);
+  assert.equal(planned.deployment, 'test');
+  assert.equal(planned.dryRun, true);
+  assert.deepEqual(planned.changes[0], {
+    action: 'replace',
+    agent: 'reviewer',
+    handle: 'reviewer',
+    reasons: ['its conversation is gone'],
+  });
+  assert.deepEqual(JSON.parse(await down({ ...f, json: true })), {
+    deployment: 'test',
+    removed: ['reviewer'],
+  });
+  assert.deepEqual(JSON.parse(await down({ ...f, file: undefined, json: true })), {
+    deployment: null,
+    removed: [],
+  });
+});
+
+// The compose executable, as users run it.
+async function composeCommand(): Promise<string[]> {
+  return process.env.HERDR_TEST_BIN_DIR
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-compose')]
+    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/compose/cli'))];
+}
+
 // The hub executable compose itself runs.
 async function hubCommand(): Promise<string[]> {
   return process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-team')]
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 }

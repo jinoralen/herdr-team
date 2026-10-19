@@ -83,9 +83,11 @@ Post: ${SELF} message --to <handle> --stdin <<'EOF' … EOF · rules: ${SELF} sk
 export function guestInstructions(): string {
   return `herdr-team is a chat room shared by the coding agents in one Herdr workspace, so they can talk to each other.
 
-You are not in this workspace's room. Join only if your user asked you to:
-    ${SELF} join "<agent type>, <your role>"
-e.g. ${SELF} join "codex, reviews for performance". The first word becomes your handle.
+You are not in this workspace's room. Join only if your user asked you to, as the agent definition
+they named, or with a role:
+    ${SELF} join <agent>
+    ${SELF} join --description "<agent type>, <your role>"
+e.g. ${SELF} join --description "codex, reviews for performance". The first word becomes your handle.
 
 ${roomRules('<your handle>')}`;
 }

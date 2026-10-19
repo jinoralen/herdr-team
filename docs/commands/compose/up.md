@@ -2,14 +2,23 @@
 
 ## What it does
 
-Reconciles `up <team>` (a team name from `~/.config/herdr-team/teams/`, or a file) with the named
-deployment in this workspace. Healthy
-helpers keep their conversations; hub starts missing helpers in compose-owned panes.
+Reconciles a team with its deployment in this workspace. Healthy helpers keep their
+conversations; hub starts missing helpers in compose-owned panes. `up review` names a team in
+`~/.config/herdr-team/teams/`, `up ./team.yaml` a file, and `up` alone reads `./herdr-team.yaml`
+in the current folder (never a parent folder's).
 
 ## When to use it
 
 - Run from the user-owned lead pane, either a running agent or an interactive shell.
 - Run `up` after editing YAML or to repair missing resources. Shell startup needs `lead.use`, a definition with a `kind`.
+- Run `up --dry-run` first when a change may replace helpers: replacing one ends its conversation.
+
+## Seeing what it will do
+
+| Option | Behavior |
+|---|---|
+| `--dry-run` | Print what `up` would start, replace (and why: its definition, handle, working folder, prompt, or the team's shared prompt, files or lead changed, or its conversation is gone), move and close; change nothing |
+| `--json` | Print the deployment, the changes and the usual output as JSON, with or without `--dry-run` |
 
 ## Replacement and recovery
 

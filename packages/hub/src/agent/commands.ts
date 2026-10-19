@@ -32,6 +32,22 @@ const REUSABLE_HANDLE = ['gone', 'left', 'rejected'];
 // A role, shown to the others in the member list and the "joined" notice; not a place for a brief.
 const MAX_DESCRIPTION_CHARS = 200;
 const STATUS_LOG_LINES = 20;
+// The shape of `status --json`, which compose reads (ADR 0012). Bump it when a field compose may
+// read changes or goes away.
+const STATUS_JSON_VERSION = 1;
+const ROLE = '"<agent type>, <your role>"';
+
+// A description given where the agent definition goes (the old positional form) is a definition
+// nobody wrote: say how to join without one.
+function adHocHint<T>(load: () => T): T {
+  try {
+    return load();
+  } catch (error) {
+    throw new Error(
+      `${(error as Error).message} For an ad-hoc join, use: ${SELF} join --description ${ROLE}`,
+    );
+  }
+}
 
 // HERDR_PANE_ID and HERDR_WORKSPACE_ID are fixed when the agent starts. Membership is matched
 // on these launch-time values, so an agent stays in its room even if its pane is moved later.
@@ -99,7 +115,7 @@ function newMember(
 
 // Records the join and returns the instructions right away. The agent is admitted (or refused, if Herdr
 // sees no agent in its pane) by the tick that runs when its turn ends; its posts are delivered after.
-// as: a definition (name or path) supplying the handle, description and instructions; the
+// as: an agent definition (name or path) supplying the handle, description and instructions; the
 // description and handle given here override it.
 export function join({
   as,
@@ -107,7 +123,7 @@ export function join({
   handle,
   env = process.env,
 }: CommandOptions & { as?: string; description?: string; handle?: string }): string {
-  const definition = as === undefined ? null : loadDefinition(as, { env });
+  const definition = as === undefined ? null : adHocHint(() => loadDefinition(as, { env }));
   const description = given ?? definition?.description ?? '';
   const base = handle ?? definition?.handle ?? slug(description);
   const instructions = definition?.instructions || null;
@@ -117,7 +133,7 @@ export function join({
     );
   }
   if (!description?.trim()) {
-    throw new Error(`Usage: ${SELF} join <agent type or description>`);
+    throw new Error(`Usage: ${SELF} join <agent>, or ${SELF} join --description ${ROLE}`);
   }
   if (description.trim().length > MAX_DESCRIPTION_CHARS) {
     throw new Error(
@@ -214,9 +230,7 @@ function resolveMembership(env: NodeJS.ProcessEnv): { store: Store; member: Memb
     if (rejected) {
       throw new Error(`Your join was refused: ${rejected.reason}`);
     }
-    throw new Error(
-      `This pane has not joined the chat. Run: ${SELF} join "<agent type or description>"`,
-    );
+    throw new Error(`This pane has not joined the chat. Run: ${SELF} join --description ${ROLE}`);
   }
   return { store, member };
 }
@@ -388,6 +402,7 @@ export function status({
   if (json) {
     return store.transaction(() =>
       JSON.stringify({
+        version: STATUS_JSON_VERSION,
         room: workspace,
         members: (['pending', 'active', 'left', 'gone', 'rejected'] as const).flatMap((state) =>
           store.members(state).map((member) => ({

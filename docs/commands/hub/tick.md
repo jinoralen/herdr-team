@@ -23,7 +23,8 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   ([ADR 0010](../../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
   without `HERDR_SOCKET_PATH`, it can't tell which session that is and clears nothing. That's enough: a post is delivered when its author's turn ends, and a message waiting for
   a busy agent when that agent goes idle; both are state changes.
-- **Trigger**: you don't run it. Running it by hand is harmless.
+- **Trigger**: you don't run it, so `--help` leaves it out, as agents read help. Running it by hand
+  (`herdr-hub tick`) is harmless.
 
 ## Guarantees
 

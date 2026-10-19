@@ -31,12 +31,16 @@ function uid(): number {
   return process.getuid();
 }
 
-// One state directory per Herdr session (server), named for its socket: pane and workspace IDs are
-// only unique within one. Herdr gives every pane and plugin command HERDR_SOCKET_PATH; without it
-// (run by hand outside Herdr), the base directory itself.
+// Hub's own folder under the state base, which compose shares with its own folder; neither opens
+// the other's. One state directory per Herdr session (server), named for its socket: pane and
+// workspace IDs are only unique within one. Herdr gives every pane and plugin command
+// HERDR_SOCKET_PATH; without it (run by hand outside Herdr), hub's folder itself.
 export function rootDir(env = process.env): string {
   // /tmp is writable from Codex's default workspace-write sandbox; override with HERDR_TEAM_STATE_DIR.
-  const base = env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${uid()}`);
+  const base = path.join(
+    env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${uid()}`),
+    'hub',
+  );
   const socket = env.HERDR_SOCKET_PATH;
   if (!socket) {
     return path.resolve(base);

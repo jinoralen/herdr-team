@@ -1,4 +1,4 @@
-# herdr-team as a Herdr plugin: Herdr runs a one-shot `herdr-team tick` whenever something can
+# herdr-team as a Herdr plugin: Herdr runs a one-shot `herdr-hub tick` whenever something can
 # move a conversation forward, so nothing has to stay running.
 id = "herdr-team"
 name = "herdr-team"
@@ -16,24 +16,24 @@ command = ["bun", "run", "build"]
 
 # Herdr started (or a new server took over): its panes are new, so every room starts empty.
 [[startup]]
-command = ["dist/herdr-team", "tick", "--startup"]
+command = ["dist/herdr-hub", "tick", "--startup"]
 
 # An agent went idle (deliver to it; an agent that just posted ended its turn), started working,
 # or got stuck on a question.
 [[events]]
 on = "pane.agent_status_changed"
-command = ["dist/herdr-team", "tick"]
+command = ["dist/herdr-hub", "tick"]
 
 # Herdr recognized an agent in a pane (e.g. one just started there).
 [[events]]
 on = "pane.agent_detected"
-command = ["dist/herdr-team", "tick"]
+command = ["dist/herdr-hub", "tick"]
 
 # A member's pane went away: tell the room.
 [[events]]
 on = "pane.closed"
-command = ["dist/herdr-team", "tick"]
+command = ["dist/herdr-hub", "tick"]
 
 [[events]]
 on = "pane.exited"
-command = ["dist/herdr-team", "tick"]
+command = ["dist/herdr-hub", "tick"]

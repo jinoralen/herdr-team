@@ -1,6 +1,6 @@
 # Agent hub
 
-Owns the `herdr-team` executable: room membership, messaging and delivery.
+Owns the `herdr-hub` executable: room membership, messaging and delivery.
 
 - `src/agent/`: agent commands and managed membership operations.
 - `src/rooms/`: admission and queued delivery on Herdr ticks.

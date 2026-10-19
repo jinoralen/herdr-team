@@ -6,6 +6,7 @@ import { sanitizeForTerminal, shellQuote } from '@herdr/terminal';
 import type { Membership } from './hub.ts';
 import { COMPOSE_SELF, Hub } from './hub.ts';
 import type { LeadConfig, ManifestPlan } from './manifest.ts';
+import type { Change } from './resources.ts';
 
 // Hub accepts initial tasks up to 80 KB. Validate before creating helper panes.
 const MAX_LEAD_PROMPT_BYTES = 80_000;
@@ -19,7 +20,13 @@ export function isCallerMember(member: Membership | null, current: Agent | null)
   );
 }
 
-export type UpResult = { output: string; launch?: LeadConfig };
+export type UpResult = {
+  output: string;
+  launch?: LeadConfig;
+  // What up changed, or would change with --dry-run.
+  changes?: Change[];
+  deployment?: string;
+};
 
 export function prepareLead({
   plan,
@@ -117,7 +124,7 @@ function coordinatorPrompt(
   const deployment = shellQuote(path.resolve(file));
   const membership = joined
     ? `You are already a member as @${handle}. Read your room guide with: ${hubCommand} skill`
-    : `First join as @${handle}: ${hubCommand} join --handle ${shellQuote(handle)} -- ${shellQuote(`${handle}, coordinates ${plan.name}`)}. Confirm the returned handle is @${handle}; report a collision instead of dispatching under a different handle.`;
+    : `First join as @${handle}: ${hubCommand} join --handle ${shellQuote(handle)} --description ${shellQuote(`${handle}, coordinates ${plan.name}`)}. Confirm the returned handle is @${handle}; report a collision instead of dispatching under a different handle.`;
   const helpers = Object.entries(plan.agents).map(
     ([key, a]) =>
       `  ${key}: @${a.handle}, ${a.kind}${a.model ? ` / ${a.model}` : ' / harness default'}`,

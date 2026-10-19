@@ -1,4 +1,4 @@
-// What `join --agent` and `invite` start: the flags given, and the definition (--as) for the rest.
+// What `invite` starts: the flags given, and the agent definition for the rest.
 import { loadDefinition } from '@herdr/agents';
 import { sanitizeForTerminal } from '#agent';
 
@@ -15,16 +15,16 @@ export function resolveStart(
     throw new Error(
       definition
         ? `The definition ${as} has no kind. Add kind: codex, claude or pi to it, or pass --agent <kind>.`
-        : 'Starting an agent requires --agent <codex|claude|pi>, or --as a definition with a kind.',
+        : 'Starting an agent requires --agent <codex|claude|pi>, or an agent definition with a kind.',
     );
   }
   const handle = given.handle ?? definition?.handle;
   if (!handle) {
-    throw new Error('Starting an agent requires --handle <handle>, or --as a definition.');
+    throw new Error('Starting an agent requires --handle <handle>, or an agent definition.');
   }
   const description = given.description ?? definition?.description;
   if (!description) {
-    throw new Error('Starting an agent requires --description <text>, or --as a definition.');
+    throw new Error('Starting an agent requires --description <text>, or an agent definition.');
   }
   return { agent, model: checkModel(given.model ?? definition?.model), handle, description };
 }

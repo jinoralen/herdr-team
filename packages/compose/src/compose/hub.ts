@@ -26,7 +26,13 @@ const Membership = z.object({
   queuedFrom: z.boolean(),
 });
 export type Membership = z.infer<typeof Membership>;
-const Snapshot = z.object({ room: z.string(), members: z.array(Membership) });
+// The `status --json` version this compose reads; hub bumps it when the shape changes.
+const SNAPSHOT_VERSION = 1;
+const Snapshot = z.object({
+  version: z.literal(SNAPSHOT_VERSION),
+  room: z.string(),
+  members: z.array(Membership),
+});
 
 export class Hub {
   readonly words: string[];
@@ -34,7 +40,7 @@ export class Hub {
   constructor(private readonly env: NodeJS.ProcessEnv) {
     this.words = env.HERDR_TEAM_HUB_BIN
       ? [env.HERDR_TEAM_HUB_BIN]
-      : words('herdr-team', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
+      : words('herdr-hub', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
     this.command = this.words.map(shellQuote).join(' ');
   }
   private snapshot(): Membership[] {
@@ -46,7 +52,13 @@ export class Hub {
     if (result.exitCode !== 0) {
       throw new Error(result.stderr.toString().trim());
     }
-    const parsed = Snapshot.safeParse(JSON.parse(result.stdout.toString()));
+    const json = JSON.parse(result.stdout.toString());
+    if (json?.version !== SNAPSHOT_VERSION) {
+      throw new Error(
+        `Hub at ${this.command} reports status version ${json?.version ?? 'none'}; this compose reads version ${SNAPSHOT_VERSION}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
+      );
+    }
+    const parsed = Snapshot.safeParse(json);
     if (!parsed.success || parsed.data.room !== this.env.HERDR_WORKSPACE_ID) {
       throw new Error('Hub returned an invalid membership snapshot. Rebuild hub and retry.');
     }
@@ -54,6 +66,9 @@ export class Hub {
   }
   check(): void {
     this.snapshot();
+  }
+  members(): Membership[] {
+    return this.snapshot();
   }
   member(handle: string): Membership | null {
     return this.snapshot().find((m) => m.handle === handle) ?? null;
@@ -68,7 +83,7 @@ export class Hub {
     agent: { definition: string; handle: string; prompt: string },
     pane: string,
   ): Promise<void> {
-    const proc = Bun.spawn([...this.words, 'invite', pane, ...this.agentArgs(agent)], {
+    const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
       env: this.env,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -82,12 +97,9 @@ export class Hub {
       throw new Error(stderr.trim() || stdout.trim());
     }
   }
-  // Starts the lead in the caller's own pane; helpers go to their panes through invite. Kind,
+  // invite starts the lead in the caller's own pane, and helpers with --pane in theirs. Kind,
   // model and description come from the definition.
   startArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
-    return ['join', '--agent', ...this.agentArgs(agent)];
-  }
-  private agentArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
-    return ['--as', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
+    return ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
   }
 }

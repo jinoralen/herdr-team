@@ -96,9 +96,9 @@ function locate(ref: string, kind: Kind, env: NodeJS.ProcessEnv, cwd: string): s
   return file;
 }
 
-// What to do when a name isn't there: the names that are, or how to write the first one.
-function missing(ref: string, kind: Kind, dir: string, first: string): Error {
-  const names = fs.existsSync(dir)
+// The names of the files of one kind in dir, without their extension.
+function namesIn(dir: string, kind: Kind): string[] {
+  return fs.existsSync(dir)
     ? fs
         .readdirSync(dir)
         .flatMap((name) => {
@@ -107,18 +107,38 @@ function missing(ref: string, kind: Kind, dir: string, first: string): Error {
         })
         .sort()
     : [];
+}
+
+// What to do when a name isn't there: the names that are, or how to write the first one.
+function missing(ref: string, kind: Kind, dir: string, first: string): Error {
+  const names = namesIn(dir, kind);
   const next = names.length
     ? `${kind.listed} there: ${names.join(', ')}.`
     : `Create ${first}: ${kind.first}.`;
   return new Error(`No ${kind.what} "${ref}" in ${dir}. ${next}`);
 }
 
-// A compose team file, by name or path.
+// The team file `up` uses when it is given no team: in the current folder only.
+const DEFAULT_TEAM = 'herdr-team.yaml';
+
+// A compose team file, by name or path; without one, herdr-team.yaml in cwd.
 export function teamFile(
-  ref: string,
+  ref: string | undefined,
   { env = process.env, cwd = process.cwd() }: Options = {},
 ): string {
-  return locate(ref, KINDS.team, env, cwd);
+  if (ref !== undefined) {
+    return locate(ref, KINDS.team, env, cwd);
+  }
+  const file = path.join(cwd, DEFAULT_TEAM);
+  if (fs.existsSync(file)) {
+    return file;
+  }
+  const dir = path.join(teamDir(env), KINDS.team.dir);
+  const names = namesIn(dir, KINDS.team);
+  const named = names.length
+    ? `${KINDS.team.listed} in ${dir}: ${names.join(', ')}; name one.`
+    : `Name a team file, or add teams to ${dir}.`;
+  throw new Error(`No ${DEFAULT_TEAM} in ${cwd}. ${named}`);
 }
 
 export function loadDefinition(

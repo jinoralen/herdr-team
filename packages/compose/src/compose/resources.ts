@@ -12,8 +12,25 @@ export type Runtime = {
   state: Deployment;
   herdr: LayoutHerdr;
   lines: string[];
+  // A dry run reads and plans; nothing it changes in memory is saved.
+  dry?: boolean;
 };
-export const save = (r: Runtime): void => saveDeployment(r.root, r.state);
+// What up changes, or would change with --dry-run: in the order it happens.
+export type Change = {
+  action: 'start' | 'replace' | 'move' | 'remove' | 'arrange-tab' | 'close-tab' | 'recover';
+  agent?: string;
+  handle?: string;
+  tab?: string;
+  // Why a helper is replaced: what changed, or that its conversation is gone.
+  reasons?: string[];
+  allocations?: number;
+};
+
+export const save = (r: Runtime): void => {
+  if (!r.dry) {
+    saveDeployment(r.root, r.state);
+  }
+};
 export const paneFor = (panes: Pane[], a: ManagedAgent): Pane | null =>
   panes.find((p) => p.terminal_id === a.terminal) ?? null;
 
@@ -81,6 +98,7 @@ export async function createAgent(
   const a: ManagedAgent = {
     handle: desired.handle,
     fingerprint: desired.fingerprint,
+    parts: desired.parts,
     pane,
     terminal: live.terminal_id,
     joinedAt: null,

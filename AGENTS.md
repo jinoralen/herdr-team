@@ -15,7 +15,7 @@ a new dependency. Bun's docs are in `node_modules/bun-types/docs/`.
 
 - Finish with `bun run verify` (Biome, type check, Knip, tests): the pre-commit hook runs the same
   checks. `bun run format` applies Biome's fixes; `bun test <path>` runs one file.
-- Herdr and agents run the compiled `dist/herdr-team`, not the sources under `packages/`.
+- Herdr and agents run the compiled `dist/herdr-hub`, not the sources under `packages/`.
   Tests run from source; trying a change in real Herdr panes needs `bun run build` first.
 - Changing the schema: edit `packages/hub/src/store/tables.ts`, then `bun run db:generate` regenerates the one
   migration. State is disposable, so there is no upgrade path to write

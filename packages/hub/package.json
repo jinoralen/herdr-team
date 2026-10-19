@@ -15,7 +15,7 @@
     "#testing": "./src/testing/index.ts"
   },
   "scripts": {
-    "build": "bun build --compile --minify src/cli/main.ts --outfile ../../dist/herdr-team",
+    "build": "bun build --compile --minify src/cli/main.ts --outfile ../../dist/herdr-hub",
     "dev": "bun src/cli/main.ts",
     "test": "bun test src",
     "typecheck": "bun check",

@@ -9,7 +9,7 @@ test('join registers the pane, assigns handles and returns instructions', async 
   const { joinAs, handles } = await installed();
   const out = await joinAs('w1:p1', 'claude reviewer');
   assert.match(out, /as @claude\./);
-  assert.match(out, /herdr-team message --to <handle> --stdin <<'EOF'/);
+  assert.match(out, /herdr-hub message --to <handle> --stdin <<'EOF'/);
   const out2 = await joinAs('w1:p2', 'claude implementer');
   assert.match(out2, /as @claude-2\./);
   assert.match(out2, /@claude — claude reviewer/);
@@ -88,7 +88,7 @@ test('agent commands explain when herdr-team has never run (plugin not installed
 test('commands refuse to run outside Herdr', async () => {
   const { root } = await installed();
   assert.throws(
-    () => message({ text: 'hi', env: { HERDR_TEAM_STATE_DIR: root } }),
+    () => message({ text: 'hi', env: { HERDR_TEAM_STATE_DIR: path.dirname(root) } }),
     /inside a Herdr pane/,
   );
 });
@@ -152,7 +152,7 @@ kind: claude
 Review architecture when the lead assigns work.
 `;
 
-test('join --as takes the handle, description and instructions from a definition', async () => {
+test('join <agent> takes the handle, description and instructions from a definition', async () => {
   const { root, env, store, tick, herdr } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   herdr.addAgent('p1', 'claude');
@@ -171,7 +171,7 @@ test('join --as takes the handle, description and instructions from a definition
   assert.match(skill({ env: env('p1') }), /Your instructions:\nReview architecture/);
 });
 
-test('with --as, the given handle and description override the definition', async () => {
+test('with an agent definition, the given handle and description override the definition', async () => {
   const { root, env, store, herdr } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   for (const pane of ['p1', 'p2', 'p3']) {
@@ -193,7 +193,7 @@ test('with --as, the given handle and description override the definition', asyn
   );
 });
 
-test('join --as a missing definition fails without joining', async () => {
+test('join <agent> with a missing definition fails without joining', async () => {
   const { root, env, store } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   assert.throws(

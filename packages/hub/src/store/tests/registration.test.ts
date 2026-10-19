@@ -8,13 +8,15 @@ import { dbPath, Store } from '#store';
 import { installed } from '#testing';
 
 function registration() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-registration-'));
-  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-registration-'));
+  const root = path.join(base, 'hub');
+  fs.mkdirSync(root);
+  onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }));
   const env = (pane: string, workspace = 'w1') => ({
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: workspace,
-    HERDR_TEAM_STATE_DIR: root,
+    HERDR_TEAM_STATE_DIR: base,
   });
   return { root, env };
 }

@@ -12,6 +12,8 @@ import { deploymentRecords } from './tables.ts';
 const ManagedAgentSchema = z.object({
   handle: z.string(),
   fingerprint: z.string(),
+  // The fingerprint's parts (definition, handle, cwd, purpose, context), to say what changed.
+  parts: z.record(z.string(), z.string()).optional(),
   pane: z.string(),
   terminal: z.string(),
   joinedAt: z.string().nullable(),
@@ -140,7 +142,11 @@ export function rootDir(env = process.env): string {
   if (!process.getuid) {
     throw new Error('herdr-compose requires Linux or macOS.');
   }
-  const base = env.HERDR_COMPOSE_DIR || path.join('/tmp', `herdr-compose-${process.getuid()}`);
+  // Compose's own folder under the state base it shares with hub; it never opens hub's.
+  const base = path.join(
+    env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${process.getuid()}`),
+    'compose',
+  );
   return env.HERDR_SOCKET_PATH
     ? path.resolve(
         base,

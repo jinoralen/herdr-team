@@ -39,8 +39,10 @@ In `status`'s recent activity, and in Herdr's plugin log:
 ## Automation
 
 Use `status --json` for a machine-readable snapshot of the caller's workspace room.
-The object contains `room` and `members` (including left, gone and
-rejected records). Each member includes its handle, description, launch pane,
+The object contains `version`, `room` and `members` (including left, gone and
+rejected records). `version` (now 1) changes when a field others may read changes or goes away;
+compose reads this snapshot and refuses a version it doesn't know
+([ADR 0012](../../adr/0012-hub-stands-alone-compose-builds-on-its-cli.md)). Each member includes its handle, description, launch pane,
 join timestamp, status, terminal, agent, reason, held state, and `queuedFrom`.
 The snapshot is read in one transaction and makes no Herdr calls. It describes
 recorded membership, not live pane health.
