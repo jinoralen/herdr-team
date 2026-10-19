@@ -10,6 +10,31 @@ An ordinary join is only recorded at first: the member is **pending** until the 
 agent's turn ends checks with Herdr that a recognized agent is really in that pane. Only then is it
 **active** and gets deliveries.
 
+## Joining as a definition
+
+`join --as reviewer` takes the handle, description and instructions from the definition
+`~/.config/herdr-team/agents/reviewer.md` (`$XDG_CONFIG_HOME/herdr-team` when that is set,
+`HERDR_TEAM_DIR` to use another folder); a path such as `./agents/reviewer.md` works too.
+
+```markdown
+---
+description: reviews architecture, read-only
+kind: claude
+model: sonnet
+---
+Review architecture when the lead assigns work. Report to the lead.
+```
+
+The guide it prints ends with the body under "Your instructions:", and [`skill`](skill.md) repeats
+it as it was when the agent joined: editing the file later doesn't change a member's role.
+`--handle` and `--description` override the file. The definition's handle, by default its file
+name, works like a description's first word: a second `@reviewer` becomes `@reviewer-2`.
+
+Only `description` (required), `kind`, `model` and `handle` are read. Any other key is ignored, so
+files written for OpenCode or Claude Code load as they are, but what those keys say, such as
+`permissions` or `tools`, is not applied: the agent's own settings still decide what it may do.
+A missing definition lists the ones in the folder.
+
 ## When to use it
 
 - **Who runs it**: a user in an interactive Herdr shell with `--agent`, or an agent in its own pane
@@ -100,7 +125,8 @@ Yes, once its member has left or is gone and nothing it posted still waits for d
 
 ## It's working if
 
-- `join` prints the guide with the agent's handle and the members.
+- `join` prints the guide with the agent's handle and the members; with `--as`, its instructions
+  after the rules.
 - With `--agent`, the selected agent opens in the selected pane and receives the room guide.
 - With another `--pane`, the caller returns with a confirmation naming the handle, pane and room.
 - After the agent's turn ends, `status` lists it as a member, and the others got "@x joined" with

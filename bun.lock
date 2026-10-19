@@ -17,6 +17,14 @@
         "typescript": "^7",
       },
     },
+    "packages/agents": {
+      "name": "@herdr/agents",
+      "version": "0.1.0",
+      "dependencies": {
+        "@herdr/terminal": "workspace:*",
+        "zod": "^4.6.5",
+      },
+    },
     "packages/compose": {
       "name": "@herdr/compose",
       "version": "0.1.0",
@@ -45,6 +53,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@commander-js/extra-typings": "15.0.0",
+        "@herdr/agents": "workspace:*",
         "@herdr/herdr": "workspace:*",
         "@herdr/terminal": "workspace:*",
         "commander": "15.0.0",
@@ -143,6 +152,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.12", "", { "os": "win32", "cpu": "ia32" }, "sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
+
+    "@herdr/agents": ["@herdr/agents@workspace:packages/agents"],
 
     "@herdr/compose": ["@herdr/compose@workspace:packages/compose"],
 

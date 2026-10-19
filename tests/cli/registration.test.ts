@@ -1,4 +1,7 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { cli } from './run-cli.ts';
 
 test('register a pane, rediscover its handle and see it in its workspace status', async () => {
@@ -67,4 +70,24 @@ test('an explicit handle does not replace the required description', async () =>
   expect(joined.code).toBe(1);
   expect(joined.stderr).toContain("missing required argument 'description'");
   expect((await run(['status'], { inPane: true })).stdout).not.toContain('@reviewer');
+});
+
+test('join --as reads a definition from the herdr-team folder', async () => {
+  const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-cli-'));
+  onTestFinished(() => fs.rmSync(team, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(team, 'agents'));
+  fs.writeFileSync(
+    path.join(team, 'agents', 'reviewer.md'),
+    '---\ndescription: reviews architecture\nkind: codex\npermissions: [deny]\n---\nReview when asked.\n',
+  );
+  const { run } = cli({ HERDR_TEAM_DIR: team });
+  await run(['tick']);
+  const joined = await run(['join', '--as', 'reviewer'], { inPane: true });
+  expect(joined.code).toBe(0);
+  expect(joined.stdout).toContain('as @reviewer.');
+  expect(joined.stdout).toContain('Your instructions:\nReview when asked.');
+  const missing = await run(['join', '--as', 'nobody'], { inPane: true, paneId: 'p2' });
+  expect(missing.code).toBe(1);
+  expect(missing.stderr).toContain('error: No agent definition "nobody"');
+  expect(missing.stderr).toContain('Definitions there: reviewer.');
 });

@@ -23,14 +23,41 @@ const program = new Command()
   .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`)
   .commandsGroup('Agent commands:');
 
-function joinDescription(words: string[], named: string | undefined): string {
+// With --as, the definition supplies the description, so none need be given.
+function joinDescription(
+  words: string[],
+  named: string | undefined,
+  as: string | undefined,
+): string | undefined {
   if (named !== undefined && words.length > 0) {
     throw new Error('Use either --description or a positional description, not both.');
   }
-  if (named === undefined && words.length === 0) {
+  if (named === undefined && words.length === 0 && as === undefined) {
     throw new Error("missing required argument 'description'");
   }
-  return named ?? words.join(' ');
+  return named ?? (words.length ? words.join(' ') : undefined);
+}
+
+// The options only starting an agent takes, and the one it doesn't take yet.
+function checkStartOptions(options: {
+  agent?: string;
+  as?: string;
+  model?: string;
+  pane?: string;
+  prompt?: string;
+}): void {
+  for (const [flag, value] of [
+    ['--pane', options.pane],
+    ['--prompt', options.prompt],
+    ['--model', options.model],
+  ] as const) {
+    if (value !== undefined && !options.agent) {
+      throw new Error(`${flag} requires --agent <type>.`);
+    }
+  }
+  if (options.agent && options.as !== undefined) {
+    throw new Error('--as cannot start an agent yet; use --agent with --handle and --description.');
+  }
 }
 
 program
@@ -49,6 +76,10 @@ program
       'confirmation and guide submission.',
   )
   .argument('[description...]', 'the agent type, then its role (or use --description)')
+  .option(
+    '--as <definition>',
+    'join as a definition from ~/.config/herdr-team/agents (name or path)',
+  )
   .option('--description <text>', 'short role shown to the other members')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
   .optionsGroup('Starting an agent (run by the user from a shell, not by agents):')
@@ -57,18 +88,10 @@ program
   .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
   .option('--prompt <text>', 'initial task after joining (requires --agent)')
   .action(async (description, options) => {
-    const role = joinDescription(description, options.description);
-    if (options.pane && !options.agent) {
-      throw new Error('--pane requires --agent <type>.');
-    }
-    if (options.prompt !== undefined && !options.agent) {
-      throw new Error('--prompt requires --agent <type>.');
-    }
-    if (options.model !== undefined && !options.agent) {
-      throw new Error('--model requires --agent <type>.');
-    }
+    const role = joinDescription(description, options.description, options.as);
+    checkStartOptions(options);
     if (options.agent) {
-      if (!options.handle) {
+      if (!options.handle || role === undefined) {
         throw new Error('Starting an agent requires --handle <handle>.');
       }
       const output = await launch({
@@ -81,7 +104,7 @@ program
       });
       console.log(output);
     } else {
-      console.log(join({ description: role, handle: options.handle }));
+      console.log(join({ as: options.as, description: role, handle: options.handle }));
     }
   });
 

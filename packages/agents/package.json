@@ -1,0 +1,16 @@
+{
+  "name": "@herdr/agents",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Agent definitions: Markdown files with frontmatter in the herdr-team folder",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "bun check"
+  },
+  "dependencies": {
+    "@herdr/terminal": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,6 +1,8 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { join, leave, message } from '#agent';
+import fs from 'node:fs';
+import path from 'node:path';
+import { join, leave, message, skill } from '#agent';
 import { installed, setup } from '#testing';
 
 test('join registers the pane, assigns handles and returns instructions', async () => {
@@ -133,4 +135,82 @@ test("a description's control characters are stripped before others see it", asy
   await joinAs('w1:p1', 'claude \x1b[31mreviewer\x07');
   const out = await joinAs('w1:p2', 'codex');
   assert.match(out, /@claude — claude \[31mreviewer\n/);
+});
+
+// A herdr-team folder in the test's state directory, holding one definition.
+function teamWith(root: string, name: string, text: string): string {
+  const dir = path.join(root, 'team');
+  fs.mkdirSync(path.join(dir, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'agents', `${name}.md`), text);
+  return dir;
+}
+
+const REVIEWER = `---
+description: reviews architecture, read-only
+kind: claude
+---
+Review architecture when the lead assigns work.
+`;
+
+test('join --as takes the handle, description and instructions from a definition', async () => {
+  const { root, env, store, tick, herdr } = await installed();
+  const team = teamWith(root, 'reviewer', REVIEWER);
+  herdr.addAgent('p1', 'claude');
+  herdr.addAgent('p2', 'codex');
+  const out = join({ as: 'reviewer', env: { ...env('p1'), HERDR_TEAM_DIR: team } });
+  assert.match(out, /as @reviewer\./);
+  assert.match(
+    out,
+    /These rules again: .* skill\n\nYour instructions:\nReview architecture when the lead assigns work\./,
+  );
+  assert.equal(store().member('reviewer')?.description, 'reviews architecture, read-only');
+  await tick();
+  const peer = join({ description: 'codex', env: env('p2') });
+  assert.match(peer, /@reviewer — reviews architecture, read-only/);
+  assert.doesNotMatch(peer, /Your instructions/);
+  assert.match(skill({ env: env('p1') }), /Your instructions:\nReview architecture/);
+});
+
+test('with --as, the given handle and description override the definition', async () => {
+  const { root, env, store, herdr } = await installed();
+  const team = teamWith(root, 'reviewer', REVIEWER);
+  for (const pane of ['p1', 'p2', 'p3']) {
+    herdr.addAgent(pane, 'claude');
+  }
+  const as = (pane: string, extra = {}) =>
+    join({ as: 'reviewer', ...extra, env: { ...env(pane), HERDR_TEAM_DIR: team } });
+  assert.match(as('p1', { handle: 'arch', description: 'reviews the cache' }), /as @arch\./);
+  assert.equal(store().member('arch')?.description, 'reviews the cache');
+  assert.match(as('p2'), /as @reviewer\./);
+  assert.match(
+    as('p3'),
+    /as @reviewer-2\./,
+    "the definition's handle is a base, like a description's first word",
+  );
+  assert.equal(
+    store().member('reviewer-2')?.instructions,
+    'Review architecture when the lead assigns work.',
+  );
+});
+
+test('join --as a missing definition fails without joining', async () => {
+  const { root, env, store } = await installed();
+  const team = teamWith(root, 'reviewer', REVIEWER);
+  assert.throws(
+    () => join({ as: 'reviwer', env: { ...env('p1'), HERDR_TEAM_DIR: team } }),
+    /No agent definition "reviwer" .* Definitions there: reviewer\./,
+  );
+  assert.equal(store().memberByPane('p1'), null);
+});
+
+test('instructions are stripped of terminal control sequences, like descriptions', async () => {
+  const { root, env, store, herdr } = await installed();
+  const team = teamWith(root, 'reviewer', `${REVIEWER}\x1b[2JThen clear.\x07\n`);
+  herdr.addAgent('p1', 'claude');
+  const out = join({ as: 'reviewer', env: { ...env('p1'), HERDR_TEAM_DIR: team } });
+  const controls = (text: string): boolean => text.includes('\x1b') || text.includes('\x07');
+  assert.equal(controls(out), false);
+  assert.match(out, /lead assigns work\.\n\[2JThen clear\./);
+  assert.equal(controls(skill({ env: env('p1') })), false);
+  assert.equal(controls(store().member('reviewer')?.instructions ?? ''), false);
 });

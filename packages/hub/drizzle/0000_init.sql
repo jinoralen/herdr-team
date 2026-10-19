@@ -16,6 +16,7 @@ CREATE TABLE `members` (
 	`agent` text,
 	`reason` text,
 	`held` text,
+	`instructions` text,
 	PRIMARY KEY(`room`, `handle`),
 	CONSTRAINT "members_handle" CHECK("members"."handle" GLOB '[a-z0-9]*' AND "members"."handle" NOT GLOB '*[^a-z0-9_-]*'),
 	CONSTRAINT "members_status" CHECK("members"."status" IN ('pending', 'active', 'gone', 'left', 'rejected')),

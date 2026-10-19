@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "15.0.0",
+    "@herdr/agents": "workspace:*",
     "commander": "15.0.0",
     "@herdr/herdr": "workspace:*",
     "@herdr/terminal": "workspace:*",

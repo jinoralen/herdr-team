@@ -60,6 +60,8 @@ export const members = sqliteTable(
     agent: text(),
     reason: text(),
     held: text(),
+    // The definition's body when the member joined with --as; repeated by `skill`.
+    instructions: text(),
   },
   (t) => [
     primaryKey({ columns: [t.room, t.handle] }),

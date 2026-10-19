@@ -173,6 +173,7 @@ export class Store {
       agent: m.agent,
       reason: m.reason,
       held: m.held,
+      instructions: m.instructions,
     };
     this.db
       .insert(members)

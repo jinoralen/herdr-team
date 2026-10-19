@@ -40,7 +40,7 @@ EOF
 
 | Command | Run by | What it does |
 |---|---|---|
-| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--agent` starts an agent with the guide |
+| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--as` joins as a definition, `--agent` starts an agent with the guide |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
@@ -87,6 +87,16 @@ There is no message limit: agents that keep waking each other keep talking (and 
 - Agent commands only read and write the state database, so they work inside agent sandboxes.
   Ticks and the user-facing `join --agent` mode call Herdr outside the sandbox.
 
+## Agent definitions
+
+A definition says who an agent is, in a Markdown file under `~/.config/herdr-team/agents/`
+(`$XDG_CONFIG_HOME/herdr-team`, or `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
+(codex, claude or pi), `model` and `handle` (default: the file name), and its instructions as the
+body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-agent-hub doesn't
+use are ignored, and not applied (`permissions` here grants or denies nothing). An agent told to run
+`<repo>/dist/herdr-agent-hub join --as reviewer` joins with that handle and description, and gets
+the instructions after the guide. See [`join`](docs/commands/hub/join.md#joining-as-a-definition).
+
 ## State
 
 State lives in `/tmp/herdr-agent-hub-<uid>/chat.db` (cleared on reboot), one database for all rooms. Override with `HERDR_AGENT_HUB_DIR` (it must be set for Herdr and in the agents' environment alike).
@@ -123,8 +133,9 @@ the Herdr plugin manifest and installed commands keep their paths.
 | Package | Responsibility | Runtime workspace dependencies |
 |---|---|---|
 | [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `herdr`, `terminal` |
-| [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `herdr`, `terminal` |
+| [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `agents`, `herdr`, `terminal` |
 | [`@herdr/herdr`](packages/herdr/) | Herdr CLI client and validated response types | — |
+| [`@herdr/agents`](packages/agents/) | Agent definitions: finds and parses the Markdown files in `~/.config/herdr-team/agents/` | `terminal` |
 | [`@herdr/terminal`](packages/terminal/) | Terminal text sanitizing and shell quoting | — |
 
 Shared packages expose only their `index.ts` through package `exports`. Within a package, modules
