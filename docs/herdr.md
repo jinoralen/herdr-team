@@ -27,7 +27,7 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
   recognized, and `pane get` fails with `pane_not_found` once the pane closed. Checked in 0.9.5.
 - `agent_session` may appear some time after the agent is detected; a new value in the same terminal
   is a new conversation.
-- `join --agent --pane` uses `herdr agent start <name> --kind <kind> --pane <pane> --timeout 120000`.
+- `invite <pane>` uses `herdr agent start <name> --kind <kind> --pane <pane> --timeout 120000`.
   Optional harness arguments follow `--`, e.g. `-- --model <id>` (checked with the installed CLI).
   Agent names must start with a lowercase letter and contain only lowercase letters, digits,
   hyphens or underscores, up to 32 characters; hub truncates its UUID suffix to fit.

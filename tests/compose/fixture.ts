@@ -24,6 +24,7 @@ type Fixture = {
   herdr: LayoutHerdr;
   tick: () => Promise<void>;
   write: (prompt?: string, layout?: string) => Promise<number>;
+  define: (name: string, text: string) => Promise<number>;
   read: () => Promise<State>;
   change: (fields: Record<string, unknown>) => Promise<number>;
 };
@@ -104,6 +105,7 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     HERDR_AGENT_HUB_DIR: path.join(root, 'hub'),
     HERDR_COMPOSE_DIR: path.join(root, 'compose'),
     HERDR_BIN_PATH: fake,
+    HERDR_TEAM_DIR: path.join(root, 'team'),
     FAKE_STATE: state,
     ...(process.env.HERDR_TEST_BIN_DIR ? { HERDR_AGENT_HUB_BIN: hub[0] } : {}),
   };
@@ -115,20 +117,30 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     }
   }
   await tick();
+  // Definitions in the fixture's herdr-team folder, which the manifest uses by name.
+  const define = (name: string, text: string): Promise<number> =>
+    Bun.write(path.join(root, 'team', 'agents', `${name}.md`), text);
+  await define(
+    'coordinator',
+    '---\ndescription: coordinates the team\nkind: codex\n---\nCoordinate.\n',
+  );
+  await define(
+    'reviewer',
+    '---\ndescription: reviews the code\nkind: codex\nmodel: example-v1\n---\nReview when asked.\n',
+  );
   const file = path.join(root, 'team.yaml');
   const write = (prompt = 'Review the code', layout = 'columns'): Promise<number> =>
     Bun.write(
       file,
       `name: test
 lead:
-  kind: codex
+  use: coordinator
 tabs:
   helpers:
     layout: ${layout}
 agents:
   reviewer:
-    kind: codex
-    model: example-v1
+    use: reviewer
     tab: helpers
     prompt: ${prompt}
 `,
@@ -137,5 +149,5 @@ agents:
   const read = (): Promise<State> => Bun.file(state).json();
   const change = async (fields: Record<string, unknown>): Promise<number> =>
     Bun.write(state, JSON.stringify({ ...(await read()), ...fields }));
-  return { root, env, file, herdr: cliLayoutHerdr(env), tick, write, read, change };
+  return { root, env, file, herdr: cliLayoutHerdr(env), tick, write, define, read, change };
 }

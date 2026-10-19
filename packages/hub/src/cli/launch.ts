@@ -3,7 +3,7 @@ import { cliHerdr } from '@herdr/herdr';
 import { shellQuote } from '@herdr/terminal';
 import { join, SELF, sanitizeForTerminal } from '#agent';
 import { initialTask, memberPrompt } from './prompt.ts';
-import { launchInPane } from './remote.ts';
+import { resolveStart, type Start } from './start.ts';
 
 function callerPane(env: NodeJS.ProcessEnv): string {
   if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
@@ -13,30 +13,23 @@ function callerPane(env: NodeJS.ProcessEnv): string {
 }
 
 export async function launch({
-  agent,
-  model,
-  handle,
-  description,
+  as,
   prompt,
-  pane: target,
   env = process.env,
-}: {
-  agent: string;
-  model?: string;
-  handle: string;
-  description: string;
+  ...given
+}: Partial<Start> & {
+  as?: string;
   prompt?: string;
-  pane?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<string> {
+  const start = resolveStart(given, as, env);
+  const { agent, model, handle } = start;
+  let { description } = start;
   if (!['codex', 'claude', 'pi'].includes(agent)) {
     throw new Error('Supported agents are codex, claude and pi.');
   }
   const args = modelArgs(model);
   const task = initialTask(prompt);
-  if (target && target !== env.HERDR_PANE_ID) {
-    return launchInPane({ agent, model, handle, description, task, pane: target, env });
-  }
   const current = callerPane(env);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Starting an agent requires an interactive terminal.');
@@ -62,9 +55,10 @@ export async function launch({
     );
   }
   description = sanitizeForTerminal(description).trim();
-  const guide = join({ description, handle, env });
+  const guide = join({ as, description, handle, env });
   // A tick may have rejected the pending join while the pane was still a shell.
-  const confirm = `${SELF} join --handle ${shellQuote(handle)} -- ${shellQuote(description)}`;
+  const definition = as === undefined ? '' : ` --as ${shellQuote(as)}`;
+  const confirm = `${SELF} join${definition} --handle ${shellQuote(handle)} -- ${shellQuote(description)}`;
   const instructions = `Your user asked you to join the room as @${handle} with this role: ${description}\n\nFirst confirm your membership by running: ${confirm}\nUse the returned guide. If joining fails, report the error to your user and stop.\n\n${guide}`;
   const initial = memberPrompt(instructions, task);
   const inherited = Object.fromEntries(
@@ -73,19 +67,7 @@ export async function launch({
   return process.execve(binary, [binary, ...args, '--', initial], inherited);
 }
 
+// The model was checked by resolveStart.
 function modelArgs(model: string | undefined): string[] {
-  if (model === undefined) {
-    return [];
-  }
-  if (
-    !model ||
-    model.startsWith('-') ||
-    /\s/u.test(model) ||
-    sanitizeForTerminal(model) !== model
-  ) {
-    throw new Error(
-      'Use a nonempty model identifier without a leading hyphen, spaces or control characters.',
-    );
-  }
-  return ['--model', model];
+  return model === undefined ? [] : ['--model', model];
 }

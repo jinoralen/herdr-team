@@ -15,7 +15,7 @@ async function shell() {
   const result = path.join(fixture.root, 'launch.json');
   const harness = `#!${process.execPath}
 await Bun.write(process.env.LAUNCH_RESULT, JSON.stringify({
-  pid: process.pid, args: process.argv.slice(2), cwd: process.cwd(),
+  pid: process.pid, args: process.argv.slice(2), cwd: process.cwd(), bin: process.argv[1].split('/').pop(),
   pane: process.env.HERDR_PANE_ID, workspace: process.env.HERDR_WORKSPACE_ID,
   tty: !!process.stdin.isTTY, marker: process.env.LAUNCH_MARKER
 }));
@@ -50,11 +50,8 @@ console.log(JSON.stringify({result: {pane: {
     prompt?: string,
     model?: string,
   ) {
-    const chunks: Buffer[] = [];
-    const proc = Bun.spawn(
+    return startWith(
       [
-        ...COMMAND,
-        'join',
         '--agent',
         agent,
         '--handle',
@@ -64,17 +61,22 @@ console.log(JSON.stringify({result: {pane: {
         ...(prompt === undefined ? [] : ['--prompt', prompt]),
         ...(model === undefined ? [] : ['--model', model]),
       ],
-      {
-        env: { ...env, ...extra },
-        cwd: fixture.root,
-        timeout: 10000,
-        terminal: {
-          data: (_terminal, bytes) => {
-            chunks.push(Buffer.from(bytes));
-          },
+      extra,
+    );
+  }
+  // Runs `join <args>` in the fake shell pane, in a real terminal.
+  async function startWith(args: string[], extra: Record<string, string> = {}) {
+    const chunks: Buffer[] = [];
+    const proc = Bun.spawn([...COMMAND, 'join', ...args], {
+      env: { ...env, ...extra },
+      cwd: fixture.root,
+      timeout: 10000,
+      terminal: {
+        data: (_terminal, bytes) => {
+          chunks.push(Buffer.from(bytes));
         },
       },
-    );
+    });
     try {
       const code = await proc.exited;
       return { pid: proc.pid, code, output: Buffer.concat(chunks).toString() };
@@ -82,7 +84,7 @@ console.log(JSON.stringify({result: {pane: {
       proc.terminal?.close();
     }
   }
-  return { ...fixture, result, start };
+  return { ...fixture, env, result, start, startWith };
 }
 
 test('terminal join hands the same process and terminal to each supported agent with its room guide', async () => {
@@ -162,4 +164,86 @@ test('terminal join forwards model selection before the initial prompt', async (
     assert.deepEqual(record.args.slice(0, 2), ['--model', model]);
     assert.match(record.args.at(-1), /as @reviewer/);
   }
+});
+
+// A herdr-team folder in the fixture, holding one definition.
+function team(root: string, text: string): Record<string, string> {
+  const dir = path.join(root, 'team');
+  fs.mkdirSync(path.join(dir, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'agents', 'reviewer.md'), text);
+  return { HERDR_TEAM_DIR: dir };
+}
+
+const REVIEWER = `---
+description: reviews architecture
+kind: claude
+model: sonnet[1m]
+---
+Review architecture when the lead assigns work.
+`;
+
+test("--agent --as starts the definition's kind and model with the guide, its instructions, then the task", async () => {
+  const { startWith, result, root, run } = await shell();
+  const launched = await startWith(
+    ['--agent', '--as', 'reviewer', '--prompt', 'Review the cache.'],
+    team(root, REVIEWER),
+  );
+  assert.equal(launched.code, 23, launched.output);
+  const { args, bin } = await Bun.file(result).json();
+  assert.equal(bin, 'claude');
+  assert.deepEqual(args.slice(0, 2), ['--model', 'sonnet[1m]']);
+  const prompt: string = args.at(-1);
+  assert.match(prompt, /join --as reviewer --handle reviewer/);
+  const order = [
+    'as @reviewer.',
+    'Your instructions:\nReview architecture',
+    'Your initial task:\nReview the cache.',
+  ];
+  assert.deepEqual(
+    order.map((part) => prompt.indexOf(part)).toSorted((a, b) => a - b),
+    order.map((part) => prompt.indexOf(part)),
+  );
+  assert.ok(order.every((part) => prompt.includes(part)));
+  assert.match((await run(['status'], { inPane: true })).stdout, /@reviewer/);
+});
+
+test('with --as, --agent <kind>, --model, --handle and --description override the definition', async () => {
+  const { startWith, result, root, run } = await shell();
+  const launched = await startWith(
+    [
+      '--agent',
+      'codex',
+      '--as',
+      'reviewer',
+      '--model',
+      'example-v1',
+      '--handle',
+      'arch',
+      '--description',
+      'reviews the cache',
+    ],
+    team(root, REVIEWER),
+  );
+  assert.equal(launched.code, 23, launched.output);
+  const record = await Bun.file(result).json();
+  assert.equal(record.bin, 'codex');
+  assert.deepEqual(record.args.slice(0, 2), ['--model', 'example-v1']);
+  assert.match(record.args.at(-1), /as @arch\./);
+  assert.match(record.args.at(-1), /Your instructions:\nReview architecture/);
+  assert.match((await run(['status'], { inPane: true })).stdout, /@arch — reviews the cache/);
+});
+
+test('--agent --as a definition without kind says to add one, before joining', async () => {
+  const { startWith, result, root, run } = await shell();
+  const launched = await startWith(
+    ['--agent', '--as', 'reviewer'],
+    team(root, REVIEWER.replace('kind: claude\n', '')),
+  );
+  assert.equal(launched.code, 1);
+  assert.match(
+    launched.output,
+    /The definition reviewer has no kind\. Add kind: codex, claude or pi to it, or pass --agent <kind>\./,
+  );
+  assert.equal(await Bun.file(result).exists(), false);
+  assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /@reviewer/);
 });

@@ -2,6 +2,7 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { down, status, up } from '@herdr/compose';
 import { fixture } from './fixture.ts';
 
@@ -152,10 +153,10 @@ test('shell bootstrap delegates the lead to hub and keeps the lead outside owner
 
 test('compose preserves Claude extended-context model aliases through hub startup', async () => {
   const f = await fixture();
-  const yaml = (await Bun.file(f.file).text())
-    .replace('    kind: codex', '    kind: claude')
-    .replace('model: example-v1', 'model: sonnet[1m]');
-  await Bun.write(f.file, yaml);
+  await f.define(
+    'reviewer',
+    '---\ndescription: reviews\nkind: claude\nmodel: sonnet[1m]\n---\nx\n',
+  );
   await up(f);
   const start = (await f.read()).calls.find((args) => args[1] === 'start')!;
   assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
@@ -165,10 +166,13 @@ for (const swap of [false, true]) {
   test(`${swap ? 'swapping' : 'reassigning'} owned handles retires helpers before waiting for reuse`, async () => {
     const f = await fixture();
     const original = await Bun.file(f.file).text();
-    const auditor = '  auditor:\n    kind: codex\n    tab: helpers\n';
+    const auditor = '  auditor:\n    use: reviewer\n    tab: helpers\n';
     await Bun.write(f.file, original + auditor);
     await up(f);
-    const changed = original.replace('    tab: helpers', '    handle: auditor\n    tab: helpers');
+    const changed = original.replace(
+      '    use: reviewer\n    tab: helpers',
+      '    use: reviewer\n    handle: auditor\n    tab: helpers',
+    );
     await Bun.write(
       f.file,
       changed +
@@ -189,4 +193,89 @@ for (const swap of [false, true]) {
     await up(f);
     assert.equal((await f.read()).calls.filter((args) => args[1] === 'start').length, starts);
   }, 10_000);
+}
+
+test('helpers start from their definition: its kind, model and description reach hub and peers', async () => {
+  const f = await fixture();
+  await up(f);
+  const calls = (await f.read()).calls;
+  const start = calls.find((a: string[]) => a[1] === 'start')!;
+  assert.deepEqual(start.slice(3, 5), ['--kind', 'codex']);
+  const prompt = calls.find((a: string[]) => a[1] === 'prompt')![3]!;
+  assert.match(
+    prompt,
+    /Your instructions:\nReview when asked\.[\s\S]*Your initial task:[\s\S]*Review the code/,
+  );
+  const hub = Bun.spawnSync([...(await hubCommand()), 'status', '--json'], { env: f.env });
+  const members = JSON.parse(hub.stdout.toString()).members as { handle: string }[];
+  assert.ok(members.some((m) => m.handle === 'reviewer'));
+  assert.match(
+    Bun.spawnSync([...(await hubCommand()), 'status'], { env: f.env }).stdout.toString(),
+    /@reviewer — reviews the code/,
+  );
+});
+
+test('editing a definition replaces the helper on the next up', async () => {
+  const f = await fixture();
+  await up(f);
+  await up(f);
+  assert.equal((await f.read()).calls.filter((a: string[]) => a[1] === 'start').length, 1);
+  await f.define(
+    'reviewer',
+    '---\ndescription: reviews the code\nkind: codex\n---\nReview security.\n',
+  );
+  await assert.rejects(up(f), /occupied|draining/);
+  await f.tick();
+  await up(f);
+  const prompts = (await f.read()).calls.filter((a: string[]) => a[1] === 'prompt');
+  assert.equal(prompts.length, 2);
+  assert.match(prompts.at(-1)![3]!, /Review security\./);
+});
+
+test('inline kind and missing definitions are refused before any layout change', async () => {
+  for (const [entry, error] of [
+    ['    kind: codex\n    tab: helpers', /Invalid team YAML/],
+    [
+      '    use: nobody\n    tab: helpers',
+      /No agent definition "nobody" .* Definitions there: coordinator, reviewer\./,
+    ],
+  ] as const) {
+    const f = await fixture();
+    await Bun.write(
+      f.file,
+      (await Bun.file(f.file).text()).replace('    use: reviewer\n    tab: helpers', entry),
+    );
+    await assert.rejects(up(f), error);
+    assert.equal(
+      (await f.read()).calls.some((a: string[]) => ['create', 'start', 'close'].includes(a[1]!)),
+      false,
+    );
+  }
+});
+
+test('a team is found by name in the herdr-team folder, and use: paths are relative to it', async () => {
+  const f = await fixture();
+  const teams = path.join(f.root, 'team', 'teams');
+  fs.mkdirSync(path.join(teams, 'local'), { recursive: true });
+  fs.writeFileSync(
+    path.join(teams, 'local', 'helper.md'),
+    '---\ndescription: helps locally\nkind: codex\n---\nHelp.\n',
+  );
+  const yaml = (await Bun.file(f.file).text()).replace(
+    '    use: reviewer',
+    '    use: ./local/helper.md',
+  );
+  fs.writeFileSync(path.join(teams, 'test.yaml'), yaml);
+  await up({ ...f, file: 'test' });
+  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready\)/);
+  const prompt = (await f.read()).calls.find((a: string[]) => a[1] === 'prompt')![3]!;
+  assert.match(prompt, /Your instructions:\nHelp\./);
+  assert.match(await down({ ...f, file: 'test' }), /is down/);
+});
+
+// The hub executable compose itself runs.
+async function hubCommand(): Promise<string[]> {
+  return process.env.HERDR_TEST_BIN_DIR
+    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 }

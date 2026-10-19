@@ -65,10 +65,10 @@ export class Hub {
     );
   }
   async start(
-    agent: { kind: string; model?: string; handle: string; prompt: string },
+    agent: { definition: string; handle: string; prompt: string },
     pane: string,
   ): Promise<void> {
-    const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
+    const proc = Bun.spawn([...this.words, 'invite', pane, ...this.agentArgs(agent)], {
       env: this.env,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -82,18 +82,12 @@ export class Hub {
       throw new Error(stderr.trim() || stdout.trim());
     }
   }
-  startArgs(agent: { kind: string; model?: string; handle: string; prompt: string }): string[] {
-    return [
-      'join',
-      '--agent',
-      agent.kind,
-      '--handle',
-      agent.handle,
-      '--description',
-      `${agent.handle}, ${agent.kind}`,
-      '--prompt',
-      agent.prompt,
-      ...(agent.model ? ['--model', agent.model] : []),
-    ];
+  // Starts the lead in the caller's own pane; helpers go to their panes through invite. Kind,
+  // model and description come from the definition.
+  startArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
+    return ['join', '--agent', ...this.agentArgs(agent)];
+  }
+  private agentArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
+    return ['--as', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
   }
 }

@@ -14,7 +14,7 @@ const program = new Command()
 program
   .command('up')
   .summary('reconcile a team; start a lead in this pane when none is running')
-  .argument('<file>', 'desired team configuration')
+  .argument('<team>', 'a team name from ~/.config/herdr-team/teams, or a team file')
   .action(async (file) => {
     const result = await up({
       file,
@@ -29,7 +29,7 @@ program
 program
   .command('down')
   .summary('dismantle only the agents and tabs owned by a team YAML deployment')
-  .argument('<file>', 'team file (only its name is needed)')
+  .argument('<team>', 'a team name or file (only its name: is read)')
   .action(async (file) => {
     console.log(await down({ file, herdr: cliLayoutHerdr() }));
   });

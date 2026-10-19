@@ -40,7 +40,8 @@ EOF
 
 | Command | Run by | What it does |
 |---|---|---|
-| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--agent` starts an agent with the guide |
+| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--as` joins as a definition, `--agent` starts an agent with the guide |
+| [`invite`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in another shell pane and bring it into its room; `--as` a definition |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
 | [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
@@ -49,17 +50,20 @@ EOF
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
 
-To start a member directly from an interactive shell in Herdr:
+To start a member directly from an interactive shell in Herdr, from a
+[definition](#agent-definitions) or from flags alone:
 
 ```bash
+<repo>/dist/herdr-agent-hub join --agent --as reviewer
 <repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
 ```
 
-This starts `codex` in the current pane with the join guide as its initial prompt. `claude` and
-`pi` are also supported. The executable must be on PATH. Explicit handles fail on collisions.
-Add `--pane w1:p3` to start in another existing shell pane and return after membership is confirmed
-and the guide is submitted. Its workspace supplies the room. Pane creation and layout stay with
-the caller, such as compose.
+This starts the agent in the current pane with the join guide (and the definition's instructions)
+as its initial prompt: the definition's `kind`, or `codex`, `claude` or `pi` given to `--agent`,
+which also overrides it. The executable must be on PATH. Explicit handles fail on collisions.
+To start one in another existing shell pane instead, and return once its membership is confirmed
+and the guide submitted, use [`invite w1:p3`](docs/commands/hub/invite.md) with the same options.
+Pane creation and layout stay with the caller, such as compose.
 Add `--model <id>` to select a model when starting an agent.
 Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
 the guide. The description remains the short role shown to peers.
@@ -67,12 +71,14 @@ the guide. The description remains the short role shown to peers.
 ## Compose
 
 For declarative teams and tab layouts, use [compose](docs/compose.md). It wraps hub's
-startup commands and keeps ownership in its own Drizzle/SQLite store.
+startup commands and keeps ownership in its own Drizzle/SQLite store. A team file lists its agents
+by [definition](#agent-definitions) (`use: reviewer`) plus where they run; see
+[`examples/team.yaml`](examples/team.yaml) and its `examples/agents/`.
 
 | Command | What it does |
 |---|---|
-| [`herdr-compose up <file>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML |
-| [`herdr-compose down <file>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
+| [`herdr-compose up <team>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML, by name (`~/.config/herdr-team/teams/`) or file |
+| [`herdr-compose down <team>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
 | [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace |
 
 ## Stopping a conversation
@@ -85,7 +91,18 @@ There is no message limit: agents that keep waking each other keep talking (and 
 - **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-agent-hub:*)` in your settings.
 - Agents must be ones Herdr recognizes (`herdr agent list` shows them).
 - Agent commands only read and write the state database, so they work inside agent sandboxes.
-  Ticks and the user-facing `join --agent` mode call Herdr outside the sandbox.
+  Ticks, `join --agent` and `invite` call Herdr, so run them outside a sandbox
+  ([ADR 0011](docs/adr/0011-invite-starts-agents-in-named-panes.md)).
+
+## Agent definitions
+
+A definition says who an agent is, in a Markdown file under `~/.config/herdr-team/agents/`
+(`$XDG_CONFIG_HOME/herdr-team`, or `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
+(codex, claude or pi), `model` and `handle` (default: the file name), and its instructions as the
+body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-agent-hub doesn't
+use are ignored, and not applied (`permissions` here grants or denies nothing). An agent told to run
+`<repo>/dist/herdr-agent-hub join --as reviewer` joins with that handle and description, and gets
+the instructions after the guide. See [`join`](docs/commands/hub/join.md#joining-as-a-definition).
 
 ## State
 
@@ -122,9 +139,10 @@ the Herdr plugin manifest and installed commands keep their paths.
 
 | Package | Responsibility | Runtime workspace dependencies |
 |---|---|---|
-| [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `herdr`, `terminal` |
-| [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `herdr`, `terminal` |
+| [`@herdr/compose`](packages/compose/) | YAML teams, layouts, and separate deployment ownership; wraps hub commands | `hub` (CLI), `agents`, `herdr`, `terminal` |
+| [`@herdr/hub`](packages/hub/) | Room membership, messaging, delivery and the hub CLI; owns the SQLite schema and migrations | `agents`, `herdr`, `terminal` |
 | [`@herdr/herdr`](packages/herdr/) | Herdr CLI client and validated response types | — |
+| [`@herdr/agents`](packages/agents/) | Agent definitions: finds and parses the Markdown files in `~/.config/herdr-team/agents/` | `terminal` |
 | [`@herdr/terminal`](packages/terminal/) | Terminal text sanitizing and shell quoting | — |
 
 Shared packages expose only their `index.ts` through package `exports`. Within a package, modules

@@ -4,6 +4,7 @@
 // An agent's room is its Herdr workspace, so none of these take a room name.
 
 import fs from 'node:fs';
+import { loadDefinition } from '@herdr/agents';
 import {
   appendLog,
   dbPath,
@@ -76,7 +77,11 @@ function freeHandle(store: Store, base: string): string {
 }
 
 // A join waiting for the next tick, which checks with Herdr that an agent runs in the pane.
-function newMember(description: string, pane: string): Omit<Member, 'handle'> {
+function newMember(
+  description: string,
+  pane: string,
+  instructions: string | null,
+): Omit<Member, 'handle'> {
   return {
     // Shown to the other members by join, skill and status, and in their deliveries.
     description: sanitizeForTerminal(description).trim(),
@@ -87,16 +92,25 @@ function newMember(description: string, pane: string): Omit<Member, 'handle'> {
     agent: null,
     reason: null,
     held: null,
+    // Typed into the agent's pane with its guide, like the description.
+    instructions: instructions && sanitizeForTerminal(instructions).trim(),
   };
 }
 
 // Records the join and returns the instructions right away. The agent is admitted (or refused, if Herdr
 // sees no agent in its pane) by the tick that runs when its turn ends; its posts are delivered after.
+// as: a definition (name or path) supplying the handle, description and instructions; the
+// description and handle given here override it.
 export function join({
-  description,
+  as,
+  description: given,
   handle,
   env = process.env,
-}: CommandOptions & { description: string; handle?: string }): string {
+}: CommandOptions & { as?: string; description?: string; handle?: string }): string {
+  const definition = as === undefined ? null : loadDefinition(as, { env });
+  const description = given ?? definition?.description ?? '';
+  const base = handle ?? definition?.handle ?? slug(description);
+  const instructions = definition?.instructions || null;
   if (handle !== undefined && !/^[a-z0-9][a-z0-9_-]{0,19}$/.test(handle)) {
     throw new Error(
       'A handle must be 1–20 lowercase letters, digits, underscores or hyphens, starting with a letter or digit.',
@@ -125,13 +139,13 @@ export function join({
       }
       return existing.handle;
     }
-    const candidate = freeHandle(store, handle ?? slug(description));
+    const candidate = freeHandle(store, base);
     if (handle !== undefined && candidate !== handle) {
       throw new Error(
         `Handle @${handle} is already in use or has undelivered posts. Choose another handle.`,
       );
     }
-    const member = { ...newMember(description, pane), handle: candidate };
+    const member = { ...newMember(description, pane, instructions), handle: candidate };
     store.saveMember(member);
     // Queued now, so it comes before anything the agent posts; held until the join is confirmed.
     const id = store.announce(candidate, 'joined', `@${candidate} joined (${member.description}).`);
@@ -147,6 +161,7 @@ function instructionsFor(store: Store, handle: string, justJoined: boolean): str
     handle,
     room: store.room,
     members: store.members('active'),
+    instructions: store.member(handle)?.instructions ?? null,
     justJoined,
   });
 }

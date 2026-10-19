@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b691d0ef-9767-4493-8d0d-397561a74eb7",
+  "id": "a3ca27a9-a1d9-44b8-85be-8be273a93d68",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "log": {
@@ -110,6 +110,13 @@
         },
         "held": {
           "name": "held",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "instructions": {
+          "name": "instructions",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

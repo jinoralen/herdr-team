@@ -1,5 +1,7 @@
-import { test } from 'bun:test';
+import { onTestFinished, test } from 'bun:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cli } from './run-cli.ts';
@@ -8,19 +10,27 @@ const COMMAND = process.env.HERDR_TEST_BIN_DIR
   ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 const JOIN = [
-  'join',
+  'invite',
+  'w2:p2',
   '--agent',
   'codex',
   '--handle',
   'reviewer',
-  '--pane',
-  'w2:p2',
   '--description',
   'reviews architecture',
 ];
 
 async function remote(scenario = '') {
+  // A herdr-team folder with one definition, for invite --as.
+  const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-invite-'));
+  onTestFinished(() => fs.rmSync(team, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(team, 'agents'));
+  fs.writeFileSync(
+    path.join(team, 'agents', 'reviewer.md'),
+    '---\ndescription: reviews architecture\nkind: pi\nmodel: example-v1\n---\nReview when asked.\n',
+  );
   const fixture = cli({
+    HERDR_TEAM_DIR: team,
     SCENARIO: scenario,
     // The caller is in w1; status without inPane can inspect the target room through this env.
     HERDR_ENV: '1',
@@ -75,7 +85,7 @@ else if (args[0] === 'pane') {
   return { ...fixture, calls };
 }
 
-test('remote join starts and confirms a target room member, submits its guide and preserves the caller', async () => {
+test('invite starts and confirms a target room member, submits its guide and preserves the caller', async () => {
   const { run, calls } = await remote();
   const result = await run(JOIN, { inPane: true });
   assert.equal(result.code, 0, result.stderr);
@@ -95,14 +105,14 @@ test('remote join starts and confirms a target room member, submits its guide an
   assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /@reviewer/);
 });
 
-test('remote join recovers when a startup tick rejects the initial shell join', async () => {
+test('invite recovers when a startup tick rejects the initial shell join', async () => {
   const { run } = await remote('reject');
   const result = await run(JOIN, { inPane: true });
   assert.equal(result.code, 0, result.stderr);
   assert.match((await run(['status'])).stdout, /@reviewer — reviews architecture \[codex/);
 });
 
-test('remote join refuses occupied or missing panes without starting an agent', async () => {
+test('invite refuses occupied or missing panes without starting an agent', async () => {
   for (const scenario of ['busy', 'missing']) {
     const { run, calls } = await remote(scenario);
     const result = await run(JOIN, { inPane: true });
@@ -115,7 +125,7 @@ test('remote join refuses occupied or missing panes without starting an agent', 
   }
 });
 
-test('remote startup and prompt uncertainty are reported once without retries or closing panes', async () => {
+test('invite startup and prompt uncertainty are reported once without retries or closing panes', async () => {
   for (const scenario of ['start-timeout', 'prompt-timeout', 'changed', 'leave-on-prompt']) {
     const { run, calls } = await remote(scenario);
     const result = await run(JOIN, { inPane: true });
@@ -134,7 +144,7 @@ test('remote startup and prompt uncertainty are reported once without retries or
   }
 });
 
-test('remote join checks handle collisions before starting anything', async () => {
+test('invite checks handle collisions before starting anything', async () => {
   const { run, calls } = await remote();
   assert.equal((await run(['join', '--handle', 'reviewer', 'existing'])).code, 0);
   const result = await run(JOIN, { inPane: true });
@@ -146,14 +156,54 @@ test('remote join checks handle collisions before starting anything', async () =
   );
 });
 
-test('pane selection requires agent startup mode', async () => {
+test('join no longer starts agents in other panes: that is invite', async () => {
   const { run } = cli();
-  const result = await run(['join', '--pane', 'w2:p2', 'reviews'], { inPane: true });
+  const result = await run(['join', '--agent', 'codex', '--pane', 'w2:p2', 'reviews'], {
+    inPane: true,
+  });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /--pane requires --agent/);
+  assert.match(result.stderr, /unknown option '--pane'/);
 });
 
-test('remote startup submits the guide followed by a multiline initial task', async () => {
+test('invite refuses a pane where an agent already runs, with the line to paste into it', async () => {
+  const { run, calls } = await remote('busy');
+  const result = await run(['invite', 'w2:p2', '--as', 'reviewer'], { inPane: true });
+  assert.equal(result.code, 1);
+  assert.match(
+    result.stderr,
+    /w2:p2 already runs claude\. Ask it to run: .* join --as reviewer\nor invite a shell pane\./,
+  );
+  assert.equal(
+    (await calls()).some((args) => args[1] === 'start'),
+    false,
+  );
+});
+
+test('invite --as starts the definition in the target pane with its instructions', async () => {
+  const { run, calls } = await remote();
+  const result = await run([
+    'invite',
+    'w2:p2',
+    '--as',
+    'reviewer',
+    '--prompt',
+    'Review the cache.',
+  ]);
+  assert.equal(result.code, 0, result.stderr);
+  const history = await calls();
+  const start = history.find((args) => args[1] === 'start')!;
+  assert.deepEqual(start.slice(3, 5), ['--kind', 'pi']);
+  assert.deepEqual(start.slice(-3), ['--', '--model', 'example-v1']);
+  const prompt = history.find((args) => args[1] === 'prompt')![3]!;
+  assert.match(prompt, /as @reviewer\./);
+  assert.match(
+    prompt,
+    /Your instructions:\nReview when asked\.[\s\S]*Your initial task:\nReview the cache\./,
+  );
+  assert.match((await run(['status'])).stdout, /@reviewer — reviews architecture \[pi/);
+});
+
+test('invite startup submits the guide followed by a multiline initial task', async () => {
   const { run, calls } = await remote();
   const task = 'Review caching.\nPreserve $(literal) and `text` 🚀.\x07';
   const result = await run([...JOIN, '--prompt', task], { inPane: true });
@@ -175,23 +225,23 @@ test('invalid initial tasks fail before remote startup or membership changes', a
   }
 });
 
-test('initial tasks require agent startup mode', async () => {
+test('initial tasks require agent startup mode in join', async () => {
   const { run } = cli();
   const result = await run(['join', '--prompt', 'review', 'reviews'], { inPane: true });
   assert.equal(result.code, 1);
   assert.match(result.stderr, /--prompt requires --agent/);
 });
 
-test('remote startup requires a description even with a handle and initial task', async () => {
+test('invite startup requires a description even with a handle and initial task', async () => {
   const { run, calls } = await remote();
   const args = JOIN.slice(0, -2);
   const result = await run([...args, '--prompt', 'Review caching'], { inPane: true });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /missing required argument 'description'/);
+  assert.match(result.stderr, /requires --description <text>, or --as a definition/);
   assert.equal((await calls()).length, 0);
 });
 
-test('remote startup forwards a model as harness arguments', async () => {
+test('invite startup forwards a model as harness arguments', async () => {
   const { run, calls } = await remote();
   const result = await run([...JOIN, '--model', 'example/model-v1']);
   assert.equal(result.code, 0, result.stderr);
@@ -224,7 +274,7 @@ test('model selection requires startup and validates before changing membership'
   assert.equal((await calls()).length, 0);
 });
 
-test('remote startup preserves Claude extended-context model aliases', async () => {
+test('invite startup preserves Claude extended-context model aliases', async () => {
   for (const model of ['sonnet[1m]', 'opus[1m]']) {
     const { run, calls } = await remote();
     const args = JOIN.map((value) => (value === 'codex' ? 'claude' : value));

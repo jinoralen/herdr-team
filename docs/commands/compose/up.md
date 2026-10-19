@@ -2,17 +2,19 @@
 
 ## What it does
 
-Reconciles `up <file>` with the named deployment in this workspace. Healthy
+Reconciles `up <team>` (a team name from `~/.config/herdr-team/teams/`, or a file) with the named
+deployment in this workspace. Healthy
 helpers keep their conversations; hub starts missing helpers in compose-owned panes.
 
 ## When to use it
 
 - Run from the user-owned lead pane, either a running agent or an interactive shell.
-- Run `up` after editing YAML or to repair missing resources. Shell startup needs `lead.kind`.
+- Run `up` after editing YAML or to repair missing resources. Shell startup needs `lead.use`, a definition with a `kind`.
 
 ## Replacement and recovery
 
-Purpose, model, kind, handle, cwd and context changes replace helpers. Layout changes
+Definition edits (kind, model, description, instructions), and purpose, handle, cwd and context
+changes, replace helpers. Layout changes
 move terminals. Hub must finish retiring the old membership and draining outgoing
 messages before its handle can be reused; `up` reports this and asks you to retry.
 Handles may be reassigned or swapped between helpers in the same deployment:
@@ -27,7 +29,8 @@ Compose does not restart an existing lead or own its pane. See [configuration](.
 
 ## It's working if
 
-- Helpers receive hub's room guide followed by their purpose.
+- Helpers receive hub's room guide, their definition's instructions, then their purpose; peers see
+  the definition's description.
 - A second unchanged `up` creates no agents and submits no helper prompts.
 
 ## Where it fits

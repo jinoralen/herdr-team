@@ -36,11 +36,14 @@ export function memberInstructions({
   handle,
   room,
   members,
+  instructions = null,
   justJoined,
 }: {
   handle: string;
   room: string;
   members: Member[];
+  // From the definition the member joined as: its standing instructions, after the rules.
+  instructions?: string | null;
   justJoined: boolean;
 }): string {
   const others = members
@@ -57,7 +60,7 @@ export function memberInstructions({
 Members:
 ${others.length ? others.join('\n') : '  (nobody else yet)'}
 
-${roomRules(handle)}${outro}`;
+${roomRules(handle)}${instructions ? `\n\nYour instructions:\n${instructions}` : ''}${outro}`;
 }
 
 // For the top of `--help` in a member's pane: enough to post without reading the whole guide.

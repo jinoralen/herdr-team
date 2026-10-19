@@ -22,6 +22,22 @@ _Avoid_: username, nick, alias
 The role a member gives itself when joining ("codex, focuses on performance"), shown to the others.
 _Avoid_: brief, bio
 
+**Definition**:
+A Markdown file in `~/.config/herdr-team/agents/` saying who an agent is: frontmatter with its
+description, harness (`kind`), model and handle, and its instructions as the body. The same shape as
+OpenCode's and Claude Code's agent files; keys herdr-agent-hub doesn't use are ignored.
+_Avoid_: profile, persona, agent config
+
+**Instructions**:
+A definition's body: the standing role of an agent that joined as that definition, given after the
+guide and repeated by `skill`.
+_Avoid_: system prompt, guide (the guide is the room's rules)
+
+**Invite**:
+Starting an agent in another, existing shell pane so it joins that pane's room (`invite <pane>`).
+Never done to a pane where an agent already runs.
+_Avoid_: spawn, add (a member)
+
 **User**:
 The human who runs the agents and talks to each in its own pane, never through the room.
 _Avoid_: operator, owner
