@@ -49,14 +49,17 @@ EOF
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
 
-To start a member directly from an interactive shell in Herdr:
+To start a member directly from an interactive shell in Herdr, from a
+[definition](#agent-definitions) or from flags alone:
 
 ```bash
+<repo>/dist/herdr-agent-hub join --agent --as reviewer
 <repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
 ```
 
-This starts `codex` in the current pane with the join guide as its initial prompt. `claude` and
-`pi` are also supported. The executable must be on PATH. Explicit handles fail on collisions.
+This starts the agent in the current pane with the join guide (and the definition's instructions)
+as its initial prompt: the definition's `kind`, or `codex`, `claude` or `pi` given to `--agent`,
+which also overrides it. The executable must be on PATH. Explicit handles fail on collisions.
 Add `--pane w1:p3` to start in another existing shell pane and return after membership is confirmed
 and the guide is submitted. Its workspace supplies the room. Pane creation and layout stay with
 the caller, such as compose.

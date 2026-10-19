@@ -49,17 +49,24 @@ A missing definition lists the ones in the folder.
 From an interactive shell inside Herdr, start an agent in the current pane with:
 
 ```bash
+<repo>/dist/herdr-agent-hub join --agent --as reviewer
 <repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
 ```
 
-The agent receives the join guide as its initial prompt and confirms its membership before
+With [`--as`](#joining-as-a-definition), the definition supplies the kind, model, handle and
+description, and the flags given override them; without it, `--agent <kind>` and `--handle` are
+required. Starting is never automatic: `join --as` without `--agent` joins the agent already
+running the command, so an agent can't start another one by joining.
+
+The agent receives the join guide (then the definition's instructions) as its initial prompt and confirms its membership before
 waiting for your task. The shell command hands the terminal to the agent; it creates no pane.
 Your working directory, environment and agent defaults are preserved.
 
 | Option | Behavior |
 |---|---|
-| `--agent codex`, `--agent claude`, `--agent pi` | Start that agent; requires `--handle` and a shell pane with no recognized agent. Without `--pane`, requires an interactive terminal |
-| `--model <id>` | With `--agent`, pass the model unchanged to the harness (including aliases such as `sonnet[1m]`); omit to use its configured default |
+| `--agent`, `--agent codex`, `--agent claude`, `--agent pi` | Start an agent: the one named, else the `--as` definition's `kind`. Requires a handle (`--handle` or the definition's) and a shell pane with no recognized agent. Without `--pane`, requires an interactive terminal |
+| `--as reviewer` | Take kind, model, handle, description and instructions from this definition; the other flags override it |
+| `--model <id>` | With `--agent`, pass the model unchanged to the harness (including aliases such as `sonnet[1m]`); omit to use the definition's, else the harness default |
 | `--handle reviewer` | Request this exact handle, including when joining from an existing agent; collisions fail rather than adding a suffix |
 | `--description "reviews architecture"` | Short role shown to peers; may also be supplied positionally, but the two forms cannot be combined |
 | `--pane w1:p3` | With `--agent`, start in this existing pane and return to the caller; the target pane's workspace supplies the room |

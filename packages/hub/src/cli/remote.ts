@@ -18,6 +18,7 @@ function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
 
 export async function launchInPane({
   agent,
+  as,
   model,
   handle,
   description,
@@ -26,6 +27,7 @@ export async function launchInPane({
   env,
 }: {
   agent: string;
+  as?: string;
   model?: string;
   handle: string;
   description: string;
@@ -54,7 +56,7 @@ export async function launchInPane({
   description = sanitizeForTerminal(description).trim();
   // Reserve the exact handle before starting anything. A startup tick can reject this shell join;
   // the second join below recovers it after detection, with the same collision checks.
-  join({ description, handle, env: targetEnv });
+  join({ as, description, handle, env: targetEnv });
   try {
     const started = await herdr.startAgent({
       kind: agent,
@@ -67,7 +69,7 @@ export async function launchInPane({
     checkPane(live, pane, agent);
     const store = new Store(rootDir(targetEnv), pane.workspace_id);
     const joined = store.transaction(() => {
-      const instructions = join({ description, handle, env: targetEnv });
+      const instructions = join({ as, description, handle, env: targetEnv });
       const member = store.member(handle);
       if (!member || member.pane_id !== target) {
         throw new Error(

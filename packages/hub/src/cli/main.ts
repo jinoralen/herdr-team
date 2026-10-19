@@ -38,10 +38,9 @@ function joinDescription(
   return named ?? (words.length ? words.join(' ') : undefined);
 }
 
-// The options only starting an agent takes, and the one it doesn't take yet.
+// The options only starting an agent takes.
 function checkStartOptions(options: {
-  agent?: string;
-  as?: string;
+  agent?: string | true;
   model?: string;
   pane?: string;
   prompt?: string;
@@ -52,11 +51,8 @@ function checkStartOptions(options: {
     ['--model', options.model],
   ] as const) {
     if (value !== undefined && !options.agent) {
-      throw new Error(`${flag} requires --agent <type>.`);
+      throw new Error(`${flag} requires --agent.`);
     }
-  }
-  if (options.agent && options.as !== undefined) {
-    throw new Error('--as cannot start an agent yet; use --agent with --handle and --description.');
   }
 }
 
@@ -83,7 +79,7 @@ program
   .option('--description <text>', 'short role shown to the other members')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
   .optionsGroup('Starting an agent (run by the user from a shell, not by agents):')
-  .option('--agent <type>', 'start codex, claude or pi in the selected shell pane')
+  .option('--agent [type]', "start codex, claude or pi here; with --as, the definition's kind")
   .option('--model <id>', 'model for the agent being started (requires --agent)')
   .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
   .option('--prompt <text>', 'initial task after joining (requires --agent)')
@@ -91,11 +87,9 @@ program
     const role = joinDescription(description, options.description, options.as);
     checkStartOptions(options);
     if (options.agent) {
-      if (!options.handle || role === undefined) {
-        throw new Error('Starting an agent requires --handle <handle>.');
-      }
       const output = await launch({
-        agent: options.agent,
+        agent: options.agent === true ? undefined : options.agent,
+        as: options.as,
         model: options.model,
         handle: options.handle,
         description: role,
