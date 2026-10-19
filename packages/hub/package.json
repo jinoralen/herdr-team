@@ -9,6 +9,7 @@
   },
   "imports": {
     "#agent": "./src/agent/index.ts",
+    "#package": "./package.json",
     "#rooms": "./src/rooms/index.ts",
     "#store": "./src/store/index.ts",
     "#testing": "./src/testing/index.ts"

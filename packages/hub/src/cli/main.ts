@@ -4,10 +4,12 @@
 
 import { Command } from '@commander-js/extra-typings';
 import { cliHerdr } from '@herdr/herdr';
-import { join, leave, message, parseTo, SELF, skill, status } from '#agent';
+import { join, leave, message, orientation, parseTo, SELF, skill, status } from '#agent';
+import { version } from '#package';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
 import { launch } from './launch.ts';
+import { unknownCommand } from './unknown.ts';
 
 const program = new Command()
   .name(SELF)
@@ -16,7 +18,10 @@ const program = new Command()
       'Agents join and post with this command; Herdr runs it when agents change state, so nothing stays running.',
   )
   .showSuggestionAfterError(false)
-  .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`);
+  .version(version, '-v, --version', 'print the version')
+  .addHelpText('before', () => orientation())
+  .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`)
+  .commandsGroup('Agent commands:');
 
 function joinDescription(words: string[], named: string | undefined): string {
   if (named !== undefined && words.length > 0) {
@@ -32,20 +37,23 @@ program
   .command('join')
   .summary("join a pane's room, optionally starting an agent")
   .description(
-    "Join the chat room of this pane's Herdr workspace. Run it inside the agent\n" +
-      '(e.g. tell the agent to run it). Without --handle, the first word becomes the handle (@codex,\n' +
-      "@claude-2, ...); the rest describes the agent's role to the others.\n" +
+    "Join the chat room of this pane's Herdr workspace. An agent runs it in its own\n" +
+      'shell, when its user asks. Without --handle, the first word becomes the handle\n' +
+      "(@codex, @claude-2, ...); the rest describes the agent's role to the others.\n" +
       'Prints instructions for the agent on how to use the room.\n' +
       'Running it again from the same pane prints the instructions again.\n' +
-      'From an interactive Herdr shell, use --agent and --handle to start an agent\n' +
-      'in this pane with the room guide as its initial prompt. Add --pane to start\n' +
-      'in another existing shell pane and return after confirmation and guide submission.',
+      '\n' +
+      'Users, not agents: from an interactive Herdr shell, use --agent and --handle\n' +
+      'to start an agent in this pane with the room guide as its initial prompt.\n' +
+      'Add --pane to start in another existing shell pane and return after\n' +
+      'confirmation and guide submission.',
   )
   .argument('[description...]', 'the agent type, then its role (or use --description)')
   .option('--description <text>', 'short role shown to the other members')
-  .option('--model <id>', 'model for the agent being started (requires --agent)')
-  .option('--agent <type>', 'start codex, claude or pi in the selected shell pane')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
+  .optionsGroup('Starting an agent (run by the user from a shell, not by agents):')
+  .option('--agent <type>', 'start codex, claude or pi in the selected shell pane')
+  .option('--model <id>', 'model for the agent being started (requires --agent)')
   .option('--pane <id>', 'start in this existing shell pane (requires --agent)')
   .option('--prompt <text>', 'initial task after joining (requires --agent)')
   .action(async (description, options) => {
@@ -122,6 +130,8 @@ program
     console.log(leave());
   });
 
+program.commandsGroup('Other commands:').helpCommand(true);
+
 program
   .command('status')
   .summary("show the room's members, what waits for them and recent activity")
@@ -147,6 +157,22 @@ program
   .action(async (options) => {
     await runTick(options.startup ?? false);
   });
+
+// A usage mistake names the command's own help. An unknown command lists the commands and, for the
+// usual guesses (an inbox to read, `send`), says how the room works instead.
+program.showHelpAfterError(`(${SELF} --help lists the commands)`);
+for (const command of program.commands) {
+  command.showHelpAfterError(`(${SELF} ${command.name()} --help shows its usage)`);
+}
+program.on('command:*', ([name]: string[]) => {
+  console.error(
+    unknownCommand(
+      name ?? '',
+      program.commands.map((c) => c.name()),
+    ),
+  );
+  process.exitCode = 1;
+});
 
 // Without HERDR_SOCKET_PATH, a tick can't tell which Herdr session started, so clearing could empty
 // another session's rooms: the rooms are kept instead.

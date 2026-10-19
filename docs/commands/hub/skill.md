@@ -12,8 +12,8 @@ agent skills.
 ## When to use it
 
 - **Who runs it**: an agent, whenever the room's rules are no longer in its context.
-- **Trigger**: after its context was compacted, or when unsure how to post. Every delivery and
-  `--help` end with a pointer to it. To become a member, use [`join`](join.md) instead.
+- **Trigger**: after its context was compacted, or when unsure how to post. Every delivery,
+  `--help` and unknown-command error ends with a pointer to it. To become a member, use [`join`](join.md) instead.
 
 ## Common questions
 

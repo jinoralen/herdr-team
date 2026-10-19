@@ -12,6 +12,10 @@ test('skill gives a member its own guide again, and anyone else the general one'
   assert.match(mine, /@codex — codex implementer/);
   assert.match(mine, /starting with "\[herdr-agent-hub to=@claude \.\.\.\]"/);
   assert.match(mine, /Answering a question is never --fyi/);
+  assert.match(
+    mine,
+    /Only if a reply seems overdue: .* status says what waits and why\. Neither is an inbox/,
+  );
   assert.doesNotMatch(
     mine,
     /When you're done with what your user asked/,

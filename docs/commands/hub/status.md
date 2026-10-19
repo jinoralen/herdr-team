@@ -11,6 +11,8 @@ reads, so it's safe from any pane, member or not.
 - **Who runs it**: the user or an agent, from any pane in the workspace.
 - **Trigger**: a conversation went quiet, a reply didn't arrive, or you want to see who is in the
   room.
+- The guide points agents here only when a reply seems overdue: it is not an inbox, and messages
+  reach them only as deliveries. For their own handle and the members, use [`skill`](skill.md).
 
 ## Common questions
 

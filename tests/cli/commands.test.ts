@@ -1,11 +1,13 @@
 import { expect, test } from 'bun:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { cli } from './run-cli.ts';
 
 test('with no arguments, prints the help and points agents to skill', async () => {
   const { stdout, code } = await cli().run([]);
   expect(code).toBe(0);
-  expect(stdout).toContain('Commands:');
+  expect(stdout).toContain('Agent commands:');
   expect(stdout).toMatch(/Agents: run `.* skill` to learn how to use the room\./);
 });
 
@@ -32,6 +34,68 @@ test('usage errors use standard errors without suggestions or examples', async (
   expect(missing.code).toBe(1);
   expect(missing.stderr).toContain("missing required argument 'description'");
   expect(missing.stderr).not.toContain('Example:');
+});
+
+test("usage errors point to the command's own help", async () => {
+  const { run } = cli();
+  const option = await run(['message', '--to']);
+  expect(option.code).toBe(1);
+  expect(option.stderr).toMatch(/\(.* message --help shows its usage\)/);
+  const root = await run(['--frob']);
+  expect(root.code).toBe(1);
+  expect(root.stderr).toMatch(/\(.* --help lists the commands\)/);
+});
+
+test('an unknown command lists the commands and answers the usual guesses', async () => {
+  const { run } = cli();
+  const typo = await run(['mesage', 'hi']);
+  expect(typo.code).toBe(1);
+  expect(typo.stderr).toContain('Commands: join, message, skill, leave, status, tick.');
+  expect(typo.stderr).toMatch(/Agents: run `.* skill`/);
+  const inbox = await run(['inbox']);
+  expect(inbox.code).toBe(1);
+  expect(inbox.stderr).toContain('There is no inbox to read');
+  const send = await run(['send', 'hi']);
+  expect(send.stderr).toMatch(/To post, use message: .* message --to <handle> --stdin/);
+  const who = await run(['members']);
+  expect(who.stderr).toMatch(/Your handle and the members: .* skill\./);
+});
+
+test('help separates the agent commands, and join the options only users start agents with', async () => {
+  const { run } = cli();
+  const root = (await run(['--help'])).stdout;
+  expect(root).toMatch(/Agent commands:\n {2}join[\s\S]*message[\s\S]*skill[\s\S]*leave/);
+  expect(root).toMatch(/Other commands:\n {2}status[\s\S]*tick[\s\S]*help/);
+  const join = (await run(['join', '--help'])).stdout;
+  const options = join.slice(join.indexOf('Options:'));
+  const [own, starting] = options.split(
+    'Starting an agent (run by the user from a shell, not by agents):',
+  );
+  expect(own).toContain('--handle');
+  expect(own).not.toContain('--agent');
+  expect(starting).toMatch(/--agent[\s\S]*--model[\s\S]*--pane[\s\S]*--prompt/);
+});
+
+test('--version prints the version', async () => {
+  const { stdout, code } = await cli().run(['--version']);
+  expect(code).toBe(0);
+  expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+});
+
+test("help in a member's pane starts with who it is and how to post", async () => {
+  const { run, root } = cli();
+  const before = await run(['--help'], { inPane: true });
+  expect(before.stdout).toMatch(/^Usage:/);
+  expect(fs.existsSync(path.join(root, 'state', 'chat.db'))).toBe(false);
+  await run(['tick']);
+  await run(['join', 'codex, reviews'], { inPane: true });
+  await run(['join', 'claude'], { inPane: true, paneId: 'p2' });
+  await run(['tick']);
+  const help = await run([], { inPane: true });
+  expect(help.stdout).toMatch(
+    /^You are @codex in chat room "w1", with @claude\.\nPost: .* message --to <handle> --stdin .* rules: .* skill\n/,
+  );
+  expect((await run(['--help'], { inPane: true, paneId: 'p9' })).stdout).toMatch(/^Usage:/);
 });
 
 test('room overrides are rejected and status requires a Herdr pane', async () => {
