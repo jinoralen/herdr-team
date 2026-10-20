@@ -50,6 +50,8 @@ function directory(root: string): string {
 function database(root: string): BunSQLiteDatabase & { $client: Database } {
   const client = new Database(path.join(directory(root), 'compose.db'));
   try {
+    client.exec('PRAGMA busy_timeout = 5000');
+    client.exec('PRAGMA journal_mode = WAL');
     client.exec('BEGIN IMMEDIATE');
     const id = client
       .query<{ application_id: number }, []>('PRAGMA application_id')

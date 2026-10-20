@@ -37,7 +37,7 @@ async function recoverAllocation(
   const original = allocation.pane ?? (await identifyAllocation(r, allocation));
   // Recorded IDs survive moves between tabs; the original tab is no longer authoritative.
   const panes = await r.herdr.listPaneTopology();
-  if (panes.some((p) => p.pane_id === original)) {
+  if (original && panes.some((p) => p.pane_id === original)) {
     await r.herdr.closePane(original);
   }
   r.state.allocations = r.state.allocations.filter((a) => a.label !== allocation.label);
@@ -47,11 +47,14 @@ async function recoverAllocation(
 async function identifyAllocation(
   r: Runtime,
   allocation: Runtime['state']['allocations'][number],
-): Promise<string> {
+): Promise<string | null> {
   const tabs = await r.herdr.listTabs();
   const tab =
     allocation.tab ??
     tabs.find((t) => t.workspace_id === r.state.room && t.label === allocation.label)?.tab_id;
+  if (!tab) {
+    return null;
+  }
   const panes = (await r.herdr.listPaneTopology()).filter((p) => p.tab_id === tab);
   const original = panes[0];
   if (!original || panes.length !== 1) {

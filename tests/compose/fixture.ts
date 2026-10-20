@@ -70,6 +70,7 @@ else if (a[0] === 'pane' && a[1] === 'get') {
  out({pane});
 } else if (a[0] === 'tab' && a[1] === 'list') out({tabs:s.tabs});
 else if (a[0] === 'tab' && a[1] === 'create') {
+ if (s.rejectCreate) {s.rejectCreate=false;fail('refused');}
  const id = s.next++;
  const tab = {tab_id:'tab'+id,workspace_id:opt('--workspace'),label:opt('--label')};
  const pane = {pane_id:'pane'+id,terminal_id:'terminal'+id,workspace_id:tab.workspace_id,tab_id:tab.tab_id,agent:null,agent_status:'idle'};
