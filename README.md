@@ -16,7 +16,22 @@ herdr plugin link "$PWD"  # Herdr runs it on agent events
 
 `herdr plugin link` doesn't build; `herdr plugin install` from GitHub runs the manifest's `[[build]]` steps.
 
-Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/dist/herdr-hub`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need to know where it lives.
+Agents run the executable by its full path (`<repo>/dist/herdr-hub`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need PATH.
+
+### Shell setup (zsh, inside Herdr)
+
+For yourself, put both commands on PATH with Tab completion, in Herdr panes only. Add to `~/.zshrc`:
+
+```zsh
+if [[ -n $HERDR_ENV && $(${HERDR_BIN_PATH:-herdr} plugin list --plugin herdr-team --json 2>/dev/null) =~ '"plugin_root":"([^"]+)"' ]]; then
+  source $match[1]/shell/init.zsh
+fi
+```
+
+It asks Herdr where the plugin is, so it works for a linked checkout and an installed plugin alike,
+and keeps working after `herdr plugin update`, which builds each version in a new folder. It
+completes commands, options, agent definitions, room handles for `--to` and team names. Shells
+outside Herdr are untouched ([ADR 0013](docs/adr/0013-path-and-completion-only-in-herdr-shells.md)).
 
 ## Quick start
 
@@ -134,7 +149,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 |---|---|
 | `bun test` | run package and repository tests from source |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
-| `bun run build` | compile `dist/herdr-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
+| `bun run build` | empty `dist/`, then compile `dist/herdr-hub` and `dist/herdr-compose`; Herdr and agents run them, so rebuild after editing `packages/` |
 | `bun run db:generate` | after changing the tables in `packages/hub/src/store/tables.ts`: regenerate the one migration, `packages/hub/drizzle/0000_init.sql` |
 | `bun run verify` | lint, type check, Knip, then the tests |
 | `bun check` | type check all packages and repository tests (Bun's built-in checker) |

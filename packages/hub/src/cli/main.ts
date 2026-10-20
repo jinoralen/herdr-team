@@ -10,11 +10,13 @@ import { version } from '#package';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
 import { agents } from './agents.ts';
+import { complete } from './complete.ts';
 import { launch } from './launch.ts';
 import { invite, UncertainStartup } from './remote.ts';
 import { unknownCommand } from './unknown.ts';
 
-const program = new Command()
+// Exported for tests/shell, which checks the zsh completion against it.
+export const program = new Command()
   .name(SELF)
   .description(
     'Chat rooms for coding agents running in Herdr, one room per workspace.\n' +
@@ -231,6 +233,17 @@ program
   .option('--startup', "Herdr's server just started: clear every room first (agents join again)")
   .action(async (options) => {
     await runTick(options.startup ?? false);
+  });
+
+// Run by the zsh completion (shell/zsh/_herdr-hub) on Tab: left out of help.
+program
+  .command('__complete', { hidden: true })
+  .argument('<what>', 'definitions or handles')
+  .action((what) => {
+    const values = complete(what);
+    if (values) {
+      console.log(values);
+    }
   });
 
 // A usage mistake names the command's own help. An unknown command lists the commands and, for the

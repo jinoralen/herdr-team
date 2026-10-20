@@ -23,6 +23,10 @@ a new dependency. Bun's docs are in `node_modules/bun-types/docs/`.
 - Herdr's behaviour the code depends on (events, prompt outcomes, IDs): `docs/herdr.md`.
 - When you add, rename, remove or change the behaviour of a command, create or re-sync its page in
   `docs/commands/hub/` and its line in README.md, following `docs/agents/writing-docs.md`.
+- When you add, rename or remove a command or option, update its zsh completion in `shell/zsh/`
+  (`_herdr-hub`, `_herdr-compose`): an entry in `commands` and a `(name)` branch per command.
+  `tests/shell/zsh.test.ts` fails until they match `--help`. A new dynamic value (like definition
+  names) goes in the hidden `__complete` command, not in JSON parsed by the script.
 
 ## Agent skills
 

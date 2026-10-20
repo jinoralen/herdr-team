@@ -1,3 +1,4 @@
+import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -124,6 +125,20 @@ test("help in a member's pane starts with who it is and how to post", async () =
     /^You are @codex in chat room "w1", with @claude\.\nPost: .* message --to <handle> --stdin .* rules: .* guide\n/,
   );
   expect((await run(['--help'], { inPane: true, paneId: 'p9' })).stdout).toMatch(/^Usage:/);
+});
+
+test('help in a pane leaves a database from another build as it is', async () => {
+  const { run, root } = cli();
+  const dir = path.join(root, 'state', 'hub');
+  fs.mkdirSync(dir, { recursive: true });
+  const db = new Database(path.join(dir, 'chat.db'));
+  db.exec('CREATE TABLE members (handle TEXT); PRAGMA user_version = 99;');
+  db.close();
+  const before = fs.readFileSync(path.join(dir, 'chat.db'));
+  const help = await run(['--help'], { inPane: true });
+  assert.match(help.stdout, /^Usage:/);
+  assert.deepEqual(fs.readdirSync(dir), ['chat.db']);
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'chat.db')), before);
 });
 
 test('room overrides are rejected and status requires a Herdr pane', async () => {

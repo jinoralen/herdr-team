@@ -1,0 +1,77 @@
+#compdef herdr-compose -p */herdr-compose
+# zsh completion for herdr-compose, loaded by shell/init.zsh.
+#
+# Keep it in step with packages/compose/src/compose/main.ts: tests/shell/zsh.test.ts fails when a
+# visible command or option is missing here, or one named here no longer exists. Each command has
+# an entry in `commands` and a `(name)` branch below. Team names come from the hidden `__complete`
+# command, run as the executable being completed.
+
+local self=${~${(Q)words[1]}}
+
+# up and down's [team]: a team in ~/.config/herdr-team/teams by name, or a team file.
+_herdr-compose_teams() {
+  if [[ $PREFIX == */* ]]; then
+    _files -g '*.y(a|)ml(-.)'
+    return
+  fi
+  local -a teams
+  local line
+  for line in ${(f)"$(_call_program teams ${(q)self} __complete teams 2>/dev/null)"}; do
+    teams+=("${${line%%$'\t'*}//:/\\:}")
+  done
+  _describe -t teams team teams
+}
+
+local -a commands=(
+  'up:reconcile a team; start a lead in this pane when none is running'
+  'down:dismantle only the agents and tabs owned by a team YAML deployment'
+  'status:show deployments in this workspace and their helpers'\'' room membership'
+  'teams:list the teams in ~/.config/herdr-team/teams and check each one'
+  'help:display help for command'
+)
+local curcontext=$curcontext state state_descr line ret=1
+typeset -A opt_args
+
+_arguments -C \
+  '(- *)'{-h,--help}'[display help for command]' \
+  '1: :->command' \
+  '*:: :->args' && return
+
+case $state in
+  (command)
+    _describe -t commands command commands && ret=0
+    ;;
+  (args)
+    curcontext=${curcontext%:*:*}:herdr-compose-$words[1]:
+    case $words[1] in
+      (up)
+        _arguments \
+          '--dry-run[show what up would change; change nothing]' \
+          '--json[print the changes and the output as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' \
+          '1:team:_herdr-compose_teams' && ret=0
+        ;;
+      (down)
+        _arguments \
+          '--json[print the deployment taken down and the handles removed as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' \
+          '1:team:_herdr-compose_teams' && ret=0
+        ;;
+      (status)
+        _arguments \
+          '--json[print the deployments as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (teams)
+        _arguments \
+          '--json[print the teams as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (help)
+        _describe -t commands command commands && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret

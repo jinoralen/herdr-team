@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // Team management has its own executable; hub remains the room relay plugin.
 import { Command } from '@commander-js/extra-typings';
+import { listTeams } from '@herdr/agents';
 import { cliLayoutHerdr } from '@herdr/herdr';
 import { down, up } from './commands.ts';
 import { COMPOSE_SELF } from './hub.ts';
@@ -9,7 +10,8 @@ import { exitCode } from './retry.ts';
 import { status } from './status.ts';
 import { teams } from './teams.ts';
 
-const program = new Command()
+// Exported for tests/shell, which checks the zsh completion against it.
+export const program = new Command()
   .name(COMPOSE_SELF)
   .description('Create and reconcile agent teams and tab layouts in Herdr.')
   .showSuggestionAfterError(false);
@@ -70,6 +72,22 @@ program
   .option('--json', 'print the teams as JSON')
   .action(async (options) => {
     console.log(await teams({ json: options.json }));
+  });
+
+// Run by the zsh completion (shell/zsh/_herdr-compose) on Tab: up and down's team names, one
+// "name<TAB>file" per line. Only reads the folder, and prints nothing rather than failing.
+program
+  .command('__complete', { hidden: true })
+  .argument('<what>', 'teams')
+  .action((what) => {
+    try {
+      const names = what === 'teams' ? listTeams().teams : [];
+      if (names.length) {
+        console.log(names.map(({ name, file }) => `${name}\t${file}`).join('\n'));
+      }
+    } catch {
+      /* no completion */
+    }
   });
 
 if (import.meta.main) {

@@ -1,0 +1,119 @@
+#compdef herdr-hub -p */herdr-hub
+# zsh completion for herdr-hub, loaded by shell/init.zsh.
+#
+# Keep it in step with packages/hub/src/cli/main.ts: tests/shell/zsh.test.ts fails when a visible
+# command or option is missing here, or one named here no longer exists. Each command has an entry
+# in `commands` and a `(name)` branch below. Values only the program knows (definitions, handles)
+# come from its hidden `__complete` command, run as the executable being completed.
+
+local self=${~${(Q)words[1]}}
+
+# `__complete <what>`'s "value<TAB>description" lines, as _describe's "value:description" in reply.
+_herdr-hub_values() {
+  local line value description
+  reply=()
+  for line in ${(f)"$(_call_program $1 ${(q)self} __complete $1 2>/dev/null)"}; do
+    value=${line%%$'\t'*} description=${line#*$'\t'}
+    reply+=("${value//:/\\:}${description:+:$description}")
+  done
+}
+
+# join and invite's [agent]: a definition by name, or a path to one.
+_herdr-hub_definitions() {
+  if [[ $PREFIX == */* ]]; then
+    _files -g '*.md(-.)'
+    return
+  fi
+  local -a reply
+  _herdr-hub_values definitions
+  _describe -t definitions 'agent definition' reply
+}
+
+# message --to: the other members of this pane's room, comma-separated.
+_herdr-hub_handles() {
+  local -a reply
+  _herdr-hub_values handles
+  _sequence _describe -t handles handle reply
+}
+
+local -a commands=(
+  'join:join this pane'\''s room (agent)'
+  'message:post to the room (agent)'
+  'guide:how to use the room: your handle, members, rules (agent)'
+  'leave:leave the room (agent)'
+  'invite:start an agent in this or another shell pane and bring it into its room'
+  'agents:list the agent definitions join and invite can use'
+  'status:show the room'\''s members, what waits for them and recent activity'
+  'help:display help for command'
+)
+local curcontext=$curcontext state state_descr line ret=1
+typeset -A opt_args
+
+_arguments -C \
+  '(- *)'{-h,--help}'[display help for command]' \
+  '(- *)'{-v,--version}'[print the version]' \
+  '1: :->command' \
+  '*:: :->args' && return
+
+case $state in
+  (command)
+    _describe -t commands command commands && ret=0
+    ;;
+  (args)
+    curcontext=${curcontext%:*:*}:herdr-hub-$words[1]:
+    case $words[1] in
+      (join)
+        _arguments \
+          '(-d --description)'{-d,--description}'[short role shown to the other members]:text' \
+          '--handle[use this exact handle; fail if it is occupied]:handle' \
+          '(- *)'{-h,--help}'[display help for command]' \
+          '1:agent definition:_herdr-hub_definitions' && ret=0
+        ;;
+      (message)
+        _arguments \
+          '--to[send only to these agents, comma-separated]:handles:_herdr-hub_handles' \
+          '--re[the message this answers, from a delivery header]:message id' \
+          '--fyi[no reply needed: wakes nobody, arrives with their next message]' \
+          '--stdin[read the message from standard input]' \
+          '*--attach[attach a file (repeat for more)]:file:_files' \
+          '(- *)'{-h,--help}'[display help for command]' \
+          '*:message:' && ret=0
+        ;;
+      (guide)
+        _arguments \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (leave)
+        _arguments \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (invite)
+        _arguments \
+          '--pane[start in this shell pane instead of the current one]:pane id' \
+          '--agent[codex, claude or pi; overrides the definition'\''s kind]:agent kind:(codex claude pi)' \
+          '--handle[use this exact handle; fail if it is occupied]:handle' \
+          '(-d --description)'{-d,--description}'[short role shown to the other members]:text' \
+          '--model[model for the agent, passed to it unchanged]:model id' \
+          '--prompt[initial task after the guide]:text' \
+          '--json[with --pane: print the outcome as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' \
+          '1:agent definition:_herdr-hub_definitions' && ret=0
+        ;;
+      (agents)
+        _arguments \
+          '--json[print the definitions as JSON]' \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (status)
+        _arguments \
+          '--json[print a membership snapshot for automation]' \
+          '(- *)'{-h,--help}'[display help for command]' && ret=0
+        ;;
+      (help)
+        _describe -t commands command commands && ret=0
+        ;;
+    esac
+    ;;
+esac
+
+return ret
