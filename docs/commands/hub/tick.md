@@ -37,8 +37,8 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   right before each prompt, but Herdr accepts prompts for working agents, so a user typing at that
   same instant can still race it.
 - **A delivery counts once the agent starts a turn on it.** Until then the message stays queued, so a
-  crash never silently loses one: a post is dropped only when no agent is running in its
-  recipient's pane, and then its author is told.
+  crash never silently loses one. A post is dropped when no agent is running in its
+  recipient's pane, the recipient leaves, or its join is refused; its author still in the room is told. A pending sender's posts are withdrawn if it leaves or is refused before admission.
 - **No unmarked re-send.** If a prompt fails in a way where the text may have arrived, it isn't sent
   again on its own; it goes out with the next delivery marked "may repeat", and its author is warned
   unless it was an FYI or the author has left ([ADR 0006](../../adr/0006-no-unmarked-resend.md)).

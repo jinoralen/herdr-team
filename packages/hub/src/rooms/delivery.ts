@@ -6,7 +6,7 @@
 
 import type { Agent } from '@herdr/herdr';
 import { formatDelivery } from '#agent';
-import type { Member, Queued } from '#store';
+import { isPost, type Member, type Queued } from '#store';
 import type { Router } from './router.ts';
 import { findPane, heldReason } from './rules.ts';
 
@@ -25,8 +25,6 @@ const NOTHING_SENT: Record<string, string> = {
 // that may have failed only go out with something that does.
 const prompts = (q: Queued): boolean =>
   (q.kind === 'message' || q.kind === 'undelivered') && !q.unsure;
-// What an agent wrote (as opposed to a notice or warning about it).
-const isPost = (q: Queued): boolean => q.kind === 'message' || q.kind === 'fyi';
 
 export async function deliver(room: Router): Promise<void> {
   for (const member of [...room.members.values()]) {
@@ -103,9 +101,8 @@ function dropPosts(room: Router, member: Member): void {
     const posts = waiting(room, member).filter(isPost);
     const ids = posts.map((e) => e.id);
     room.store.withdrawWarnings(member.handle, ids);
-    warnAuthors(
-      room,
-      member,
+    room.store.warnAuthors(
+      member.handle,
       posts,
       (e) =>
         `Your message ${e.id} to @${member.handle} ${e.unsure ? 'may not have arrived, and will not be repeated' : 'was not delivered'}: no agent is running in its pane, so it was dropped. Send it again once @${member.handle} is back, or tell your user.`,
@@ -166,9 +163,8 @@ async function prompt(
     }
     room.store.setUnsure(member.handle, fresh, true);
     // FYI posts asked for no reply, so losing one isn't worth waking their author.
-    warnAuthors(
-      room,
-      member,
+    room.store.warnAuthors(
+      member.handle,
       entries.filter((e) => e.kind === 'message' && !e.unsure),
       (e) =>
         `Your message ${e.id} to @${member.handle} may not have arrived: the delivery failed or was interrupted. It is repeated, marked "may repeat", with @${member.handle}'s next message; if it can't wait, send it again or tell your user.`,
@@ -186,8 +182,12 @@ async function prompt(
     const unsent = error.code ? NOTHING_SENT[error.code] : undefined;
     if (unsent) {
       room.store.transaction(() => {
-        room.store.setUnsure(member.handle, fresh, false);
-        room.store.withdrawWarnings(member.handle, fresh);
+        // Only what still waits: a post dropped meanwhile (its recipient left) keeps the warning
+        // that says so.
+        const still = new Set(room.store.queued(member.handle).map((q) => q.id));
+        const kept = fresh.filter((id) => still.has(id));
+        room.store.setUnsure(member.handle, kept, false);
+        room.store.withdrawWarnings(member.handle, kept);
       });
       room.log(`… @${member.handle} ${unsent}.`);
       return;
@@ -207,20 +207,4 @@ async function prompt(
     room.store.withdrawWarnings(member.handle, ids);
   });
   room.log(`→ delivered ${ids.join(',')} to @${member.handle}`);
-}
-
-// Queues, for the author of each of these posts (if still in the room), a warning about its delivery
-// to `member`: one per post, linked to it by re, so it can be withdrawn once that post is delivered.
-function warnAuthors(
-  room: Router,
-  member: Member,
-  posts: Queued[],
-  text: (post: Queued) => string,
-): void {
-  const inRoom = room.store.handles();
-  for (const e of posts) {
-    if (inRoom.includes(e.from)) {
-      room.store.enqueue(member.handle, text(e), [e.from], { kind: 'undelivered', re: e.id });
-    }
-  }
 }

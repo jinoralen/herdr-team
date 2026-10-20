@@ -9,7 +9,9 @@ just text ([ADR 0005](../../adr/0005-recipients-by-to-not-mentions.md)).
 The message is queued at once and the command answers whom it's for (`Queued as @claude for
 @codex.`). Delivery happens later: when the poster's turn ends, each recipient gets it as soon as it
 is idle. If no agent is running in a recipient's pane, the message is dropped for it and the sender
-is warned; a busy or blocked agent keeps its messages.
+is warned; a busy or blocked agent keeps its messages. Leaving or refusing a recipient also drops its waiting posts and warns their authors still in the room. A previous warning promising a repeat is replaced with the final drop warning.
+
+Recipients are checked again when the post is queued. The output lists recipients that left meanwhile; if none remain, the command refuses the post.
 
 ## When to use it
 

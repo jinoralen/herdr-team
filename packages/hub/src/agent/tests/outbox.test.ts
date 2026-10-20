@@ -67,12 +67,16 @@ test('leave takes the member out at once and tells the others', async () => {
   assert.match(leave({ env: env('p1') }), /You left the room/);
   assert.equal(store().member('codex')!.status, 'left');
   assert.deepEqual(store().queued('codex'), [], 'nothing more for it');
+  const queued = store().queued('claude');
   assert.deepEqual(
-    store()
-      .queued('claude')
-      .map((q) => [q.from, q.kind, q.text]),
-    [['codex', 'left', '@codex left the room.']],
+    queued.map((q) => [q.from, q.kind]),
+    [
+      ['codex', 'undelivered'],
+      ['codex', 'left'],
+    ],
   );
+  assert.match(queued[0]!.text, /was not delivered.*dropped/);
+  assert.equal(queued[1]!.text, '@codex left the room.');
   assert.throws(() => message({ text: 'after leaving', env: env('p1') }), /not joined/);
 });
 

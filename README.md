@@ -64,7 +64,7 @@ commands by who runs them.
 | [`join [agent]`](docs/commands/hub/join.md) | agent | Join this pane's room, as an agent definition or with `--description`; never starts an agent |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
 | [`guide`](docs/commands/hub/guide.md) | agent | Print the guide again, e.g. after context compaction |
-| [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
+| [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told, and authors are warned of dropped posts |
 | [`invite [agent]`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in this shell pane, or in another with `--pane` (`--json` there), and bring it into its room |
 | [`agents`](docs/commands/hub/agents.md) | user or lead agent | List the agent definitions and what is wrong with any broken one; `--json` |
 | [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` (versioned) for automation |

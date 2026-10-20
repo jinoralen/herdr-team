@@ -1,6 +1,6 @@
 // One room's rows: its members and the messages waiting for them. Every method is scoped to the room.
 
-import { and, asc, desc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
 import { type Db, openDb, transaction } from './db.ts';
 import { members, queue, service } from './tables.ts';
 
@@ -15,6 +15,8 @@ export type Entry = { id: string; from: string; kind: QueueKind; text: string; r
 export type QueueKind = (typeof queue.$inferSelect)['kind'];
 // A message waiting for one recipient.
 export type Queued = Entry & { unsure: boolean };
+// What an agent wrote (as opposed to a notice or warning about it).
+export const isPost = (q: Entry): boolean => q.kind === 'message' || q.kind === 'fyi';
 
 const messageNumber = (id: string): number => Number(id.slice(1));
 
@@ -290,33 +292,63 @@ export class Store {
   // `@handle <why>.` Returns the notice's id, or null if the member had already changed.
   remove(member: Member, status: MemberStatus, why: string): string | null {
     return this.transaction(() => {
+      const pending = this.member(member.handle)?.status === 'pending';
       if (!this.change(member, ['pending', 'active'], { status })) {
         return null;
+      }
+      if (pending) {
+        this.dropSender(member.handle);
       }
       this.dropRecipient(member.handle);
       return this.announce(member.handle, 'left', `@${member.handle} ${why}.`);
     });
   }
 
-  // Whether anything from `handle` still waits for delivery, e.g. posts of a member that left.
+  // Whether a post or notice from `handle` still waits; warnings about it do not reserve its handle.
   hasQueuedFrom(handle: string): boolean {
     return !!this.db
       .select({ id: queue.message_id })
       .from(queue)
-      .where(and(eq(queue.room, this.room), eq(queue.sender, handle)))
+      .where(
+        and(eq(queue.room, this.room), eq(queue.sender, handle), ne(queue.kind, 'undelivered')),
+      )
       .limit(1)
       .get();
   }
 
-  // A member that left gets nothing more; a refused join takes back its notice and posts.
+  // Drop what waited for a removed recipient and correct delivery warnings for its posts.
   dropRecipient(handle: string): void {
+    const posts = this.queued(handle).filter(isPost);
+    this.withdrawWarnings(
+      handle,
+      posts.map((q) => q.id),
+    );
+    this.warnAuthors(
+      handle,
+      posts,
+      (e) =>
+        `Your message ${e.id} to @${handle} ${e.unsure ? 'may not have arrived, and will not be repeated' : 'was not delivered'}: the recipient left the room or its join was refused, so it was dropped. Send it again once @${handle} is back, or tell your user.`,
+    );
     this.db.delete(queue).where(this.forRecipient(handle)).run();
   }
 
+  // Warn authors still in the room; re links each warning to the post it describes.
+  warnAuthors(handle: string, posts: Queued[], text: (post: Queued) => string): void {
+    const inRoom = this.handles();
+    for (const e of posts) {
+      if (inRoom.includes(e.from)) {
+        this.enqueue(handle, text(e), [e.from], { kind: 'undelivered', re: e.id });
+      }
+    }
+  }
+
+  // Warnings are about the member, for other authors, so they stay.
   dropSender(handle: string): void {
     this.db
       .delete(queue)
-      .where(and(eq(queue.room, this.room), eq(queue.sender, handle)))
+      .where(
+        and(eq(queue.room, this.room), eq(queue.sender, handle), ne(queue.kind, 'undelivered')),
+      )
       .run();
   }
 

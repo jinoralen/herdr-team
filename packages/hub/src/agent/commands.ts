@@ -15,7 +15,13 @@ import {
   Store,
   serviceState,
 } from '#store';
-import { copyAttachments, planAttachments, withAttachments } from './attachments.ts';
+import {
+  type Attachment,
+  copyAttachments,
+  planAttachments,
+  removeAttachments,
+  withAttachments,
+} from './attachments.ts';
 import { leadingMention } from './recipients.ts';
 import { RetryLater } from './retry.ts';
 import { SELF } from './self.ts';
@@ -279,10 +285,9 @@ export function message({
   }
   requireInstalled(store);
   const others = store.handles().filter((h) => h !== member.handle);
-  const recipients = checkRecipients(to, others);
+  const chosen = checkRecipients(to, others);
   const answers = re === undefined ? null : checkRe(store, re);
-  copyAttachments(attachments);
-  const id = store.enqueue(member.handle, post, recipients, {
+  const { id, recipients, left } = enqueueLive(store, member.handle, post, chosen, attachments, {
     kind: fyi ? 'fyi' : 'message',
     re: answers,
   });
@@ -298,7 +303,39 @@ export function message({
     store.room,
     `${id} @${member.handle} → ${handleList(recipients)}${tags ? ` (${tags})` : ''}: ${preview(text)}`,
   );
-  return confirmation({ handle: member.handle, text, to, recipients, others, fyi });
+  return confirmation({ handle: member.handle, text, to, recipients, others, fyi }) + left;
+}
+
+// Copies the attachments and queues the post for those of `chosen` still in the room, read again in
+// the same transaction: one may have left since they were chosen (left says who). Refused when none
+// is left, and then nothing refers to the copies, so they are taken back.
+function enqueueLive(
+  store: Store,
+  sender: string,
+  post: string,
+  chosen: string[],
+  attachments: Attachment[],
+  options: { kind: 'message' | 'fyi'; re: string | null },
+): { id: string; recipients: string[]; left: string } {
+  copyAttachments(attachments);
+  try {
+    return store.transaction(() => {
+      const live = new Set(store.handles());
+      const recipients = chosen.filter((h) => live.has(h));
+      if (!recipients.length) {
+        throw new Error('No recipients remain in the room.');
+      }
+      const id = store.enqueue(sender, post, recipients, options);
+      const dropped = chosen.filter((h) => !live.has(h));
+      const left = dropped.length
+        ? `\nNot queued for ${handleList(dropped)}: they left the room.`
+        : '';
+      return { id, recipients, left };
+    });
+  } catch (error) {
+    removeAttachments(attachments);
+    throw error;
+  }
 }
 
 // What `message` answers: whom the post is queued for, when it goes out, and a reminder when a post

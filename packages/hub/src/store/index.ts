@@ -8,6 +8,7 @@ export { appendLog, type LogRow, readLog } from './log.ts';
 export { peekMembers } from './peek.ts';
 export {
   type Entry,
+  isPost,
   type Member,
   type MemberStatus,
   type Queued,
