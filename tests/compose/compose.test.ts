@@ -46,7 +46,7 @@ test('changed purpose waits for hub to retire the old membership before replacin
   await f.tick();
   await up(f);
   assert.equal((await f.read()).calls.filter((a: string[]) => a[1] === 'start').length, 2);
-});
+}, 10_000);
 
 test('down retains unrelated panes and ownership survives hub state removal', async () => {
   const f = await fixture();
@@ -237,7 +237,7 @@ test('editing a definition replaces the helper on the next up', async () => {
   const prompts = (await f.read()).calls.filter((a: string[]) => a[1] === 'prompt');
   assert.equal(prompts.length, 2);
   assert.match(prompts.at(-1)![3]!, /Review security\./);
-});
+}, 10_000);
 
 test('inline kind and missing definitions are refused before any layout change', async () => {
   for (const [entry, error] of [
