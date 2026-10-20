@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
-  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 
 async function shell() {
@@ -39,7 +39,7 @@ console.log(JSON.stringify({result: {pane: {
     HERDR_ENV: '1',
     HERDR_PANE_ID: 'p1',
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: path.join(fixture.root, 'state'),
+    HERDR_TEAM_STATE_DIR: path.join(fixture.root, 'state'),
     HERDR_BIN_PATH: path.join(fixture.root, 'herdr'),
     LAUNCH_RESULT: result,
     LAUNCH_MARKER: 'preserved',
@@ -64,10 +64,10 @@ console.log(JSON.stringify({result: {pane: {
       extra,
     );
   }
-  // Runs `join <args>` in the fake shell pane, in a real terminal.
+  // Runs `invite <args>` in the fake shell pane, in a real terminal.
   async function startWith(args: string[], extra: Record<string, string> = {}) {
     const chunks: Buffer[] = [];
-    const proc = Bun.spawn([...COMMAND, 'join', ...args], {
+    const proc = Bun.spawn([...COMMAND, 'invite', ...args], {
       env: { ...env, ...extra },
       cwd: fixture.root,
       timeout: 10000,
@@ -87,8 +87,12 @@ console.log(JSON.stringify({result: {pane: {
   return { ...fixture, env, result, start, startWith };
 }
 
-test('terminal join hands the same process and terminal to each supported agent with its room guide', async () => {
-  for (const agent of ['codex', 'claude', 'pi']) {
+const AGENTS = ['codex', 'claude', 'pi'];
+
+// One test per agent: each starts the CLI from source, and a failure names the agent.
+test.each(AGENTS)(
+  'invite without --pane hands the same process and terminal to %s with its room guide',
+  async (agent) => {
     const { start, result, root, run } = await shell();
     const launched = await start(agent);
     assert.equal(launched.code, 23, launched.output);
@@ -105,10 +109,10 @@ test('terminal join hands the same process and terminal to each supported agent 
     assert.match(record.args[0], /join --handle .*reviewer/);
     assert.match(record.args[0], /reviews architecture/);
     assert.match((await run(['status'], { inPane: true })).stdout, /@reviewer/);
-  }
-});
+  },
+);
 
-test('terminal join refuses nested agents and unsupported kinds before joining', async () => {
+test('invite without --pane refuses nested agents and unsupported kinds before joining', async () => {
   for (const [agent, env] of [
     ['codex', { LIVE_AGENT: 'claude' }],
     ['unknown', {}],
@@ -121,12 +125,13 @@ test('terminal join refuses nested agents and unsupported kinds before joining',
   }
 });
 
-test('terminal join requires an explicit handle and an interactive Herdr terminal', async () => {
+test('invite without --pane requires a handle and an interactive Herdr terminal', async () => {
   const { run } = cli();
+  const adHoc = ['invite', '--agent', 'codex', '--description', 'reviews'];
   for (const [args, inPane] of [
-    [['join', '--agent', 'codex', 'reviews'], true],
-    [['join', '--agent', 'codex', '--handle', 'reviewer', 'reviews'], false],
-    [['join', '--agent', 'codex', '--handle', 'reviewer', 'reviews'], true],
+    [adHoc, true],
+    [[...adHoc, '--handle', 'reviewer'], false],
+    [[...adHoc, '--handle', 'reviewer'], true],
   ] as const) {
     const result = await run([...args], { inPane });
     assert.equal(result.code, 1);
@@ -154,8 +159,9 @@ test('same-pane startup appends the initial task after the guide without changin
   assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /Review the cache/);
 });
 
-test('terminal join forwards model selection before the initial prompt', async () => {
-  for (const agent of ['codex', 'claude', 'pi']) {
+test.each(AGENTS)(
+  'invite without --pane forwards model selection to %s before the initial prompt',
+  async (agent) => {
     const { start, result } = await shell();
     const model = agent === 'claude' ? 'sonnet[1m]' : 'example-v1';
     const launched = await start(agent, {}, undefined, model);
@@ -163,8 +169,8 @@ test('terminal join forwards model selection before the initial prompt', async (
     const record = await Bun.file(result).json();
     assert.deepEqual(record.args.slice(0, 2), ['--model', model]);
     assert.match(record.args.at(-1), /as @reviewer/);
-  }
-});
+  },
+);
 
 // A herdr-team folder in the fixture, holding one definition.
 function team(root: string, text: string): Record<string, string> {
@@ -182,10 +188,10 @@ model: sonnet[1m]
 Review architecture when the lead assigns work.
 `;
 
-test("--agent --as starts the definition's kind and model with the guide, its instructions, then the task", async () => {
+test("invite <agent> starts the definition's kind and model with the guide, its instructions, then the task", async () => {
   const { startWith, result, root, run } = await shell();
   const launched = await startWith(
-    ['--agent', '--as', 'reviewer', '--prompt', 'Review the cache.'],
+    ['reviewer', '--prompt', 'Review the cache.'],
     team(root, REVIEWER),
   );
   assert.equal(launched.code, 23, launched.output);
@@ -193,7 +199,7 @@ test("--agent --as starts the definition's kind and model with the guide, its in
   assert.equal(bin, 'claude');
   assert.deepEqual(args.slice(0, 2), ['--model', 'sonnet[1m]']);
   const prompt: string = args.at(-1);
-  assert.match(prompt, /join --as reviewer --handle reviewer/);
+  assert.match(prompt, /join reviewer --handle reviewer --description 'reviews architecture'/);
   const order = [
     'as @reviewer.',
     'Your instructions:\nReview architecture',
@@ -207,14 +213,13 @@ test("--agent --as starts the definition's kind and model with the guide, its in
   assert.match((await run(['status'], { inPane: true })).stdout, /@reviewer/);
 });
 
-test('with --as, --agent <kind>, --model, --handle and --description override the definition', async () => {
+test('--agent <kind>, --model, --handle and --description override the definition', async () => {
   const { startWith, result, root, run } = await shell();
   const launched = await startWith(
     [
+      'reviewer',
       '--agent',
       'codex',
-      '--as',
-      'reviewer',
       '--model',
       'example-v1',
       '--handle',
@@ -233,10 +238,10 @@ test('with --as, --agent <kind>, --model, --handle and --description override th
   assert.match((await run(['status'], { inPane: true })).stdout, /@arch — reviews the cache/);
 });
 
-test('--agent --as a definition without kind says to add one, before joining', async () => {
+test('invite <agent> for a definition without kind says to add one, before joining', async () => {
   const { startWith, result, root, run } = await shell();
   const launched = await startWith(
-    ['--agent', '--as', 'reviewer'],
+    ['reviewer'],
     team(root, REVIEWER.replace('kind: claude\n', '')),
   );
   assert.equal(launched.code, 1);

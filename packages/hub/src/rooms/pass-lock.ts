@@ -70,7 +70,7 @@ export class PassLock {
     serviceTransaction(this.root, () => {
       if (!this.owns()) {
         throw new Error(
-          'Another herdr-agent-hub took over (this one was unresponsive too long). Stopping.',
+          'Another herdr-team took over (this one was unresponsive too long). Stopping.',
         );
       }
       saveServiceState(this.root, { ...serviceState(this.root), heartbeat: this.now() });

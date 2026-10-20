@@ -2,14 +2,14 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { join, leave, message, skill } from '#agent';
+import { guide, join, leave, message } from '#agent';
 import { installed, setup } from '#testing';
 
 test('join registers the pane, assigns handles and returns instructions', async () => {
   const { joinAs, handles } = await installed();
   const out = await joinAs('w1:p1', 'claude reviewer');
   assert.match(out, /as @claude\./);
-  assert.match(out, /herdr-agent-hub message --to <handle> --stdin <<'EOF'/);
+  assert.match(out, /herdr-hub message --to <handle> --stdin <<'EOF'/);
   const out2 = await joinAs('w1:p2', 'claude implementer');
   assert.match(out2, /as @claude-2\./);
   assert.match(out2, /@claude — claude reviewer/);
@@ -77,7 +77,7 @@ test('a join is refused when Herdr sees no agent in the pane, and the agent lear
   );
 });
 
-test('agent commands explain when herdr-agent-hub has never run (plugin not installed)', async () => {
+test('agent commands explain when herdr-team has never run (plugin not installed)', async () => {
   const { env } = setup();
   assert.throws(
     () => join({ description: 'x', env: env('w1:p1') }),
@@ -88,7 +88,7 @@ test('agent commands explain when herdr-agent-hub has never run (plugin not inst
 test('commands refuse to run outside Herdr', async () => {
   const { root } = await installed();
   assert.throws(
-    () => message({ text: 'hi', env: { HERDR_AGENT_HUB_DIR: root } }),
+    () => message({ text: 'hi', env: { HERDR_TEAM_STATE_DIR: path.dirname(root) } }),
     /inside a Herdr pane/,
   );
 });
@@ -152,7 +152,7 @@ kind: claude
 Review architecture when the lead assigns work.
 `;
 
-test('join --as takes the handle, description and instructions from a definition', async () => {
+test('join <agent> takes the handle, description and instructions from a definition', async () => {
   const { root, env, store, tick, herdr } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   herdr.addAgent('p1', 'claude');
@@ -161,17 +161,17 @@ test('join --as takes the handle, description and instructions from a definition
   assert.match(out, /as @reviewer\./);
   assert.match(
     out,
-    /These rules again: .* skill\n\nYour instructions:\nReview architecture when the lead assigns work\./,
+    /These rules again: .* guide\n\nYour instructions:\nReview architecture when the lead assigns work\./,
   );
   assert.equal(store().member('reviewer')?.description, 'reviews architecture, read-only');
   await tick();
   const peer = join({ description: 'codex', env: env('p2') });
   assert.match(peer, /@reviewer — reviews architecture, read-only/);
   assert.doesNotMatch(peer, /Your instructions/);
-  assert.match(skill({ env: env('p1') }), /Your instructions:\nReview architecture/);
+  assert.match(guide({ env: env('p1') }), /Your instructions:\nReview architecture/);
 });
 
-test('with --as, the given handle and description override the definition', async () => {
+test('with an agent definition, the given handle and description override the definition', async () => {
   const { root, env, store, herdr } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   for (const pane of ['p1', 'p2', 'p3']) {
@@ -193,7 +193,7 @@ test('with --as, the given handle and description override the definition', asyn
   );
 });
 
-test('join --as a missing definition fails without joining', async () => {
+test('join <agent> with a missing definition fails without joining', async () => {
   const { root, env, store } = await installed();
   const team = teamWith(root, 'reviewer', REVIEWER);
   assert.throws(
@@ -211,6 +211,6 @@ test('instructions are stripped of terminal control sequences, like descriptions
   const controls = (text: string): boolean => text.includes('\x1b') || text.includes('\x07');
   assert.equal(controls(out), false);
   assert.match(out, /lead assigns work\.\n\[2JThen clear\./);
-  assert.equal(controls(skill({ env: env('p1') })), false);
+  assert.equal(controls(guide({ env: env('p1') })), false);
   assert.equal(controls(store().member('reviewer')?.instructions ?? ''), false);
 });

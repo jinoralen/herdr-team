@@ -3,8 +3,9 @@
 import type { LayoutHerdr, Pane } from '@herdr/herdr';
 import { type Deployment, type ManagedAgent, type ManagedTab, saveDeployment } from '#store';
 import { allocate, consume } from './allocation.ts';
-import type { Hub } from './hub.ts';
+import { COMPOSE_SELF, type Hub } from './hub.ts';
 import type { DesiredAgent } from './manifest.ts';
+import { RetryLater } from './retry.ts';
 
 export type Runtime = {
   hub: Hub;
@@ -12,8 +13,25 @@ export type Runtime = {
   state: Deployment;
   herdr: LayoutHerdr;
   lines: string[];
+  // A dry run reads and plans; nothing it changes in memory is saved.
+  dry?: boolean;
 };
-export const save = (r: Runtime): void => saveDeployment(r.root, r.state);
+// A helper by its key in the team file and its handle.
+type Helper = { agent: string; handle: string };
+// What up changes, or would change with --dry-run: in the order it happens.
+export type Change =
+  | { action: 'recover'; allocations: number }
+  | ({ action: 'remove' } & Helper)
+  // reasons: what changed, or that its conversation is gone.
+  | ({ action: 'replace'; reasons: string[] } & Helper)
+  | ({ action: 'start' | 'move'; tab: string } & Helper)
+  | { action: 'arrange-tab' | 'close-tab'; tab: string };
+
+export const save = (r: Runtime): void => {
+  if (!r.dry) {
+    saveDeployment(r.root, r.state);
+  }
+};
 export const paneFor = (panes: Pane[], a: ManagedAgent): Pane | null =>
   panes.find((p) => p.terminal_id === a.terminal) ?? null;
 
@@ -81,6 +99,7 @@ export async function createAgent(
   const a: ManagedAgent = {
     handle: desired.handle,
     fingerprint: desired.fingerprint,
+    parts: desired.parts,
     pane,
     terminal: live.terminal_id,
     joinedAt: null,
@@ -139,8 +158,8 @@ export async function cleanupTabs(r: Runtime): Promise<void> {
 function requireFreeHandle(r: Runtime, handle: string): void {
   const occupied = r.hub.member(handle);
   if (occupied && (['pending', 'active'].includes(occupied.status) || occupied.queuedFrom)) {
-    throw new Error(
-      `Handle @${handle} is still occupied or draining outgoing messages. Let hub process pane closure and delivery, then retry up.`,
+    throw new RetryLater(
+      `Handle @${handle} is still occupied or draining outgoing messages. Retry ${COMPOSE_SELF} up once a tick has retired its member and delivered its posts.`,
     );
   }
 }

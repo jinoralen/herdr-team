@@ -54,9 +54,9 @@ test('up and down cannot overlap and release their lock after a failure', async 
 
 test('ownership is scoped to the Herdr session without sharing hub state', () => {
   const base = {
-    HERDR_COMPOSE_DIR: '/tmp/compose-test',
+    HERDR_TEAM_STATE_DIR: '/tmp/state-test',
     HERDR_SOCKET_PATH: '/tmp/herdr-first.sock',
   };
   assert.notEqual(rootDir(base), rootDir({ ...base, HERDR_SOCKET_PATH: '/tmp/herdr-second.sock' }));
-  assert.equal(rootDir({ HERDR_COMPOSE_DIR: '/tmp/compose-test' }), '/tmp/compose-test');
+  assert.equal(rootDir({ HERDR_TEAM_STATE_DIR: '/tmp/state-test' }), '/tmp/state-test/compose');
 });

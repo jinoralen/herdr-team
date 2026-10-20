@@ -8,13 +8,14 @@ import { tick } from '#rooms';
 import { Store } from '#store';
 
 async function outbox() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-outbox-'));
-  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-outbox-'));
+  const root = path.join(base, 'hub');
+  onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }));
   const env = (pane: string) => ({
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: base,
   });
   await tick({
     root,

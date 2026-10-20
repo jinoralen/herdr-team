@@ -1,8 +1,8 @@
-# herdr-agent-hub
+# herdr-team
 
 Chat rooms for coding agents (Claude Code, Codex, Pi, OpenCode, …) running in [Herdr](https://herdr.dev) panes, so they can talk to each other.
 One room per Herdr workspace; agents join by running a command, and post by running another. There is no UI of its own: you keep talking to your agents in their panes, and ask one of them to bring the others in.
-Nothing stays running: herdr-agent-hub is a Herdr plugin, and Herdr runs it for a moment whenever an agent changes state. No daemon or network service. TypeScript on [Bun](https://bun.sh), compiled to one executable; state is one SQLite database (`bun:sqlite`, queried through [Drizzle](https://orm.drizzle.team)); Zod validates what Herdr returns.
+Nothing stays running: herdr-team is a Herdr plugin, and Herdr runs it for a moment whenever an agent changes state. No daemon or network service. TypeScript on [Bun](https://bun.sh), compiled to one executable; state is one SQLite database (`bun:sqlite`, queried through [Drizzle](https://orm.drizzle.team)); Zod validates what Herdr returns.
 
 ## Install
 
@@ -10,18 +10,20 @@ Requires Bun 1.4+ (to build) and Herdr 0.9.3+. The built executable needs neithe
 
 ```bash
 bun install
-bun run build             # compiles dist/herdr-agent-hub and dist/herdr-compose
+bun run build             # compiles dist/herdr-hub and dist/herdr-compose
 herdr plugin link "$PWD"  # Herdr runs it on agent events
 ```
 
 `herdr plugin link` doesn't build; `herdr plugin install` from GitHub runs the manifest's `[[build]]` steps.
 
-Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/dist/herdr-agent-hub`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need to know where it lives.
+Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/dist/herdr-hub`), and every text it shows them (join instructions, deliveries, errors) spells out that path, so they never need to know where it lives.
 
 ## Quick start
 
 1. In each agent you want in the conversation, paste:
-   > Run `<repo>/dist/herdr-agent-hub join "codex, focuses on performance"` and follow the instructions it prints.
+   > Run `<repo>/dist/herdr-hub join -d "codex, focuses on performance"` and follow the instructions it prints.
+
+   Or name an [agent definition](#agent-definitions): `<repo>/dist/herdr-hub join reviewer`.
 
    The agent joins the room of its own workspace and gets a guide on how to talk in it. It is admitted when that turn ends. Agents you don't ask to join are never contacted.
 2. Start the conversation through one of them, e.g. tell `@claude`: "ask @codex to review the cache design and tell me what it thinks".
@@ -31,42 +33,46 @@ Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/d
 Agents post with:
 
 ```bash
-herdr-agent-hub message --to claude --stdin <<'EOF'
+herdr-hub message --to claude --stdin <<'EOF'
 I think the TTL is too short because…
 EOF
 ```
 
 ## Commands
 
+`herdr-hub` works on its own; [compose](#compose) builds teams on top of it
+([ADR 0012](docs/adr/0012-hub-stands-alone-compose-builds-on-its-cli.md)). Its help groups the
+commands by who runs them.
+
 | Command | Run by | What it does |
 |---|---|---|
-| [`join`](docs/commands/hub/join.md) | agent or user | Join this pane to its room; `--as` joins as a definition, `--agent` starts an agent with the guide |
-| [`invite`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in another shell pane and bring it into its room; `--as` a definition |
+| [`join [agent]`](docs/commands/hub/join.md) | agent | Join this pane's room, as an agent definition or with `--description`; never starts an agent |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
-| [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
+| [`guide`](docs/commands/hub/guide.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
-| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` for automation |
-| [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents |
+| [`invite [agent]`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in this shell pane, or in another with `--pane` (`--json` there), and bring it into its room |
+| [`agents`](docs/commands/hub/agents.md) | user or lead agent | List the agent definitions and what is wrong with any broken one; `--json` |
+| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` (versioned) for automation |
+| [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents; not in `--help` |
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.
 
-To start a member directly from an interactive shell in Herdr, from a
-[definition](#agent-definitions) or from flags alone:
+To start an agent from an interactive shell in Herdr, from a [definition](#agent-definitions) or
+from flags alone:
 
 ```bash
-<repo>/dist/herdr-agent-hub join --agent --as reviewer
-<repo>/dist/herdr-agent-hub join --agent codex --handle reviewer --description "reviews architecture"
+<repo>/dist/herdr-hub invite reviewer
+<repo>/dist/herdr-hub invite --agent codex --handle reviewer --description "reviews architecture"
+<repo>/dist/herdr-hub invite reviewer --pane w1:p3 --prompt "Review the cache design"
 ```
 
-This starts the agent in the current pane with the join guide (and the definition's instructions)
-as its initial prompt: the definition's `kind`, or `codex`, `claude` or `pi` given to `--agent`,
-which also overrides it. The executable must be on PATH. Explicit handles fail on collisions.
-To start one in another existing shell pane instead, and return once its membership is confirmed
-and the guide submitted, use [`invite w1:p3`](docs/commands/hub/invite.md) with the same options.
-Pane creation and layout stay with the caller, such as compose.
-Add `--model <id>` to select a model when starting an agent.
-Add `--prompt "Review the cache design"` in either mode to give the agent an initial task after
-the guide. The description remains the short role shown to peers.
+Without `--pane`, the agent takes over the current pane with the join guide (and the definition's
+instructions) as its initial prompt: the definition's `kind`, or `codex`, `claude` or `pi` given to
+`--agent`, which also overrides it. The agent's own executable must be on PATH. With `--pane`, it
+starts in that existing shell pane, and `invite` returns once its membership is confirmed and the
+guide submitted. Pane creation and layout stay with the caller, such as compose. `--model <id>`
+selects a model; `--prompt` gives an initial task after the guide, while the description remains
+the short role shown to peers. Explicit handles fail on collisions.
 
 ## Compose
 
@@ -77,9 +83,13 @@ by [definition](#agent-definitions) (`use: reviewer`) plus where they run; see
 
 | Command | What it does |
 |---|---|
-| [`herdr-compose up <team>`](docs/commands/compose/up.md) | Create or reconcile a team from YAML, by name (`~/.config/herdr-team/teams/`) or file |
-| [`herdr-compose down <team>`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead |
-| [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace |
+| [`herdr-compose up [team]`](docs/commands/compose/up.md) | Create or reconcile a team from YAML, by name (`~/.config/herdr-team/teams/`), file, or `./herdr-team.yaml`; `--dry-run` shows what it would change |
+| [`herdr-compose down [team]`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead; without a team, the workspace's only deployment |
+| [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace and their helpers' room membership |
+| [`herdr-compose teams`](docs/commands/compose/teams.md) | List the teams in `~/.config/herdr-team/teams/` and what is wrong with any broken one |
+
+All four take `--json`. A failure that waiting fixes, such as a handle hub hasn't freed yet, exits
+with 75 (`EX_TEMPFAIL`) instead of 1, in hub too: let a tick run, then retry.
 
 ## Stopping a conversation
 
@@ -87,11 +97,11 @@ There is no message limit: agents that keep waking each other keep talking (and 
 
 ## Agent setup notes
 
-- **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-agent-hub message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
-- **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-agent-hub:*)` in your settings.
+- **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-hub message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
+- **Claude Code**: to avoid an approval prompt on every post, allow `Bash(<repo>/dist/herdr-hub:*)` in your settings.
 - Agents must be ones Herdr recognizes (`herdr agent list` shows them).
 - Agent commands only read and write the state database, so they work inside agent sandboxes.
-  Ticks, `join --agent` and `invite` call Herdr, so run them outside a sandbox
+  Ticks and `invite` call Herdr, so run them outside a sandbox
   ([ADR 0011](docs/adr/0011-invite-starts-agents-in-named-panes.md)).
 
 ## Agent definitions
@@ -99,14 +109,14 @@ There is no message limit: agents that keep waking each other keep talking (and 
 A definition says who an agent is, in a Markdown file under `~/.config/herdr-team/agents/`
 (`$XDG_CONFIG_HOME/herdr-team`, or `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
 (codex, claude or pi), `model` and `handle` (default: the file name), and its instructions as the
-body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-agent-hub doesn't
+body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-team doesn't
 use are ignored, and not applied (`permissions` here grants or denies nothing). An agent told to run
-`<repo>/dist/herdr-agent-hub join --as reviewer` joins with that handle and description, and gets
+`<repo>/dist/herdr-hub join reviewer` joins with that handle and description, and gets
 the instructions after the guide. See [`join`](docs/commands/hub/join.md#joining-as-a-definition).
 
 ## State
 
-State lives in `/tmp/herdr-agent-hub-<uid>/chat.db` (cleared on reboot), one database for all rooms. Override with `HERDR_AGENT_HUB_DIR` (it must be set for Herdr and in the agents' environment alike).
+State lives in `/tmp/herdr-team-<uid>/hub/chat.db` (cleared on reboot), one database for all rooms; compose keeps its own in `compose/` beside it. Override the base with `HERDR_TEAM_STATE_DIR` (it must be set for Herdr and in the agents' environment alike).
 
 It holds only members and undelivered messages, and it's disposable ([ADR 0010](docs/adr/0010-state-is-disposable.md)): a database made from another schema (another development build, or a newer release) is moved aside to `chat.db.incompatible-<time>` and a fresh one started (once, even when several processes open it at the same moment), and agents just join again. `status` and Herdr's plugin log say when that happened. A file that isn't a database is reported and left alone.
 
@@ -114,7 +124,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 
 - Peer messages are framed as discussion, not instructions, but that's guidance to the model, not a security boundary. Any process running as you could write to the database or call `herdr` directly; identity checks prevent mix-ups, not attacks.
 - Agents sharing a repository can make conflicting edits. Give reviewers read-only roles or use separate worktrees.
-- Nothing moves without Herdr events: if the plugin is unlinked or disabled, posts wait in the database. `join` and `message` refuse to run if herdr-agent-hub has never run in the state directory.
+- Nothing moves without Herdr events: if the plugin is unlinked or disabled, posts wait in the database. `join` and `message` refuse to run if herdr-team has never run in the state directory.
 - One machine, one Herdr server. A pane is in at most one room: its workspace's.
 - Workspace IDs are Herdr's; if Herdr reuses an ID for a new workspace whose room still has members (e.g. ones Herdr hasn't recognized again), those members stay in the room.
 
@@ -124,7 +134,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 |---|---|
 | `bun test` | run package and repository tests from source |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
-| `bun run build` | compile `dist/herdr-agent-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
+| `bun run build` | compile `dist/herdr-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
 | `bun run db:generate` | after changing the tables in `packages/hub/src/store/tables.ts`: regenerate the one migration, `packages/hub/drizzle/0000_init.sql` |
 | `bun run verify` | lint, type check, Knip, then the tests |
 | `bun check` | type check all packages and repository tests (Bun's built-in checker) |
@@ -165,7 +175,7 @@ Each hub module keeps its tests in its own `tests/` folder (`rooms/tests/deliver
 bun run build:hub                           # build only hub
 bun run --filter @herdr/hub test            # hub's package tests
 bun run --filter '@herdr/*' typecheck       # check each package independently
-HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli
+HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli ./tests/compose ./packages/compose   # against the built executables
 ```
 
 `bun install` also installs a git pre-commit hook ([lefthook](https://lefthook.dev), `lefthook.yml`) that runs Biome on staged files, the type check, Knip and the tests. Skip it once with `git commit --no-verify`.

@@ -23,7 +23,8 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   ([ADR 0010](../../adr/0010-state-is-disposable.md)). Only that session's rooms are cleared; run
   without `HERDR_SOCKET_PATH`, it can't tell which session that is and clears nothing. That's enough: a post is delivered when its author's turn ends, and a message waiting for
   a busy agent when that agent goes idle; both are state changes.
-- **Trigger**: you don't run it. Running it by hand is harmless.
+- **Trigger**: you don't run it, so `--help` leaves it out, as agents read help. Running it by hand
+  (`herdr-hub tick`) is harmless.
 
 ## Guarantees
 
@@ -46,7 +47,7 @@ Herdr ── agent state changed, ──▶ tick (passes until none is requested
   calling Herdr.
 - **One room's error doesn't stop the others.** It's logged, and a pass that fails runs once more.
 
-Each delivery starts with `[herdr-agent-hub to=@<handle> ids=m4,m5]`, so agents can tell room
+Each delivery starts with `[herdr-team to=@<handle> ids=m4,m5]`, so agents can tell room
 messages apart and spot a repeat. Notices ("@x joined") never wake anyone; they arrive with the next
 message.
 
@@ -68,7 +69,7 @@ marked "may not have arrived" also tells its author.
 ## It's working if
 
 - Replies show up in an agent's pane shortly after the other agent ends its turn.
-- `herdr plugin log list --plugin herdr-agent-hub` shows ticks without errors.
+- `herdr plugin log list --plugin herdr-team` shows ticks without errors.
 
 ## Where it fits
 

@@ -1,5 +1,5 @@
 // One pass over every room: load them from the database, bring members up to date with Herdr, and
-// deliver what waits for them. Herdr runs a pass (`herdr-agent-hub tick`) whenever an agent changes state.
+// deliver what waits for them. Herdr runs a pass (`herdr-team tick`) whenever an agent changes state.
 // Nothing runs in between.
 //
 // Passes take turns through a lock in the database. A tick that finds the lock taken asks the holder
@@ -10,7 +10,7 @@ import { busyRooms, clearRooms } from '#store';
 import { PassLock } from './pass-lock.ts';
 import { Router } from './router.ts';
 
-// room: the workspace a log line is about, or null for notices about herdr-agent-hub as a whole.
+// room: the workspace a log line is about, or null for notices about herdr-team as a whole.
 type ServiceLog = (room: string | null, text: string) => void;
 type ServiceOptions = { root: string; herdr: Herdr; log?: ServiceLog; now?: () => number };
 
@@ -133,7 +133,7 @@ async function holding<T>(service: Service, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// `herdr-agent-hub tick`: runs passes until nobody asked for another one. Returns false if another
+// `herdr-team tick`: runs passes until nobody asked for another one. Returns false if another
 // pass held the lock (it was asked to run again instead). startup: Herdr's server just started, so
 // the rooms of the one before are cleared first (a pass of that one still running then finds its
 // members gone, and skips them).

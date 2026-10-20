@@ -10,15 +10,16 @@ import { Store } from '#store';
 import { fakeHerdr } from '#testing';
 
 async function routing() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-routing-'));
-  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-routing-'));
+  const root = path.join(base, 'hub');
+  onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }));
   const herdr = fakeHerdr();
   await initialize({ root, herdr });
   const env = (pane: string) => ({
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: 'w1',
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: base,
   });
   // Exercise routing in isolation. Production delivery is wired through locked passes later.
   async function pass() {

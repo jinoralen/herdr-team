@@ -59,7 +59,7 @@ test('the database refuses invalid rows', async () => {
 });
 
 test('a corrupt database fails visibly and is left untouched', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-agent-hub-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-test-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const garbage = 'this is not a database'.repeat(100);
   fs.writeFileSync(dbPath(root), garbage);

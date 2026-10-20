@@ -3,18 +3,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { skill, status } from '#agent';
+import { guide, status } from '#agent';
 import { dbPath, Store } from '#store';
 import { installed } from '#testing';
 
 function registration() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-registration-'));
-  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-hub-registration-'));
+  const root = path.join(base, 'hub');
+  fs.mkdirSync(root);
+  onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }));
   const env = (pane: string, workspace = 'w1') => ({
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: workspace,
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: base,
   });
   return { root, env };
 }
@@ -25,8 +27,8 @@ test('handles and membership remain isolated between workspaces', async () => {
   assert.match(await joinAs('p2', 'codex writer'), /as @codex-2\./);
   assert.match(await joinAs('p1', 'different role'), /as @codex\./);
   assert.match(await joinAs('p3', 'codex', 'codex', 'w2'), /as @codex\./);
-  assert.match(skill({ env: env('p1') }), /@codex-2 — codex writer/);
-  assert.doesNotMatch(skill({ env: env('p3', 'w2') }), /codex-2/);
+  assert.match(guide({ env: env('p1') }), /@codex-2 — codex writer/);
+  assert.doesNotMatch(guide({ env: env('p3', 'w2') }), /codex-2/);
 });
 
 test('status is scoped to its workspace and strips terminal control bytes', async () => {

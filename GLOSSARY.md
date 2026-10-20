@@ -1,4 +1,4 @@
-# herdr-agent-hub
+# herdr-team
 
 Chat rooms that let coding agents running in Herdr panes talk to each other, while their user keeps
 talking to each agent in its own pane.
@@ -23,19 +23,19 @@ The role a member gives itself when joining ("codex, focuses on performance"), s
 _Avoid_: brief, bio
 
 **Definition**:
-A Markdown file in `~/.config/herdr-team/agents/` saying who an agent is: frontmatter with its
+An agent definition: a Markdown file in `~/.config/herdr-team/agents/` saying who an agent is: frontmatter with its
 description, harness (`kind`), model and handle, and its instructions as the body. The same shape as
-OpenCode's and Claude Code's agent files; keys herdr-agent-hub doesn't use are ignored.
-_Avoid_: profile, persona, agent config
+OpenCode's and Claude Code's agent files; keys herdr-team doesn't use are ignored.
+_Avoid_: profile, persona, agent config (on the command line it is the `<agent>` argument)
 
 **Instructions**:
 A definition's body: the standing role of an agent that joined as that definition, given after the
-guide and repeated by `skill`.
+guide and repeated by `guide`.
 _Avoid_: system prompt, guide (the guide is the room's rules)
 
 **Invite**:
-Starting an agent in another, existing shell pane so it joins that pane's room (`invite <pane>`).
-Never done to a pane where an agent already runs.
+Starting an agent in a shell pane, the current one or another existing one, so it joins that
+pane's room. Never done to a pane where an agent already runs; the only way an agent is started.
 _Avoid_: spawn, add (a member)
 
 **User**:
@@ -90,13 +90,13 @@ A notice to a message's author that it was dropped for, or may not have reached,
 does wake the author.
 
 **Guide**:
-The rules for talking in a room, printed on joining and again by the `skill` command.
+The rules for talking in a room, printed on joining and again by the `guide` command.
 _Avoid_: skill (that word means agent skills), instructions, manual
 
 ## Delivery
 
 **Tick**:
-One run of herdr-agent-hub started by Herdr on an agent or pane event, or at startup; it runs
+One run of herdr-team started by Herdr on an agent or pane event, or at startup; it runs
 passes and exits.
 _Avoid_: daemon, worker, job
 
@@ -125,3 +125,27 @@ _Avoid_: stuck, blocked (as the state of the queue)
 Of a queued message: a delivery attempt may or may not have reached the recipient, so it goes out
 again with the next delivery marked "may repeat".
 _Avoid_: failed, lost, retry
+
+## Compose
+
+Teams built on top of rooms. Compose starts and arranges agents; the room itself is unchanged by it.
+
+**Team**:
+A YAML file naming agents by their definitions and saying where each runs (tabs, layout, working
+folder) and what this team asks of it.
+_Avoid_: crew, squad, stack
+
+**Deployment**:
+A team brought up in one workspace: the record of which panes and tabs compose made for it, and so
+may close.
+_Avoid_: instance, project, stack
+
+**Lead**:
+The agent in the user's own pane that a team is brought up from. Compose may start it but never owns
+or closes its pane.
+_Avoid_: coordinator (that is a definition's role), main, master
+
+**Helper**:
+An agent compose started in a pane it made and owns for a deployment; replaced when its definition
+or task changes, closed by `down`.
+_Avoid_: worker, child, sub-agent

@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
-  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-agent-hub')]
+  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 const JOIN = [
   'invite',
+  '--pane',
   'w2:p2',
   '--agent',
   'codex',
@@ -21,7 +22,7 @@ const JOIN = [
 ];
 
 async function remote(scenario = '') {
-  // A herdr-team folder with one definition, for invite --as.
+  // A herdr-team folder with one definition, for invite <agent>.
   const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-invite-'));
   onTestFinished(() => fs.rmSync(team, { recursive: true, force: true }));
   fs.mkdirSync(path.join(team, 'agents'));
@@ -146,7 +147,7 @@ test('invite startup and prompt uncertainty are reported once without retries or
 
 test('invite checks handle collisions before starting anything', async () => {
   const { run, calls } = await remote();
-  assert.equal((await run(['join', '--handle', 'reviewer', 'existing'])).code, 0);
+  assert.equal((await run(['join', '--handle', 'reviewer', '--description', 'existing'])).code, 0);
   const result = await run(JOIN, { inPane: true });
   assert.equal(result.code, 1);
   assert.match(result.stderr, /Handle @reviewer is already in use/);
@@ -156,9 +157,16 @@ test('invite checks handle collisions before starting anything', async () => {
   );
 });
 
-test('join no longer starts agents in other panes: that is invite', async () => {
+test('join never calls Herdr, so it works inside agent sandboxes', async () => {
+  const { run, calls } = await remote();
+  const before = (await calls()).length;
+  assert.equal((await run(['join', 'reviewer'], { inPane: true })).code, 0);
+  assert.equal((await calls()).length, before);
+});
+
+test('join never starts agents in other panes: that is invite', async () => {
   const { run } = cli();
-  const result = await run(['join', '--agent', 'codex', '--pane', 'w2:p2', 'reviews'], {
+  const result = await run(['join', '--pane', 'w2:p2', '--description', 'reviews'], {
     inPane: true,
   });
   assert.equal(result.code, 1);
@@ -167,11 +175,11 @@ test('join no longer starts agents in other panes: that is invite', async () => 
 
 test('invite refuses a pane where an agent already runs, with the line to paste into it', async () => {
   const { run, calls } = await remote('busy');
-  const result = await run(['invite', 'w2:p2', '--as', 'reviewer'], { inPane: true });
+  const result = await run(['invite', 'reviewer', '--pane', 'w2:p2'], { inPane: true });
   assert.equal(result.code, 1);
   assert.match(
     result.stderr,
-    /w2:p2 already runs claude\. Ask it to run: .* join --as reviewer\nor invite a shell pane\./,
+    /w2:p2 already runs claude\. Ask it to run: .* join reviewer\nor invite a shell pane\./,
   );
   assert.equal(
     (await calls()).some((args) => args[1] === 'start'),
@@ -179,13 +187,13 @@ test('invite refuses a pane where an agent already runs, with the line to paste 
   );
 });
 
-test('invite --as starts the definition in the target pane with its instructions', async () => {
+test('invite <agent> --pane starts the definition in the target pane with its instructions', async () => {
   const { run, calls } = await remote();
   const result = await run([
     'invite',
-    'w2:p2',
-    '--as',
     'reviewer',
+    '--pane',
+    'w2:p2',
     '--prompt',
     'Review the cache.',
   ]);
@@ -225,11 +233,13 @@ test('invalid initial tasks fail before remote startup or membership changes', a
   }
 });
 
-test('initial tasks require agent startup mode in join', async () => {
+test('initial tasks are for invite: join takes none', async () => {
   const { run } = cli();
-  const result = await run(['join', '--prompt', 'review', 'reviews'], { inPane: true });
+  const result = await run(['join', '--prompt', 'review', '--description', 'reviews'], {
+    inPane: true,
+  });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /--prompt requires --agent/);
+  assert.match(result.stderr, /Starting an agent moved to invite: .* invite <agent>/);
 });
 
 test('invite startup requires a description even with a handle and initial task', async () => {
@@ -237,7 +247,7 @@ test('invite startup requires a description even with a handle and initial task'
   const args = JOIN.slice(0, -2);
   const result = await run([...args, '--prompt', 'Review caching'], { inPane: true });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /requires --description <text>, or --as a definition/);
+  assert.match(result.stderr, /requires --description <text>, or an agent definition/);
   assert.equal((await calls()).length, 0);
 });
 
@@ -252,11 +262,11 @@ test('invite startup forwards a model as harness arguments', async () => {
   ]);
 });
 
-test('model selection requires startup and validates before changing membership', async () => {
+test('model selection is for invite and validates before changing membership', async () => {
   const { run, calls } = await remote();
   assert.match(
-    (await run(['join', '--model', 'example', 'role'])).stderr,
-    /--model requires --agent/,
+    (await run(['join', '--model', 'example', '--description', 'role'])).stderr,
+    /Starting an agent moved to invite: .* invite <agent>/,
   );
   for (const model of [
     '',
@@ -286,4 +296,31 @@ test('invite startup preserves Claude extended-context model aliases', async () 
       model,
     ]);
   }
+});
+
+test('invite --pane --json prints one JSON line, saying when the outcome is uncertain', async () => {
+  const ok = await (await remote()).run([...JOIN, '--json'], { inPane: true });
+  assert.equal(ok.code, 0, ok.stderr);
+  assert.deepEqual(JSON.parse(ok.stdout), {
+    ok: true,
+    agent: 'codex',
+    handle: 'reviewer',
+    pane: 'w2:p2',
+    room: 'w2',
+    uncertain: false,
+  });
+  for (const [scenario, uncertain] of [
+    ['busy', false],
+    ['prompt-timeout', true],
+  ] as const) {
+    const result = await (await remote(scenario)).run([...JOIN, '--json'], { inPane: true });
+    assert.equal(result.code, 1);
+    const outcome = JSON.parse(result.stdout);
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.uncertain, uncertain);
+    assert.equal(typeof outcome.error, 'string');
+  }
+  const here = await cli().run(['invite', 'reviewer', '--json'], { inPane: true });
+  assert.equal(here.code, 1);
+  assert.match(here.stderr, /--json needs --pane/);
 });

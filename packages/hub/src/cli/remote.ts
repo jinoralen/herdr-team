@@ -1,11 +1,17 @@
 // `invite`: starts and enrolls a member in an existing shell pane, leaving pane ownership to the
 // caller. A pane where an agent already runs is never typed into: the caller gets the line to paste.
 import { type Agent, cliHerdr } from '@herdr/herdr';
-import { shellQuote } from '@herdr/terminal';
-import { join, SELF, sanitizeForTerminal } from '#agent';
+import { join, sanitizeForTerminal } from '#agent';
 import { rootDir, Store } from '#store';
-import { initialTask, memberPrompt } from './prompt.ts';
+import { initialTask, memberPrompt, pasteLine } from './prompt.ts';
 import { resolveStart, type Start } from './start.ts';
+
+// Who was started where. The text is what a user reads; --json prints the rest.
+export type Invited = { agent: string; handle: string; pane: string; room: string; text: string };
+
+// Startup began and didn't finish: the agent or its guide may already be there, so the caller
+// must look before retrying (ADR 0006).
+export class UncertainStartup extends Error {}
 
 export function invite({
   pane,
@@ -18,27 +24,12 @@ export function invite({
   as?: string;
   prompt?: string;
   env?: NodeJS.ProcessEnv;
-}): Promise<string> {
+}): Promise<Invited> {
   const start = resolveStart(given, as, env);
   if (!['codex', 'claude', 'pi'].includes(start.agent)) {
     throw new Error('Supported agents are codex, claude and pi.');
   }
   return launchInPane({ ...start, as, task: initialTask(prompt), pane, env });
-}
-
-// What to ask an agent already running in the pane to run instead.
-function joinLine({
-  as,
-  handle,
-  description,
-}: {
-  as?: string;
-  handle: string;
-  description: string;
-}): string {
-  return as === undefined
-    ? `${SELF} join --handle ${shellQuote(handle)} -- ${shellQuote(description)}`
-    : `${SELF} join --as ${shellQuote(as)}`;
 }
 
 function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
@@ -49,7 +40,7 @@ function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
     pane.workspace_id !== expected.workspace_id ||
     pane.agent !== kind
   ) {
-    throw new Error('The target pane changed during startup. Inspect it before retrying join.');
+    throw new Error('The target pane changed during startup. Inspect it before retrying invite.');
   }
 }
 
@@ -71,7 +62,7 @@ async function launchInPane({
   task: string;
   pane: string;
   env: NodeJS.ProcessEnv;
-}): Promise<string> {
+}): Promise<Invited> {
   const herdr = cliHerdr(env);
   const pane = await herdr.pane(target);
   if (!pane || pane.pane_id !== target || !pane.workspace_id) {
@@ -81,7 +72,7 @@ async function launchInPane({
   }
   if (pane.agent) {
     throw new Error(
-      `${target} already runs ${pane.agent}. Ask it to run: ${joinLine({ as, handle, description })}\nor invite a shell pane.`,
+      `${target} already runs ${pane.agent}. Ask it to run: ${pasteLine({ as, handle, description })}\nor invite a shell pane.`,
     );
   }
   const targetEnv = {
@@ -110,7 +101,7 @@ async function launchInPane({
       const member = store.member(handle);
       if (!member || member.pane_id !== target) {
         throw new Error(
-          'The target membership changed during startup. Inspect it before retrying join.',
+          'The target membership changed during startup. Inspect it before retrying invite.',
         );
       }
       const bound = { terminal_id: pane.terminal_id, agent };
@@ -120,14 +111,14 @@ async function launchInPane({
           .some((m) => m.handle !== handle && m.terminal_id === pane.terminal_id)
       ) {
         throw new Error(
-          'The target terminal already has another membership. Inspect it before retrying join.',
+          'The target terminal already has another membership. Inspect it before retrying invite.',
         );
       }
       const confirmed =
         member.status === 'pending' ? store.admit(member, bound) : store.rebind(member, bound);
       if (!confirmed) {
         throw new Error(
-          'The target membership could not be confirmed. Inspect it before retrying join.',
+          'The target membership could not be confirmed. Inspect it before retrying invite.',
         );
       }
       return { prompt: memberPrompt(`${instructions}\n\nYour role: ${description}`, task), member };
@@ -135,12 +126,19 @@ async function launchInPane({
     await herdr.prompt(target, joined.prompt);
     if (!store.current(joined.member)) {
       throw new Error(
-        'The target membership changed while submitting the guide. Inspect it before retrying join.',
+        'The target membership changed while submitting the guide. Inspect it before retrying invite.',
       );
     }
-    return `Started ${agent} as @${handle} in ${target} (room ${pane.workspace_id}); membership confirmed and guide submitted.`;
+    const room = pane.workspace_id;
+    return {
+      agent,
+      handle,
+      pane: target,
+      room,
+      text: `Started ${agent} as @${handle} in ${target} (room ${room}); membership confirmed and guide submitted.`,
+    };
   } catch (error) {
-    throw new Error(
+    throw new UncertainStartup(
       `Startup of @${handle} in ${target} did not complete: ${(error as Error).message} The agent or guide may already be present. Inspect the pane and room status before retrying; nothing was retried automatically.`,
     );
   }

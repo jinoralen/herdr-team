@@ -35,7 +35,7 @@ const Manifest = z.strictObject({
   agents: z.record(Key, Agent),
 });
 export type DesiredAgent = {
-  // The definition's file, passed to hub's invite --as.
+  // The definition's file, passed to hub's invite.
   definition: string;
   kind: string;
   model?: string;
@@ -44,7 +44,10 @@ export type DesiredAgent = {
   prompt: string;
   tab: string;
   fingerprint: string;
+  // What the fingerprint is made of, each hashed, so a replacement can say what changed.
+  parts: Parts;
 };
+export type Parts = Record<'definition' | 'handle' | 'cwd' | 'purpose' | 'context', string>;
 export type ManifestPlan = {
   name: string;
   lead?: LeadConfig;
@@ -52,9 +55,14 @@ export type ManifestPlan = {
   agents: Record<string, DesiredAgent>;
 };
 
-// A team by name (teams/<name>.yaml in the herdr-team folder) or path.
-export function resolveTeam(ref: string, env: NodeJS.ProcessEnv = process.env): string {
-  return teamFile(ref, { env });
+// A team by name (teams/<name>.yaml in the herdr-team folder) or path; without one,
+// herdr-team.yaml in the current folder.
+export function resolveTeam(
+  ref: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): string {
+  return teamFile(ref, { env, cwd });
 }
 
 // A definition that can start an agent: it has a kind.
@@ -110,21 +118,17 @@ export async function loadPlan(
       throw new Error(`Handle @${handle} is used by more than one agent.`);
     }
     handles.add(handle);
-    const prompt = sanitizeForTerminal(
-      [
-        `Your coordinating lead is @${leadHandle}. Address reports to this handle.`,
-        config.shared.prompt,
-        ...context,
-        a.prompt,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-    );
+    const shared = [
+      `Your coordinating lead is @${leadHandle}. Address reports to this handle.`,
+      config.shared.prompt,
+      ...context,
+    ];
     agents[key] = desiredAgent({
       definition,
       handle,
       cwd: path.resolve(base, a.cwd),
-      prompt,
+      shared,
+      purpose: a.prompt,
       tab: a.tab,
     });
   }
@@ -149,27 +153,36 @@ function desiredAgent({
   definition,
   handle,
   cwd,
-  prompt,
+  shared,
+  purpose,
   tab,
 }: {
   definition: Definition & { kind: string };
   handle: string;
   cwd: string;
-  prompt: string;
+  // The lead's handle and the team's shared prompt and files, then this agent's own task.
+  shared: (string | undefined)[];
+  purpose: string | undefined;
   tab: string;
 }): DesiredAgent {
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
     throw new Error(`Working directory ${cwd} is missing or is not a directory.`);
   }
+  const prompt = sanitizeForTerminal([...shared, purpose].filter(Boolean).join('\n\n'));
   const { kind, model, description, instructions } = definition;
-  const fingerprint = new Bun.CryptoHasher('sha256')
-    .update(
-      JSON.stringify(
-        [kind, handle, cwd, prompt, model, description, instructions].filter(
-          (value) => value !== undefined,
-        ),
-      ),
-    )
+  const fingerprint = hash([kind, handle, cwd, prompt, model, description, instructions]);
+  const parts = {
+    definition: hash([kind, model, description, instructions]),
+    handle,
+    cwd,
+    purpose: hash([purpose]),
+    context: hash(shared),
+  };
+  return { definition: definition.file, kind, model, handle, cwd, prompt, tab, fingerprint, parts };
+}
+
+function hash(values: unknown[]): string {
+  return new Bun.CryptoHasher('sha256')
+    .update(JSON.stringify(values.filter((value) => value !== undefined)))
     .digest('hex');
-  return { definition: definition.file, kind, model, handle, cwd, prompt, tab, fingerprint };
 }

@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { shellQuote } from '@herdr/terminal';
 import { z } from 'zod';
+import type { ManagedAgent } from '#store';
+import { RETRY_LATER_EXIT, RetryLater } from './retry.ts';
 
 function words(name: string, source: () => string): string[] {
   if (Bun.main.startsWith('/$bunfs/')) {
@@ -26,15 +28,35 @@ const Membership = z.object({
   queuedFrom: z.boolean(),
 });
 export type Membership = z.infer<typeof Membership>;
-const Snapshot = z.object({ room: z.string(), members: z.array(Membership) });
+
+// The member is the helper's own join: the join or terminal compose recorded. Another member under
+// its handle (after the helper left) is not.
+export const isJoinOf = (member: Membership, helper: ManagedAgent): boolean =>
+  member.joined_at === helper.joinedAt || member.terminal_id === helper.terminal;
+// The `status --json` version this compose reads; hub bumps it when the shape changes.
+const SNAPSHOT_VERSION = 1;
+const Snapshot = z.object({
+  version: z.literal(SNAPSHOT_VERSION),
+  room: z.string(),
+  members: z.array(Membership),
+});
+
+// Hub's stdout as JSON, or null when it isn't: the version check below then names the hub.
+function parseJson(text: string): { version?: unknown } | null {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export class Hub {
   readonly words: string[];
   readonly command: string;
   constructor(private readonly env: NodeJS.ProcessEnv) {
-    this.words = env.HERDR_AGENT_HUB_BIN
-      ? [env.HERDR_AGENT_HUB_BIN]
-      : words('herdr-agent-hub', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
+    this.words = env.HERDR_TEAM_HUB_BIN
+      ? [env.HERDR_TEAM_HUB_BIN]
+      : words('herdr-hub', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
     this.command = this.words.map(shellQuote).join(' ');
   }
   private snapshot(): Membership[] {
@@ -46,7 +68,13 @@ export class Hub {
     if (result.exitCode !== 0) {
       throw new Error(result.stderr.toString().trim());
     }
-    const parsed = Snapshot.safeParse(JSON.parse(result.stdout.toString()));
+    const json = parseJson(result.stdout.toString());
+    if (json?.version !== SNAPSHOT_VERSION) {
+      throw new Error(
+        `Hub at ${this.command} reports status version ${json?.version ?? 'none'}; this compose reads version ${SNAPSHOT_VERSION}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
+      );
+    }
+    const parsed = Snapshot.safeParse(json);
     if (!parsed.success || parsed.data.room !== this.env.HERDR_WORKSPACE_ID) {
       throw new Error('Hub returned an invalid membership snapshot. Rebuild hub and retry.');
     }
@@ -54,6 +82,9 @@ export class Hub {
   }
   check(): void {
     this.snapshot();
+  }
+  members(): Membership[] {
+    return this.snapshot();
   }
   member(handle: string): Membership | null {
     return this.snapshot().find((m) => m.handle === handle) ?? null;
@@ -68,7 +99,7 @@ export class Hub {
     agent: { definition: string; handle: string; prompt: string },
     pane: string,
   ): Promise<void> {
-    const proc = Bun.spawn([...this.words, 'invite', pane, ...this.agentArgs(agent)], {
+    const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
       env: this.env,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -79,15 +110,14 @@ export class Hub {
       proc.exited,
     ]);
     if (code !== 0) {
-      throw new Error(stderr.trim() || stdout.trim());
+      const message = stderr.trim() || stdout.trim();
+      // Hub's own "retry later" stays one for compose's caller.
+      throw code === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
     }
   }
-  // Starts the lead in the caller's own pane; helpers go to their panes through invite. Kind,
+  // invite starts the lead in the caller's own pane, and helpers with --pane in theirs. Kind,
   // model and description come from the definition.
   startArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
-    return ['join', '--agent', ...this.agentArgs(agent)];
-  }
-  private agentArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
-    return ['--as', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
+    return ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
   }
 }

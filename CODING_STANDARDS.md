@@ -28,9 +28,11 @@ layout and the import boundary are in the README ("Code layout"); `biome.json` h
   step, what to do; a command to run is spelt with `SELF` (the executable's full path):
   `Usage: ${SELF} join <agent type or description>`.
 - Throw plain `Error` for agent-facing problems; `HerdrError` with a `code` for Herdr failures, so
-  callers branch on `code`, not on message text.
-- The CLI prints `error: <message>` and sets `process.exitCode = 1`, letting the process end on
-  its own.
+  callers branch on `code`, not on message text. Two subclasses mark what a caller acts on without
+  reading the text: `RetryLater`, a problem a tick fixes by itself (exit 75, ADR 0012), and
+  `UncertainStartup`, an `invite --pane` that may have left the agent behind.
+- The CLI prints `error: <message>` and sets `process.exitCode` (1, or 75 for `RetryLater`),
+  letting the process end on its own.
 - Isolate failures per room: one room's error is logged and the pass moves on; what it couldn't
   deliver stays queued for the next pass.
 

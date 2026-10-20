@@ -4,7 +4,7 @@
 // An agent's room is its Herdr workspace, so none of these take a room name.
 
 import fs from 'node:fs';
-import { loadDefinition } from '@herdr/agents';
+import { type Definition, definitionFile, loadDefinition } from '@herdr/agents';
 import {
   appendLog,
   dbPath,
@@ -18,6 +18,7 @@ import {
 } from '#store';
 import { copyAttachments, planAttachments, withAttachments } from './attachments.ts';
 import { leadingMention } from './recipients.ts';
+import { RetryLater } from './retry.ts';
 import { SELF } from './self.ts';
 import {
   guestInstructions,
@@ -32,6 +33,27 @@ const REUSABLE_HANDLE = ['gone', 'left', 'rejected'];
 // A role, shown to the others in the member list and the "joined" notice; not a place for a brief.
 const MAX_DESCRIPTION_CHARS = 200;
 const STATUS_LOG_LINES = 20;
+// The shape of `status --json`, which compose reads (ADR 0012). Bump it when a field compose may
+// read changes or goes away.
+const STATUS_JSON_VERSION = 1;
+// What --description takes, as the usage lines show it: the agent type first, so the handle
+// derived from its first word names the agent.
+const ROLE = '"<agent type>, <your role>"';
+
+// A description given where the agent definition goes (the old positional form) is a definition
+// nobody wrote: say how to join without one. A definition that exists but is broken gets no hint.
+function definitionFor(as: string, env: NodeJS.ProcessEnv): Definition {
+  try {
+    return loadDefinition(as, { env });
+  } catch (error) {
+    if (definitionFile(as, { env }) !== null) {
+      throw error;
+    }
+    throw new Error(
+      `${(error as Error).message} For an ad-hoc join, use: ${SELF} join --description ${ROLE}`,
+    );
+  }
+}
 
 // HERDR_PANE_ID and HERDR_WORKSPACE_ID are fixed when the agent starts. Membership is matched
 // on these launch-time values, so an agent stays in its room even if its pane is moved later.
@@ -55,11 +77,11 @@ function slug(description: string): string {
   );
 }
 
-// Ticks are run by the herdr-agent-hub Herdr plugin. If none ever ran, posts would wait forever.
+// Ticks are run by the herdr-team Herdr plugin. If none ever ran, posts would wait forever.
 function requireInstalled(store: Store): void {
   if (!serviceState(store.root).heartbeat) {
     throw new Error(
-      `herdr-agent-hub has never run here (${store.root}). Install it as a Herdr plugin: herdr plugin link <herdr-agent-hub directory>`,
+      `herdr-team has never run here (${store.root}). Install it as a Herdr plugin: herdr plugin link <herdr-team directory>`,
     );
   }
 }
@@ -83,7 +105,7 @@ function newMember(
   instructions: string | null,
 ): Omit<Member, 'handle'> {
   return {
-    // Shown to the other members by join, skill and status, and in their deliveries.
+    // Shown to the other members by join, guide and status, and in their deliveries.
     description: sanitizeForTerminal(description).trim(),
     pane_id: pane,
     joined_at: new Date().toISOString(),
@@ -99,7 +121,7 @@ function newMember(
 
 // Records the join and returns the instructions right away. The agent is admitted (or refused, if Herdr
 // sees no agent in its pane) by the tick that runs when its turn ends; its posts are delivered after.
-// as: a definition (name or path) supplying the handle, description and instructions; the
+// as: an agent definition (name or path) supplying the handle, description and instructions; the
 // description and handle given here override it.
 export function join({
   as,
@@ -107,7 +129,7 @@ export function join({
   handle,
   env = process.env,
 }: CommandOptions & { as?: string; description?: string; handle?: string }): string {
-  const definition = as === undefined ? null : loadDefinition(as, { env });
+  const definition = as === undefined ? null : definitionFor(as, env);
   const description = given ?? definition?.description ?? '';
   const base = handle ?? definition?.handle ?? slug(description);
   const instructions = definition?.instructions || null;
@@ -117,7 +139,7 @@ export function join({
     );
   }
   if (!description?.trim()) {
-    throw new Error(`Usage: ${SELF} join <agent type or description>`);
+    throw new Error(`Usage: ${SELF} join <agent>, or ${SELF} join --description ${ROLE}`);
   }
   if (description.trim().length > MAX_DESCRIPTION_CHARS) {
     throw new Error(
@@ -141,9 +163,7 @@ export function join({
     }
     const candidate = freeHandle(store, base);
     if (handle !== undefined && candidate !== handle) {
-      throw new Error(
-        `Handle @${handle} is already in use or has undelivered posts. Choose another handle.`,
-      );
+      throw handleTakenError(store, handle);
     }
     const member = { ...newMember(description, pane, instructions), handle: candidate };
     store.saveMember(member);
@@ -154,6 +174,17 @@ export function join({
   });
 
   return instructionsFor(store, joinedHandle, true);
+}
+
+// An exact handle that isn't free: in use, or free once its old member's posts are delivered.
+function handleTakenError(store: Store, handle: string): Error {
+  const old = store.member(handle);
+  if (old && REUSABLE_HANDLE.includes(old.status)) {
+    return new RetryLater(
+      `Handle @${handle} still has undelivered posts from its previous member. Retry once they are delivered, or choose another handle.`,
+    );
+  }
+  return new Error(`Handle @${handle} is already in use. Choose another handle.`);
 }
 
 function instructionsFor(store: Store, handle: string, justJoined: boolean): string {
@@ -168,7 +199,7 @@ function instructionsFor(store: Store, handle: string, justJoined: boolean): str
 
 // The room's rules: this pane's own (handle, members, wake rule) if it has joined, else the general
 // guide. Only reads, so an agent can run it any time, e.g. after its context was compacted.
-export function skill({ env = process.env }: CommandOptions = {}): string {
+export function guide({ env = process.env }: CommandOptions = {}): string {
   if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
     return guestInstructions();
   }
@@ -214,9 +245,7 @@ function resolveMembership(env: NodeJS.ProcessEnv): { store: Store; member: Memb
     if (rejected) {
       throw new Error(`Your join was refused: ${rejected.reason}`);
     }
-    throw new Error(
-      `This pane has not joined the chat. Run: ${SELF} join "<agent type or description>"`,
-    );
+    throw new Error(`This pane has not joined the chat. Run: ${SELF} join --description ${ROLE}`);
   }
   return { store, member };
 }
@@ -388,6 +417,7 @@ export function status({
   if (json) {
     return store.transaction(() =>
       JSON.stringify({
+        version: STATUS_JSON_VERSION,
         room: workspace,
         members: (['pending', 'active', 'left', 'gone', 'rejected'] as const).flatMap((state) =>
           store.members(state).map((member) => ({

@@ -1,4 +1,4 @@
-// What ticks and posts report, kept for `herdr-agent-hub status`; the oldest rows are dropped past LOG_KEEP.
+// What ticks and posts report, kept for `herdr-team status`; the oldest rows are dropped past LOG_KEEP.
 
 import { desc, eq, isNull, lte, or } from 'drizzle-orm';
 import { openDb } from './db.ts';
@@ -20,7 +20,7 @@ export function appendLog(root: string, room: string | null, text: string): void
     .run();
 }
 
-// The newest `last` rows about `room` or about herdr-agent-hub as a whole, oldest first.
+// The newest `last` rows about `room` or about herdr-team as a whole, oldest first.
 export function readLog(root: string, room: string, last: number): LogRow[] {
   return openDb(root)
     .select()

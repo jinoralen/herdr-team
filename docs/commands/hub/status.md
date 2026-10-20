@@ -12,7 +12,7 @@ reads, so it's safe from any pane, member or not.
 - **Trigger**: a conversation went quiet, a reply didn't arrive, or you want to see who is in the
   room.
 - The guide points agents here only when a reply seems overdue: it is not an inbox, and messages
-  reach them only as deliveries. For their own handle and the members, use [`skill`](skill.md).
+  reach them only as deliveries. For their own handle and the members, use [`guide`](guide.md).
 
 ## Common questions
 
@@ -28,7 +28,7 @@ authors told).
 
 **Where are errors from ticks?**
 In `status`'s recent activity, and in Herdr's plugin log:
-`herdr plugin log list --plugin herdr-agent-hub`.
+`herdr plugin log list --plugin herdr-team`.
 
 ## It's working if
 
@@ -39,8 +39,10 @@ In `status`'s recent activity, and in Herdr's plugin log:
 ## Automation
 
 Use `status --json` for a machine-readable snapshot of the caller's workspace room.
-The object contains `room` and `members` (including left, gone and
-rejected records). Each member includes its handle, description, launch pane,
+The object contains `version`, `room` and `members` (including left, gone and
+rejected records). `version` (now 1) changes when a field others may read changes or goes away;
+compose reads this snapshot and refuses a version it doesn't know
+([ADR 0012](../../adr/0012-hub-stands-alone-compose-builds-on-its-cli.md)). Each member includes its handle, description, launch pane,
 join timestamp, status, terminal, agent, reason, held state, and `queuedFrom`.
 The snapshot is read in one transaction and makes no Herdr calls. It describes
 recorded membership, not live pane health.

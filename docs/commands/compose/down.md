@@ -2,8 +2,10 @@
 
 ## What it does
 
-Closes the helpers owned by the deployment named in `down <team>` (a team name or file). The lead and
-unrelated panes remain. Only the manifest's name is needed, including if context files disappeared.
+Closes the helpers owned by a deployment. The lead and unrelated panes remain. `down review` names
+it by team name or file, of which only the manifest's name is read, so it works even if context
+files disappeared. `down` alone takes this workspace's only deployment, and refuses with their
+names when there are several. `--json` prints the deployment taken down and the handles removed.
 
 ## When to use it
 

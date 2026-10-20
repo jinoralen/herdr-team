@@ -86,8 +86,9 @@ class FakeHerdr implements Herdr {
 export const fakeHerdr = () => new FakeHerdr();
 
 export function setup() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-agent-hub-test-'));
-  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-test-'));
+  const root = path.join(base, 'hub');
+  onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }));
   const herdr = fakeHerdr();
   const logs: string[] = [];
   const options = {
@@ -106,7 +107,7 @@ export function setup() {
     HERDR_ENV: '1',
     HERDR_PANE_ID: pane,
     HERDR_WORKSPACE_ID: workspace,
-    HERDR_AGENT_HUB_DIR: root,
+    HERDR_TEAM_STATE_DIR: base,
   });
   // The agent runs join during its turn; the tick when that turn ends admits it.
   async function joinAs(

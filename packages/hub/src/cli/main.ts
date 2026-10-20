@@ -2,14 +2,16 @@
 // The command line: one definition per command, with its options, help and what it runs.
 // Agents run the room commands; Herdr runs `tick`.
 
-import { Command } from '@commander-js/extra-typings';
+import { Command, Option } from '@commander-js/extra-typings';
 import { cliHerdr } from '@herdr/herdr';
-import { join, leave, message, orientation, parseTo, SELF, skill, status } from '#agent';
+import { shellQuote } from '@herdr/terminal';
+import { exitCode, guide, join, leave, message, orientation, parseTo, SELF, status } from '#agent';
 import { version } from '#package';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
+import { agents } from './agents.ts';
 import { launch } from './launch.ts';
-import { invite } from './remote.ts';
+import { invite, UncertainStartup } from './remote.ts';
 import { unknownCommand } from './unknown.ts';
 
 const program = new Command()
@@ -21,101 +23,62 @@ const program = new Command()
   .showSuggestionAfterError(false)
   .version(version, '-v, --version', 'print the version')
   .addHelpText('before', () => orientation())
-  .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`)
+  .addHelpText('after', `\nAgents: run \`${SELF} guide\` to learn how to use the room.`)
   .commandsGroup('Agent commands:');
 
-// With --as, the definition supplies the description, so none need be given.
-function joinDescription(
-  words: string[],
-  named: string | undefined,
-  as: string | undefined,
-): string | undefined {
-  if (named !== undefined && words.length > 0) {
-    throw new Error('Use either --description or a positional description, not both.');
-  }
-  if (named === undefined && words.length === 0 && as === undefined) {
-    throw new Error("missing required argument 'description'");
-  }
-  return named ?? (words.length ? words.join(' ') : undefined);
-}
-
-// The options only starting an agent takes.
-function checkStartOptions(options: {
+// Old forms get the line to run instead of a bare "unknown option".
+function refuseOldJoin(options: {
+  as?: string;
   agent?: string | true;
   model?: string;
   prompt?: string;
 }): void {
-  for (const [flag, value] of [
-    ['--prompt', options.prompt],
-    ['--model', options.model],
-  ] as const) {
-    if (value !== undefined && !options.agent) {
-      throw new Error(`${flag} requires --agent.`);
-    }
+  if (options.as !== undefined) {
+    throw new Error(`The agent is positional now: ${SELF} join ${shellQuote(options.as)}`);
+  }
+  // --model and --prompt only ever went with --agent: what join started then, invite starts now.
+  if ([options.agent, options.model, options.prompt].some((o) => o !== undefined)) {
+    throw new Error(
+      `Starting an agent moved to invite: ${SELF} invite <agent>, or ${SELF} invite --agent <kind> --handle <handle> --description <text>`,
+    );
   }
 }
 
-program
-  .command('join')
-  .summary("join a pane's room, optionally starting an agent")
-  .description(
-    "Join the chat room of this pane's Herdr workspace. An agent runs it in its own\n" +
-      'shell, when its user asks. Without --handle, the first word becomes the handle\n' +
-      "(@codex, @claude-2, ...); the rest describes the agent's role to the others.\n" +
-      'Prints instructions for the agent on how to use the room.\n' +
-      'Running it again from the same pane prints the instructions again.\n' +
-      '\n' +
-      'Users, not agents: from an interactive Herdr shell, use --agent (and --as or\n' +
-      '--handle) to start an agent in this pane with the room guide as its initial\n' +
-      'prompt. To start one in another pane, use invite.',
-  )
-  .argument('[description...]', 'the agent type, then its role (or use --description)')
-  .option(
-    '--as <definition>',
-    'join as a definition from ~/.config/herdr-team/agents (name or path)',
-  )
-  .option('--description <text>', 'short role shown to the other members')
-  .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
-  .optionsGroup('Starting an agent (run by the user from a shell, not by agents):')
-  .option('--agent [type]', "start codex, claude or pi here; with --as, the definition's kind")
-  .option('--model <id>', 'model for the agent being started (requires --agent)')
-  .option('--prompt <text>', 'initial task after joining (requires --agent)')
-  .action(async (description, options) => {
-    const role = joinDescription(description, options.description, options.as);
-    checkStartOptions(options);
-    if (options.agent) {
-      const output = await launch({
-        agent: options.agent === true ? undefined : options.agent,
-        as: options.as,
-        model: options.model,
-        handle: options.handle,
-        description: role,
-        prompt: options.prompt,
-      });
-      console.log(output);
-    } else {
-      console.log(join({ as: options.as, description: role, handle: options.handle }));
-    }
-  });
+// A pane id (w1:p3) where invite now takes an agent: the pane is --pane.
+function refuseOldInvite(agent: string | undefined, as: string | undefined): void {
+  if (agent !== undefined && /^[^/]*:[^/]*$/.test(agent)) {
+    throw new Error(`The pane is an option now: ${SELF} invite <agent> --pane ${agent}`);
+  }
+  if (as !== undefined) {
+    throw new Error(`The agent is positional now: ${SELF} invite ${shellQuote(as)}`);
+  }
+}
+
+// The [agent] argument of join and invite, which read definitions the same way.
+const AGENT = 'an agent definition from ~/.config/herdr-team/agents (name or path)';
 
 program
-  .command('invite')
-  .summary('start an agent in another shell pane and bring it into its room')
+  .command('join')
+  .summary("join this pane's room (agent)")
   .description(
-    'Start an agent in an existing Herdr shell pane, wait until it is a member of\n' +
-      "that pane's room, submit its guide and return. Run by a user, or by a lead\n" +
-      'agent bringing in helpers; only the pane given is ever touched. A pane where\n' +
-      'an agent already runs is refused, with the line to paste into that agent.',
+    "Join the chat room of this pane's Herdr workspace, as the agent running the command.\n" +
+      'An agent runs it in its own shell, when its user asks: as an agent definition, or\n' +
+      'with --description. Without --handle, the handle comes from the definition, or the\n' +
+      'first word of the description (@codex, @claude-2, ...); the description is the role\n' +
+      'the others see. Prints instructions for the agent on how to use the room.\n' +
+      'Running it again from the same pane prints the instructions again.\n' +
+      'To start an agent, use invite.',
   )
-  .argument('<pane>', 'the shell pane to start the agent in, e.g. w1:p3')
-  .option('--as <definition>', 'start a definition from ~/.config/herdr-team/agents (name or path)')
-  .option('--agent <type>', "codex, claude or pi; with --as, overrides the definition's kind")
+  .argument('[agent]', AGENT)
+  .option('-d, --description <text>', 'short role shown to the other members')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
-  .option('--description <text>', 'short role shown to the other members')
-  .option('--model <id>', 'model for the agent, passed to it unchanged')
-  .option('--prompt <text>', 'initial task after the guide')
-  .action(async (pane, options) => {
-    console.log(await invite({ pane, ...options }));
+  .addOption(new Option('--as <definition>').hideHelp())
+  .addOption(new Option('--agent [type]').hideHelp())
+  .addOption(new Option('--model <id>').hideHelp())
+  .addOption(new Option('--prompt <text>').hideHelp())
+  .action((agent, options) => {
+    refuseOldJoin(options);
+    console.log(join({ as: agent, description: options.description, handle: options.handle }));
   });
 
 program
@@ -152,7 +115,7 @@ program
   });
 
 program
-  .command('skill')
+  .command('guide')
   .summary('how to use the room: your handle, members, rules (agent)')
   .description(
     "Print the guide for agents. In a pane that joined, it is that agent's own: its\n" +
@@ -160,7 +123,16 @@ program
       'guide. It only reads, so run it whenever the rules are no longer in your context.',
   )
   .action(() => {
-    console.log(skill());
+    console.log(guide());
+  });
+
+// The guide's old name, which guides and deliveries already in an agent's context still name.
+program
+  .command('skill', { hidden: true })
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(() => {
+    throw new Error(`skill is called guide now: ${SELF} guide`);
   });
 
 program
@@ -171,7 +143,68 @@ program
     console.log(leave());
   });
 
-program.commandsGroup('Other commands:').helpCommand(true);
+program.commandsGroup('User commands:').helpCommand(true);
+
+program
+  .command('invite')
+  .summary('start an agent in this or another shell pane and bring it into its room')
+  .description(
+    "Start an agent and bring it into its pane's room. Without --pane, in this\n" +
+      'interactive Herdr shell: the agent takes over the terminal. With --pane, in that\n' +
+      'existing shell pane: waits until the agent is a member, submits its guide and\n' +
+      'returns. Run by a user, or by a lead agent bringing in helpers; only that pane is\n' +
+      'ever touched. A pane where an agent already runs is refused, with the line to\n' +
+      'paste into that agent.',
+  )
+  .argument('[agent]', AGENT)
+  .option('--pane <pane>', 'start in this shell pane instead of the current one, e.g. w1:p3')
+  .option('--agent <type>', "codex, claude or pi; overrides the definition's kind")
+  .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
+  .option('-d, --description <text>', 'short role shown to the other members')
+  .option('--model <id>', 'model for the agent, passed to it unchanged')
+  .option('--prompt <text>', 'initial task after the guide')
+  .option('--json', 'with --pane: print the outcome as JSON, failures and uncertain ones included')
+  .addOption(new Option('--as <definition>').hideHelp())
+  .action(async (agent, { pane, as, json, ...options }) => {
+    refuseOldInvite(agent, as);
+    const start = { ...options, as: agent };
+    if (pane === undefined) {
+      if (json) {
+        throw new Error('--json needs --pane: without it, the agent takes over this terminal.');
+      }
+      console.log(await launch(start));
+    } else if (json) {
+      await inviteJson({ ...start, pane });
+    } else {
+      console.log((await invite({ ...start, pane })).text);
+    }
+  });
+
+// invite --pane --json: one JSON line on stdout whatever happens, for a lead or script to read.
+// uncertain: startup began and may have left the agent or its guide behind; look before retrying.
+async function inviteJson(start: Parameters<typeof invite>[0]): Promise<void> {
+  try {
+    const { text: _, ...invited } = await invite(start);
+    console.log(JSON.stringify({ ok: true, ...invited, uncertain: false }));
+  } catch (error) {
+    const uncertain = error instanceof UncertainStartup;
+    console.log(JSON.stringify({ ok: false, error: (error as Error).message, uncertain }));
+    process.exitCode = exitCode(error);
+  }
+}
+
+program
+  .command('agents')
+  .summary('list the agent definitions join and invite can use')
+  .description(
+    "List the agent definitions in ~/.config/herdr-team/agents: each one's handle, kind,\n" +
+      'model and description, and what is wrong with any that cannot be used. Only reads\n' +
+      'the folder.',
+  )
+  .option('--json', 'print the definitions as JSON')
+  .action((options) => {
+    console.log(agents({ json: options.json }));
+  });
 
 program
   .command('status')
@@ -186,12 +219,13 @@ program
     console.log(status({ json: options.json }));
   });
 
+// Run by Herdr, not by users or agents: left out of help, which agents read.
 program
-  .command('tick')
+  .command('tick', { hidden: true })
   .summary('bring rooms up to date once (run by Herdr)')
   .description(
     'Bring every room up to date once: admit joins, handle posts, deliver messages\n' +
-      'to agents that are idle, then exit. The herdr-agent-hub Herdr plugin runs it when an\n' +
+      'to agents that are idle, then exit. The herdr-team Herdr plugin runs it when an\n' +
       'agent changes state; running it by hand is harmless.',
   )
   .option('--startup', "Herdr's server just started: clear every room first (agents join again)")
@@ -209,7 +243,11 @@ program.on('command:*', ([name]: string[]) => {
   console.error(
     unknownCommand(
       name ?? '',
-      program.commands.map((c) => c.name()),
+      // As help lists them: hidden ones (tick, the old skill) left out.
+      program
+        .createHelp()
+        .visibleCommands(program)
+        .map((c) => c.name()),
     ),
   );
   process.exitCode = 1;
@@ -257,7 +295,7 @@ async function main(): Promise<void> {
     await program.parseAsync();
   } catch (error) {
     console.error(`error: ${(error as Error).message}`);
-    process.exitCode = 1;
+    process.exitCode = exitCode(error);
   }
 }
 
