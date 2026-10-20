@@ -84,7 +84,11 @@ async function launchInPane({
   description = sanitizeForTerminal(description).trim();
   // Reserve the exact handle before starting anything. A startup tick can reject this shell join;
   // the second join below recovers it after detection, with the same collision checks.
-  join({ as, description, handle, env: targetEnv });
+  const store = new Store(rootDir(targetEnv), pane.workspace_id);
+  const prompt = store.transaction(() => {
+    const instructions = join({ as, description, handle, env: targetEnv });
+    return memberPrompt(`${instructions}\n\nYour role: ${description}`, task);
+  });
   try {
     const started = await herdr.startAgent({
       kind: agent,
@@ -95,9 +99,8 @@ async function launchInPane({
     checkPane({ ...started, workspace_id: started.workspace_id ?? pane.workspace_id }, pane, agent);
     const live = await herdr.pane(target);
     checkPane(live, pane, agent);
-    const store = new Store(rootDir(targetEnv), pane.workspace_id);
     const joined = store.transaction(() => {
-      const instructions = join({ as, description, handle, env: targetEnv });
+      join({ as, description, handle, env: targetEnv });
       const member = store.member(handle);
       if (!member || member.pane_id !== target) {
         throw new Error(
@@ -121,9 +124,9 @@ async function launchInPane({
           'The target membership could not be confirmed. Inspect it before retrying invite.',
         );
       }
-      return { prompt: memberPrompt(`${instructions}\n\nYour role: ${description}`, task), member };
+      return { member };
     });
-    await herdr.prompt(target, joined.prompt);
+    await herdr.prompt(target, prompt);
     if (!store.current(joined.member)) {
       throw new Error(
         'The target membership changed while submitting the guide. Inspect it before retrying invite.',

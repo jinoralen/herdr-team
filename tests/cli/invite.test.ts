@@ -83,7 +83,7 @@ else if (args[0] === 'pane') {
       .split('\n')
       .map((line) => JSON.parse(line));
   };
-  return { ...fixture, calls };
+  return { ...fixture, calls, team };
 }
 
 test('invite starts and confirms a target room member, submits its guide and preserves the caller', async () => {
@@ -231,6 +231,30 @@ test('invalid initial tasks fail before remote startup or membership changes', a
     assert.equal((await calls()).length, 0);
     assert.doesNotMatch((await run(['status'])).stdout, /@reviewer/);
   }
+});
+
+test('oversized guides and initial tasks fail before remote startup or membership changes', async () => {
+  const { run, calls, team } = await remote();
+  fs.appendFileSync(path.join(team, 'agents', 'reviewer.md'), 'x'.repeat(30_000));
+  const result = await run([
+    'invite',
+    'reviewer',
+    '--pane',
+    'w2:p2',
+    '--prompt',
+    'x'.repeat(75_000),
+    '--json',
+  ]);
+  assert.equal(result.code, 1);
+  const outcome = JSON.parse(result.stdout);
+  assert.match(outcome.error, /exceed 100 KB/);
+  assert.doesNotMatch((await run(['status'])).stdout, /joined/);
+  assert.equal(outcome.uncertain, false);
+  assert.equal(
+    (await calls()).some((args) => args[1] === 'start'),
+    false,
+  );
+  assert.doesNotMatch((await run(['status'])).stdout, /@reviewer/);
 });
 
 test('initial tasks are for invite: join takes none', async () => {

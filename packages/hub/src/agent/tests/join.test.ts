@@ -20,7 +20,8 @@ test('join is idempotent for the same pane', async () => {
   const { joinAs, handles } = await installed();
   await joinAs('w1:p1', 'codex');
   const again = await joinAs('w1:p1', 'codex something else');
-  assert.match(again, /as @codex\./);
+  assert.match(again, /You are @codex in chat room/);
+  assert.doesNotMatch(again, /When you.re done with what your user asked/);
   assert.deepEqual(handles(), ['codex']);
 });
 
@@ -28,7 +29,7 @@ test('an explicit handle is exact, idempotent and cannot rename a joined pane', 
   const { env, store } = await installed();
   const options = { description: 'reviews architecture', handle: 'reviewer', env: env('p1') };
   assert.match(join(options), /as @reviewer\./);
-  assert.match(join(options), /as @reviewer\./);
+  assert.match(join(options), /You are @reviewer in chat room/);
   assert.throws(() => join({ ...options, handle: 'other' }), /already joined as @reviewer/);
   assert.throws(() => join({ ...options, env: env('p2') }), /already in use/);
   assert.equal(store().member('reviewer-2'), null);
@@ -213,4 +214,14 @@ test('instructions are stripped of terminal control sequences, like descriptions
   assert.match(out, /lead assigns work\.\n\[2JThen clear\./);
   assert.equal(controls(guide({ env: env('p1') })), false);
   assert.equal(controls(store().member('reviewer')?.instructions ?? ''), false);
+});
+
+test('colliding generated handles stay within twenty characters', async () => {
+  const { env, store } = await installed();
+  const base = 'abcdefghijklmnopqrst';
+  for (let n = 1; n <= 10; n++) {
+    join({ description: base, env: env(`p${n}`) });
+    const expected = n === 1 ? base : `${base.slice(0, 20 - `-${n}`.length)}-${n}`;
+    assert.equal(store().memberByPane(`p${n}`)?.handle, expected);
+  }
 });

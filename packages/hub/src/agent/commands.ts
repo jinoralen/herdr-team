@@ -92,7 +92,8 @@ function requireInstalled(store: Store): void {
 // rejected are free again once nothing from them waits for delivery.
 function freeHandle(store: Store, base: string): string {
   for (let n = 1; ; n++) {
-    const candidate = n === 1 ? base : `${base}-${n}`;
+    const suffix = n === 1 ? '' : `-${n}`;
+    const candidate = `${base.slice(0, 20 - suffix.length)}${suffix}`;
     const old = store.member(candidate);
     if (!old || (REUSABLE_HANDLE.includes(old.status) && !store.hasQueuedFrom(candidate))) {
       return candidate;
@@ -161,7 +162,7 @@ export function join({
           `This pane already joined as @${existing.handle}. Leave before choosing another handle.`,
         );
       }
-      return existing.handle;
+      return { handle: existing.handle, justJoined: false };
     }
     const candidate = freeHandle(store, base);
     if (handle !== undefined && candidate !== handle) {
@@ -172,10 +173,10 @@ export function join({
     // Queued now, so it comes before anything the agent posts; held until the join is confirmed.
     const id = store.announce(candidate, 'joined', `@${candidate} joined (${member.description}).`);
     appendLog(store.root, store.room, `${id} @${candidate} joined (${member.description}).`);
-    return candidate;
+    return { handle: candidate, justJoined: true };
   });
 
-  return instructionsFor(store, joinedHandle, true);
+  return instructionsFor(store, joinedHandle.handle, joinedHandle.justJoined);
 }
 
 // An exact handle that isn't free: in use, or free once its old member's posts are delivered.

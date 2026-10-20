@@ -43,7 +43,8 @@ runs: that is refused, with the `join` line to paste into that agent instead.
 
 The description stays a short role shown to peers; `--prompt` is the task the agent starts on, and
 without it the agent waits for your task. Refer to a file for longer context. Empty tasks are
-refused, and terminal control characters are stripped.
+refused, and terminal control characters are stripped. The combined guide and task size is checked
+before starting an agent; a size error leaves no new membership.
 
 The command creates, moves and closes no panes: making and arranging them stays with the caller,
 such as compose. The agent starts in the pane's shell, with its working directory, environment and
