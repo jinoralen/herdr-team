@@ -3,7 +3,7 @@
 // nothing rather than failing.
 import { listDefinitions } from '@herdr/agents';
 import { sanitizeForTerminal } from '@herdr/terminal';
-import { peekActiveMembers, rootDir } from '#store';
+import { peekMembers, rootDir } from '#store';
 
 // What `__complete <what>` can list.
 const SOURCES = {
@@ -18,7 +18,7 @@ const SOURCES = {
     if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
       return [];
     }
-    return peekActiveMembers(rootDir(env), env.HERDR_WORKSPACE_ID)
+    return peekMembers(rootDir(env), env.HERDR_WORKSPACE_ID, ['active'])
       .filter((m) => m.pane_id !== env.HERDR_PANE_ID)
       .map((m) => [m.handle, m.description]);
   },

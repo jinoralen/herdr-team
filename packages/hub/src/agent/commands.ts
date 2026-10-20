@@ -3,14 +3,13 @@
 // delivers it.
 // An agent's room is its Herdr workspace, so none of these take a room name.
 
-import fs from 'node:fs';
 import { type Definition, definitionFile, loadDefinition } from '@herdr/agents';
 import {
   appendLog,
-  dbPath,
   filesDir,
   MAX_MESSAGE_CHARS,
   type Member,
+  peekMembers,
   readLog,
   rootDir,
   Store,
@@ -209,30 +208,22 @@ export function guide({ env = process.env }: CommandOptions = {}): string {
 }
 
 // For the top of `--help` in a pane that joined: who it is, and how to post. Empty anywhere else.
-// Help must always print, so it never creates the database, and a database it can't read is
-// left to the commands that need it.
+// Help must always print and only shows things, so it reads the room read-only: it never creates,
+// migrates or sets aside the database, and one it can't read is left to the commands that need it.
 export function orientation({ env = process.env }: CommandOptions = {}): string {
   if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
     return '';
   }
-  const root = rootDir(env);
-  if (!fs.existsSync(dbPath(root))) {
+  const room = env.HERDR_WORKSPACE_ID;
+  const rows = peekMembers(rootDir(env), room, ['pending', 'active']);
+  const member = rows.find((m) => m.pane_id === env.HERDR_PANE_ID);
+  if (!member) {
     return '';
   }
-  try {
-    const store = new Store(root, env.HERDR_WORKSPACE_ID);
-    const member = store.memberByPane(env.HERDR_PANE_ID);
-    if (!member) {
-      return '';
-    }
-    const others = store
-      .members('active')
-      .map((m) => m.handle)
-      .filter((h) => h !== member.handle);
-    return memberOrientation({ handle: member.handle, room: store.room, others });
-  } catch {
-    return '';
-  }
+  const others = rows
+    .filter((m) => m.status === 'active' && m.handle !== member.handle)
+    .map((m) => m.handle);
+  return memberOrientation({ handle: member.handle, room, others });
 }
 
 // A joined member, or one whose join the next tick will confirm.
