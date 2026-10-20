@@ -87,8 +87,12 @@ console.log(JSON.stringify({result: {pane: {
   return { ...fixture, env, result, start, startWith };
 }
 
-test('invite without --pane hands the same process and terminal to each supported agent with its room guide', async () => {
-  for (const agent of ['codex', 'claude', 'pi']) {
+const AGENTS = ['codex', 'claude', 'pi'];
+
+// One test per agent: each starts the CLI from source, and a failure names the agent.
+test.each(AGENTS)(
+  'invite without --pane hands the same process and terminal to %s with its room guide',
+  async (agent) => {
     const { start, result, root, run } = await shell();
     const launched = await start(agent);
     assert.equal(launched.code, 23, launched.output);
@@ -105,8 +109,8 @@ test('invite without --pane hands the same process and terminal to each supporte
     assert.match(record.args[0], /join --handle .*reviewer/);
     assert.match(record.args[0], /reviews architecture/);
     assert.match((await run(['status'], { inPane: true })).stdout, /@reviewer/);
-  }
-});
+  },
+);
 
 test('invite without --pane refuses nested agents and unsupported kinds before joining', async () => {
   for (const [agent, env] of [
@@ -155,8 +159,9 @@ test('same-pane startup appends the initial task after the guide without changin
   assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /Review the cache/);
 });
 
-test('invite without --pane forwards model selection before the initial prompt', async () => {
-  for (const agent of ['codex', 'claude', 'pi']) {
+test.each(AGENTS)(
+  'invite without --pane forwards model selection to %s before the initial prompt',
+  async (agent) => {
     const { start, result } = await shell();
     const model = agent === 'claude' ? 'sonnet[1m]' : 'example-v1';
     const launched = await start(agent, {}, undefined, model);
@@ -164,8 +169,8 @@ test('invite without --pane forwards model selection before the initial prompt',
     const record = await Bun.file(result).json();
     assert.deepEqual(record.args.slice(0, 2), ['--model', model]);
     assert.match(record.args.at(-1), /as @reviewer/);
-  }
-});
+  },
+);
 
 // A herdr-team folder in the fixture, holding one definition.
 function team(root: string, text: string): Record<string, string> {

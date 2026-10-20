@@ -7,6 +7,7 @@ import type { Membership } from './hub.ts';
 import { COMPOSE_SELF, Hub } from './hub.ts';
 import type { LeadConfig, ManifestPlan } from './manifest.ts';
 import type { Change } from './resources.ts';
+import { RetryLater } from './retry.ts';
 
 // Hub accepts initial tasks up to 80 KB. Validate before creating helper panes.
 const MAX_LEAD_PROMPT_BYTES = 80_000;
@@ -48,7 +49,7 @@ export function prepareLead({
   const running = !!current?.agent;
   if (!running && !interactive) {
     throw new Error(
-      'No agent is recognized in this pane. Run up from an interactive Herdr shell to start its configured lead.',
+      'No agent is recognized in this pane. Run up from an interactive Herdr shell, without --json, to start its configured lead.',
     );
   }
   if (!running && !plan.lead) {
@@ -107,8 +108,8 @@ function validateLeadHandle(
     );
   }
   if (!joined && occupied && occupied.queuedFrom) {
-    throw new Error(
-      `Handle @${leadHandle} still has undelivered posts from its previous conversation. Let those posts be delivered before retrying up.`,
+    throw new RetryLater(
+      `Handle @${leadHandle} still has undelivered posts from its previous conversation. Retry ${COMPOSE_SELF} up once a tick has delivered them.`,
     );
   }
   return joined;
@@ -122,9 +123,14 @@ function coordinatorPrompt(
   hubCommand: string,
 ): string {
   const deployment = shellQuote(path.resolve(file));
+  // As the team's lead definition when it names one, so peers see its role and the lead gets its
+  // instructions; else a role made up from the deployment.
+  const as = plan.lead
+    ? `${shellQuote(plan.lead.definition)} --handle ${shellQuote(handle)}`
+    : `--handle ${shellQuote(handle)} --description ${shellQuote(`${handle}, coordinates ${plan.name}`)}`;
   const membership = joined
-    ? `You are already a member as @${handle}. Read your room guide with: ${hubCommand} skill`
-    : `First join as @${handle}: ${hubCommand} join --handle ${shellQuote(handle)} --description ${shellQuote(`${handle}, coordinates ${plan.name}`)}. Confirm the returned handle is @${handle}; report a collision instead of dispatching under a different handle.`;
+    ? `You are already a member as @${handle}. Read your room guide with: ${hubCommand} guide`
+    : `First join as @${handle}: ${hubCommand} join ${as}. Confirm the returned handle is @${handle}; report a collision instead of dispatching under a different handle.`;
   const helpers = Object.entries(plan.agents).map(
     ([key, a]) =>
       `  ${key}: @${a.handle}, ${a.kind}${a.model ? ` / ${a.model}` : ' / harness default'}`,

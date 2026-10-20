@@ -4,16 +4,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cli } from './run-cli.ts';
 
-test('with no arguments, prints the help and points agents to skill', async () => {
+test('with no arguments, prints the help and points agents to guide', async () => {
   const { stdout, code } = await cli().run([]);
   expect(code).toBe(0);
   expect(stdout).toContain('Agent commands:');
-  expect(stdout).toMatch(/Agents: run `.* skill` to learn how to use the room\./);
+  expect(stdout).toMatch(/Agents: run `.* guide` to learn how to use the room\./);
 });
 
 test('each command has help with its usage', async () => {
   const { run } = cli();
-  for (const command of ['join', 'message', 'leave', 'skill', 'status', 'tick']) {
+  for (const command of ['join', 'message', 'leave', 'guide', 'status', 'tick']) {
     const { stdout, code } = await run([command, '--help']);
     expect(code).toBe(0);
     expect(stdout).toMatch(new RegExp(`Usage: .* ${command}\\b`));
@@ -50,22 +50,24 @@ test('an unknown command lists the commands and answers the usual guesses', asyn
   const { run } = cli();
   const typo = await run(['mesage', 'hi']);
   expect(typo.code).toBe(1);
-  expect(typo.stderr).toContain('Commands: join, message, skill, leave, invite, status.');
-  expect(typo.stderr).toMatch(/Agents: run `.* skill`/);
+  expect(typo.stderr).toContain(
+    'Commands: join, message, guide, leave, invite, agents, status, help.',
+  );
+  expect(typo.stderr).toMatch(/Agents: run `.* guide`/);
   const inbox = await run(['inbox']);
   expect(inbox.code).toBe(1);
   expect(inbox.stderr).toContain('There is no inbox to read');
   const send = await run(['send', 'hi']);
   expect(send.stderr).toMatch(/To post, use message: .* message --to <handle> --stdin/);
   const who = await run(['members']);
-  expect(who.stderr).toMatch(/Your handle and the members: .* skill\./);
+  expect(who.stderr).toMatch(/Your handle and the members: .* guide\./);
 });
 
 test('help groups the commands by who runs them, and leaves out tick', async () => {
   const { run } = cli();
   const root = (await run(['--help'])).stdout;
   expect(root).toMatch(
-    /Agent commands:\n {2}join[\s\S]*\n {2}message[\s\S]*\n {2}skill[\s\S]*\n {2}leave[\s\S]*\n\nUser commands:\n {2}invite[\s\S]*\n {2}status[\s\S]*\n {2}help/,
+    /Agent commands:\n {2}join[\s\S]*\n {2}message[\s\S]*\n {2}guide[\s\S]*\n {2}leave[\s\S]*\n\nUser commands:\n {2}invite[\s\S]*\n {2}agents[\s\S]*\n {2}status[\s\S]*\n {2}help/,
   );
   expect(root).not.toContain('tick');
   const join = (await run(['join', '--help'])).stdout;
@@ -87,6 +89,9 @@ test('old forms are refused with the line to run instead', async () => {
   const pane = await run(['invite', 'w1:p3', '--agent', 'codex'], { inPane: true });
   expect(pane.code).toBe(1);
   expect(pane.stderr).toMatch(/The pane is an option now: .* invite <agent> --pane w1:p3/);
+  const skill = await run(['skill'], { inPane: true });
+  expect(skill.code).toBe(1);
+  expect(skill.stderr).toMatch(/skill is called guide now: .* guide/);
   const inviteAs = await run(['invite', '--as', 'reviewer'], { inPane: true });
   expect(inviteAs.stderr).toMatch(/The agent is positional now: .* invite reviewer/);
   const role = await run(['join', 'codex, reviews'], { inPane: true });
@@ -116,7 +121,7 @@ test("help in a member's pane starts with who it is and how to post", async () =
   await run(['tick']);
   const help = await run([], { inPane: true });
   expect(help.stdout).toMatch(
-    /^You are @codex in chat room "w1", with @claude\.\nPost: .* message --to <handle> --stdin .* rules: .* skill\n/,
+    /^You are @codex in chat room "w1", with @claude\.\nPost: .* message --to <handle> --stdin .* rules: .* guide\n/,
   );
   expect((await run(['--help'], { inPane: true, paneId: 'p9' })).stdout).toMatch(/^Usage:/);
 });
@@ -142,7 +147,7 @@ test('agent commands outside Herdr, or before joining, say what to do instead', 
   expect(notJoined.stderr).toMatch(
     /This pane has not joined the chat\. Run: .* join --description "/,
   );
-  const guide = await run(['skill']);
+  const guide = await run(['guide']);
   expect(guide.code).toBe(0);
   expect(guide.stdout).toContain('Join only if your user asked you to');
 });
@@ -164,7 +169,7 @@ test('join, message from stdin and tick work end to end against Herdr', async ()
   expect(posted.stdout).toMatch(/^Queued as @codex for @claude\./);
   await run(['tick']);
   expect(prompts()).toContain('line one\nline two');
-  expect((await run(['skill'], { inPane: true })).stdout).toContain(
+  expect((await run(['guide'], { inPane: true })).stdout).toContain(
     'You are @codex in chat room "w1"',
   );
 });

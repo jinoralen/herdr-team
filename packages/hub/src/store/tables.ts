@@ -60,7 +60,7 @@ export const members = sqliteTable(
     agent: text(),
     reason: text(),
     held: text(),
-    // The definition's body when the member joined with --as; repeated by `skill`.
+    // The definition's body when the member joined as one; repeated by `guide`.
     instructions: text(),
   },
   (t) => [

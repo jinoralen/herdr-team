@@ -6,6 +6,13 @@ import { rootDir, Store } from '#store';
 import { initialTask, memberPrompt, pasteLine } from './prompt.ts';
 import { resolveStart, type Start } from './start.ts';
 
+// Who was started where. The text is what a user reads; --json prints the rest.
+export type Invited = { agent: string; handle: string; pane: string; room: string; text: string };
+
+// Startup began and didn't finish: the agent or its guide may already be there, so the caller
+// must look before retrying (ADR 0006).
+export class UncertainStartup extends Error {}
+
 export function invite({
   pane,
   as,
@@ -17,7 +24,7 @@ export function invite({
   as?: string;
   prompt?: string;
   env?: NodeJS.ProcessEnv;
-}): Promise<string> {
+}): Promise<Invited> {
   const start = resolveStart(given, as, env);
   if (!['codex', 'claude', 'pi'].includes(start.agent)) {
     throw new Error('Supported agents are codex, claude and pi.');
@@ -55,7 +62,7 @@ async function launchInPane({
   task: string;
   pane: string;
   env: NodeJS.ProcessEnv;
-}): Promise<string> {
+}): Promise<Invited> {
   const herdr = cliHerdr(env);
   const pane = await herdr.pane(target);
   if (!pane || pane.pane_id !== target || !pane.workspace_id) {
@@ -122,9 +129,16 @@ async function launchInPane({
         'The target membership changed while submitting the guide. Inspect it before retrying invite.',
       );
     }
-    return `Started ${agent} as @${handle} in ${target} (room ${pane.workspace_id}); membership confirmed and guide submitted.`;
+    const room = pane.workspace_id;
+    return {
+      agent,
+      handle,
+      pane: target,
+      room,
+      text: `Started ${agent} as @${handle} in ${target} (room ${room}); membership confirmed and guide submitted.`,
+    };
   } catch (error) {
-    throw new Error(
+    throw new UncertainStartup(
       `Startup of @${handle} in ${target} did not complete: ${(error as Error).message} The agent or guide may already be present. Inspect the pane and room status before retrying; nothing was retried automatically.`,
     );
   }

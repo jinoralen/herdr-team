@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadDefinition, teamFile } from '../index.ts';
+import { definitionFile, loadDefinition, teamFile } from '../index.ts';
 
 // A fresh folder holding the given files, removed after the test.
 function folder(files: Record<string, string>): string {
@@ -163,4 +163,21 @@ test('a team name is teams/<name>.yaml in the folder; a path is read from the ca
     () => teamFile('./none.yaml', options),
     new Error(`No team file ${path.join(dir, 'none.yaml')}.`),
   );
+});
+
+test('definitionFile tells a missing definition from a folder it cannot read', () => {
+  const dir = folder({ 'agents/reviewer.md': REVIEWER });
+  const env = { HERDR_TEAM_DIR: dir };
+  assert.equal(definitionFile('reviewer', { env }), path.join(dir, 'agents', 'reviewer.md'));
+  assert.equal(definitionFile('nobody', { env }), null);
+  // Root reads any folder; there is nothing to tell apart then.
+  if (process.getuid?.() === 0) {
+    return;
+  }
+  fs.chmodSync(path.join(dir, 'agents'), 0o000);
+  try {
+    assert.throws(() => definitionFile('nobody', { env }), /EACCES|EPERM/);
+  } finally {
+    fs.chmodSync(path.join(dir, 'agents'), 0o755);
+  }
 });

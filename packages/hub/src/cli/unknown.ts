@@ -15,7 +15,7 @@ function hint(name: string): string {
     return `To post, use message: ${SELF} message --to <handle> --stdin <<'EOF' … EOF`;
   }
   if (WHO.includes(name)) {
-    return `Your handle and the members: ${SELF} skill. What waits and why: ${SELF} status.`;
+    return `Your handle and the members: ${SELF} guide. What waits and why: ${SELF} status.`;
   }
   return '';
 }
@@ -24,7 +24,7 @@ export function unknownCommand(name: string, commands: string[]): string {
   return [
     `error: unknown command '${name}'.`,
     hint(name.toLowerCase()),
-    `Commands: ${commands.join(', ')}. Agents: run \`${SELF} skill\` to learn how to use the room.`,
+    `Commands: ${commands.join(', ')}. Agents: run \`${SELF} guide\` to learn how to use the room.`,
   ]
     .filter(Boolean)
     .join('\n');

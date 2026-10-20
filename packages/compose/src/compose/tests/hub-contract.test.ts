@@ -37,6 +37,10 @@ console.log(JSON.stringify({ result: { panes: [] } }));
     HERDR_TEAM_STATE_DIR: path.join(root, 'state'),
     HERDR_TEAM_DIR: path.join(root, 'team'),
     HERDR_BIN_PATH: herdr,
+    // Against the built hub when the tests run on dist/, as Herdr and agents run it.
+    ...(process.env.HERDR_TEST_BIN_DIR && {
+      HERDR_TEAM_HUB_BIN: path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub'),
+    }),
   };
   const hub = new Hub(env);
   const run = (args: string[]) => {
@@ -69,7 +73,7 @@ test("compose reads the members from hub's versioned status --json", () => {
   );
 });
 
-test('compose refuses a hub whose status --json version it does not read', () => {
+test('compose refuses a hub whose status --json version it does not read, or that prints no JSON', () => {
   const { root, env } = setup();
   const other = path.join(root, 'other-hub');
   fs.writeFileSync(
@@ -80,6 +84,11 @@ test('compose refuses a hub whose status --json version it does not read', () =>
   assert.throws(
     () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
     /status version 2; this compose reads version 1\. Rebuild both, or fix HERDR_TEAM_HUB_BIN\./,
+  );
+  fs.writeFileSync(other, `#!${process.execPath}\nconsole.log('usage: other-hub');\n`);
+  assert.throws(
+    () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
+    /reports status version none; this compose reads version 1/,
   );
 });
 

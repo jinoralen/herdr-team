@@ -15,7 +15,8 @@ Definitions are hub's: starting one agent from a file needs no team.
 
 ## Consequences
 
-- `status --json` and `invite`'s options and exit codes are a contract. The JSON carries a
+- `status --json` and `invite`'s options and exit codes are a contract; 75 means "retry after a
+  tick" in both, and compose passes hub's on. The JSON carries a
   `version`; compose refuses one it doesn't know, and a test pins what compose depends on.
 - Both executables come from one build. A mismatch only happens when `HERDR_TEAM_HUB_BIN` points
   compose at another build, and the version check names it.

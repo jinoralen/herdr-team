@@ -5,12 +5,13 @@
 import { Command, Option } from '@commander-js/extra-typings';
 import { cliHerdr } from '@herdr/herdr';
 import { shellQuote } from '@herdr/terminal';
-import { join, leave, message, orientation, parseTo, SELF, skill, status } from '#agent';
+import { exitCode, guide, join, leave, message, orientation, parseTo, SELF, status } from '#agent';
 import { version } from '#package';
 import { tick } from '#rooms';
 import { appendLog, rootDir } from '#store';
+import { agents } from './agents.ts';
 import { launch } from './launch.ts';
-import { invite } from './remote.ts';
+import { invite, UncertainStartup } from './remote.ts';
 import { unknownCommand } from './unknown.ts';
 
 const program = new Command()
@@ -22,15 +23,21 @@ const program = new Command()
   .showSuggestionAfterError(false)
   .version(version, '-v, --version', 'print the version')
   .addHelpText('before', () => orientation())
-  .addHelpText('after', `\nAgents: run \`${SELF} skill\` to learn how to use the room.`)
+  .addHelpText('after', `\nAgents: run \`${SELF} guide\` to learn how to use the room.`)
   .commandsGroup('Agent commands:');
 
 // Old forms get the line to run instead of a bare "unknown option".
-function refuseOldJoin(options: { as?: string; agent?: string | true }): void {
+function refuseOldJoin(options: {
+  as?: string;
+  agent?: string | true;
+  model?: string;
+  prompt?: string;
+}): void {
   if (options.as !== undefined) {
     throw new Error(`The agent is positional now: ${SELF} join ${shellQuote(options.as)}`);
   }
-  if (options.agent !== undefined) {
+  // --model and --prompt only ever went with --agent: what join started then, invite starts now.
+  if ([options.agent, options.model, options.prompt].some((o) => o !== undefined)) {
     throw new Error(
       `Starting an agent moved to invite: ${SELF} invite <agent>, or ${SELF} invite --agent <kind> --handle <handle> --description <text>`,
     );
@@ -47,6 +54,7 @@ function refuseOldInvite(agent: string | undefined, as: string | undefined): voi
   }
 }
 
+// The [agent] argument of join and invite, which read definitions the same way.
 const AGENT = 'an agent definition from ~/.config/herdr-team/agents (name or path)';
 
 program
@@ -62,10 +70,12 @@ program
       'To start an agent, use invite.',
   )
   .argument('[agent]', AGENT)
-  .option('--description <text>', 'short role shown to the other members')
+  .option('-d, --description <text>', 'short role shown to the other members')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
   .addOption(new Option('--as <definition>').hideHelp())
   .addOption(new Option('--agent [type]').hideHelp())
+  .addOption(new Option('--model <id>').hideHelp())
+  .addOption(new Option('--prompt <text>').hideHelp())
   .action((agent, options) => {
     refuseOldJoin(options);
     console.log(join({ as: agent, description: options.description, handle: options.handle }));
@@ -105,7 +115,7 @@ program
   });
 
 program
-  .command('skill')
+  .command('guide')
   .summary('how to use the room: your handle, members, rules (agent)')
   .description(
     "Print the guide for agents. In a pane that joined, it is that agent's own: its\n" +
@@ -113,7 +123,16 @@ program
       'guide. It only reads, so run it whenever the rules are no longer in your context.',
   )
   .action(() => {
-    console.log(skill());
+    console.log(guide());
+  });
+
+// The guide's old name, which guides and deliveries already in an agent's context still name.
+program
+  .command('skill', { hidden: true })
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(() => {
+    throw new Error(`skill is called guide now: ${SELF} guide`);
   });
 
 program
@@ -141,14 +160,50 @@ program
   .option('--pane <pane>', 'start in this shell pane instead of the current one, e.g. w1:p3')
   .option('--agent <type>', "codex, claude or pi; overrides the definition's kind")
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
-  .option('--description <text>', 'short role shown to the other members')
+  .option('-d, --description <text>', 'short role shown to the other members')
   .option('--model <id>', 'model for the agent, passed to it unchanged')
   .option('--prompt <text>', 'initial task after the guide')
+  .option('--json', 'with --pane: print the outcome as JSON, failures and uncertain ones included')
   .addOption(new Option('--as <definition>').hideHelp())
-  .action(async (agent, { pane, as, ...options }) => {
+  .action(async (agent, { pane, as, json, ...options }) => {
     refuseOldInvite(agent, as);
     const start = { ...options, as: agent };
-    console.log(pane === undefined ? await launch(start) : await invite({ ...start, pane }));
+    if (pane === undefined) {
+      if (json) {
+        throw new Error('--json needs --pane: without it, the agent takes over this terminal.');
+      }
+      console.log(await launch(start));
+    } else if (json) {
+      await inviteJson({ ...start, pane });
+    } else {
+      console.log((await invite({ ...start, pane })).text);
+    }
+  });
+
+// invite --pane --json: one JSON line on stdout whatever happens, for a lead or script to read.
+// uncertain: startup began and may have left the agent or its guide behind; look before retrying.
+async function inviteJson(start: Parameters<typeof invite>[0]): Promise<void> {
+  try {
+    const { text: _, ...invited } = await invite(start);
+    console.log(JSON.stringify({ ok: true, ...invited, uncertain: false }));
+  } catch (error) {
+    const uncertain = error instanceof UncertainStartup;
+    console.log(JSON.stringify({ ok: false, error: (error as Error).message, uncertain }));
+    process.exitCode = exitCode(error);
+  }
+}
+
+program
+  .command('agents')
+  .summary('list the agent definitions join and invite can use')
+  .description(
+    "List the agent definitions in ~/.config/herdr-team/agents: each one's handle, kind,\n" +
+      'model and description, and what is wrong with any that cannot be used. Only reads\n' +
+      'the folder.',
+  )
+  .option('--json', 'print the definitions as JSON')
+  .action((options) => {
+    console.log(agents({ json: options.json }));
   });
 
 program
@@ -188,7 +243,11 @@ program.on('command:*', ([name]: string[]) => {
   console.error(
     unknownCommand(
       name ?? '',
-      program.commands.map((c) => c.name()).filter((name) => name !== 'tick'),
+      // As help lists them: hidden ones (tick, the old skill) left out.
+      program
+        .createHelp()
+        .visibleCommands(program)
+        .map((c) => c.name()),
     ),
   );
   process.exitCode = 1;
@@ -236,7 +295,7 @@ async function main(): Promise<void> {
     await program.parseAsync();
   } catch (error) {
     console.error(`error: ${(error as Error).message}`);
-    process.exitCode = 1;
+    process.exitCode = exitCode(error);
   }
 }
 

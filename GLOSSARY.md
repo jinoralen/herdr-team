@@ -30,7 +30,7 @@ _Avoid_: profile, persona, agent config (on the command line it is the `<agent>`
 
 **Instructions**:
 A definition's body: the standing role of an agent that joined as that definition, given after the
-guide and repeated by `skill`.
+guide and repeated by `guide`.
 _Avoid_: system prompt, guide (the guide is the room's rules)
 
 **Invite**:
@@ -90,7 +90,7 @@ A notice to a message's author that it was dropped for, or may not have reached,
 does wake the author.
 
 **Guide**:
-The rules for talking in a room, printed on joining and again by the `skill` command.
+The rules for talking in a room, printed on joining and again by the `guide` command.
 _Avoid_: skill (that word means agent skills), instructions, manual
 
 ## Delivery

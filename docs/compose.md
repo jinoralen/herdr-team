@@ -17,7 +17,8 @@ bun run build
 ```
 
 Run these inside a Herdr workspace with the hub plugin installed. From a running
-agent, `up` prints coordinator instructions and preserves that agent. From an
+agent, `up` prints coordinator instructions and preserves that agent; it joins as `@lead`, as the
+`lead.use` definition when the team names one, so peers see that role and it gets those instructions. From an
 interactive shell, `lead.use` starts the lead through hub in the caller's pane.
 The lead pane belongs to the user and is never closed by compose.
 

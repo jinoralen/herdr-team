@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { down, status, up } from '@herdr/compose';
+import { down, status, teams, up } from '@herdr/compose';
 import { fixture } from './fixture.ts';
 
 test('up starts through hub, keeps healthy conversations and moves layout without restarting', async () => {
@@ -35,6 +35,13 @@ test('changed purpose waits for hub to retire the old membership before replacin
   await up(f);
   await f.write('Review security');
   await assert.rejects(up(f), /occupied|draining/);
+  // Retrying after a tick fixes it, so the command line says so with EX_TEMPFAIL.
+  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file], {
+    env: f.env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  assert.equal(await cli.exited, 75, await new Response(cli.stderr).text());
   assert.equal((await f.read()).panes.filter((p) => p.agent === 'codex').length, 1);
   await f.tick();
   await up(f);
@@ -344,6 +351,15 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
   assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
 });
 
+test('up --dry-run plans from a script in a shell pane, where up itself is refused', async () => {
+  const f = await fixture();
+  const { panes } = await f.read();
+  await f.change({ panes: panes.map((p) => ({ ...p, agent: null })) });
+  const planned = await up({ ...f, interactive: false, dryRun: true });
+  assert.match(planned.output, /Start the codex lead in this pane\.$/);
+  await assert.rejects(up({ ...f, interactive: false }), /No agent is recognized in this pane/);
+});
+
 test("status shows each helper's room membership, and JSON for status, down and up", async () => {
   const f = await fixture();
   await up(f);
@@ -379,6 +395,50 @@ test("status shows each helper's room membership, and JSON for status, down and 
     deployment: null,
     removed: [],
   });
+});
+
+test("a running lead is told to join as the team's lead definition, else with a made-up role", async () => {
+  const f = await fixture();
+  const coordinator = path.join(f.root, 'team', 'agents', 'coordinator.md');
+  assert.match(
+    (await up(f)).output,
+    new RegExp(`First join as @lead: .* join '?${coordinator}'? --handle lead\\. Confirm`),
+  );
+  await down(f);
+  await f.tick();
+  await Bun.write(
+    f.file,
+    (await Bun.file(f.file).text()).replace('lead:\n  use: coordinator\n', ''),
+  );
+  assert.match(
+    (await up(f)).output,
+    /First join as @lead: .* join --handle lead --description 'lead, coordinates test'\. Confirm/,
+  );
+});
+
+test('teams lists the team files, each read as up would, without Herdr', async () => {
+  const f = await fixture();
+  assert.match(await teams({ env: f.env }), /^No teams in .*teams\./);
+  const dir = path.join(f.root, 'team', 'teams');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'review.yaml'),
+    (await Bun.file(f.file).text()).replace('name: test', 'name: review'),
+  );
+  fs.writeFileSync(path.join(dir, 'broken.yml'), 'name: broken\nagents:\n  a:\n    use: nobody\n');
+  const before = (await f.read()).calls.length;
+  const listed = await teams({ env: f.env });
+  assert.match(listed, / {2}review: deployment review, agents reviewer/);
+  assert.match(listed, / {2}broken: /);
+  const json = JSON.parse(await teams({ env: f.env, json: true }));
+  assert.deepEqual(
+    json.teams.map((t: { name: string; problem?: string }) => [t.name, !!t.problem]),
+    [
+      ['broken', true],
+      ['review', false],
+    ],
+  );
+  assert.equal((await f.read()).calls.length, before);
 });
 
 // The compose executable, as users run it.

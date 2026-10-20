@@ -2,7 +2,7 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { join, leave, message, skill } from '#agent';
+import { guide, join, leave, message } from '#agent';
 import { installed, setup } from '#testing';
 
 test('join registers the pane, assigns handles and returns instructions', async () => {
@@ -161,14 +161,14 @@ test('join <agent> takes the handle, description and instructions from a definit
   assert.match(out, /as @reviewer\./);
   assert.match(
     out,
-    /These rules again: .* skill\n\nYour instructions:\nReview architecture when the lead assigns work\./,
+    /These rules again: .* guide\n\nYour instructions:\nReview architecture when the lead assigns work\./,
   );
   assert.equal(store().member('reviewer')?.description, 'reviews architecture, read-only');
   await tick();
   const peer = join({ description: 'codex', env: env('p2') });
   assert.match(peer, /@reviewer — reviews architecture, read-only/);
   assert.doesNotMatch(peer, /Your instructions/);
-  assert.match(skill({ env: env('p1') }), /Your instructions:\nReview architecture/);
+  assert.match(guide({ env: env('p1') }), /Your instructions:\nReview architecture/);
 });
 
 test('with an agent definition, the given handle and description override the definition', async () => {
@@ -211,6 +211,6 @@ test('instructions are stripped of terminal control sequences, like descriptions
   const controls = (text: string): boolean => text.includes('\x1b') || text.includes('\x07');
   assert.equal(controls(out), false);
   assert.match(out, /lead assigns work\.\n\[2JThen clear\./);
-  assert.equal(controls(skill({ env: env('p1') })), false);
+  assert.equal(controls(guide({ env: env('p1') })), false);
   assert.equal(controls(store().member('reviewer')?.instructions ?? ''), false);
 });

@@ -21,7 +21,7 @@ Nothing goes on your PATH. Agents run the executable by its full path (`<repo>/d
 ## Quick start
 
 1. In each agent you want in the conversation, paste:
-   > Run `<repo>/dist/herdr-hub join --description "codex, focuses on performance"` and follow the instructions it prints.
+   > Run `<repo>/dist/herdr-hub join -d "codex, focuses on performance"` and follow the instructions it prints.
 
    Or name an [agent definition](#agent-definitions): `<repo>/dist/herdr-hub join reviewer`.
 
@@ -48,9 +48,10 @@ commands by who runs them.
 |---|---|---|
 | [`join [agent]`](docs/commands/hub/join.md) | agent | Join this pane's room, as an agent definition or with `--description`; never starts an agent |
 | [`message`](docs/commands/hub/message.md) | agent | Post to the room; `--to` alone decides who gets it; `--attach` adds files |
-| [`skill`](docs/commands/hub/skill.md) | agent | Print the guide again, e.g. after context compaction |
+| [`guide`](docs/commands/hub/guide.md) | agent | Print the guide again, e.g. after context compaction |
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told |
-| [`invite [agent]`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in this shell pane, or in another with `--pane`, and bring it into its room |
+| [`invite [agent]`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in this shell pane, or in another with `--pane` (`--json` there), and bring it into its room |
+| [`agents`](docs/commands/hub/agents.md) | user or lead agent | List the agent definitions and what is wrong with any broken one; `--json` |
 | [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` (versioned) for automation |
 | [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents; not in `--help` |
 
@@ -85,8 +86,10 @@ by [definition](#agent-definitions) (`use: reviewer`) plus where they run; see
 | [`herdr-compose up [team]`](docs/commands/compose/up.md) | Create or reconcile a team from YAML, by name (`~/.config/herdr-team/teams/`), file, or `./herdr-team.yaml`; `--dry-run` shows what it would change |
 | [`herdr-compose down [team]`](docs/commands/compose/down.md) | Close owned helpers while keeping the lead; without a team, the workspace's only deployment |
 | [`herdr-compose status`](docs/commands/compose/status.md) | Show recorded deployments in this workspace and their helpers' room membership |
+| [`herdr-compose teams`](docs/commands/compose/teams.md) | List the teams in `~/.config/herdr-team/teams/` and what is wrong with any broken one |
 
-All three take `--json`.
+All four take `--json`. A failure that waiting fixes, such as a handle hub hasn't freed yet, exits
+with 75 (`EX_TEMPFAIL`) instead of 1, in hub too: let a tick run, then retry.
 
 ## Stopping a conversation
 
@@ -172,7 +175,7 @@ Each hub module keeps its tests in its own `tests/` folder (`rooms/tests/deliver
 bun run build:hub                           # build only hub
 bun run --filter @herdr/hub test            # hub's package tests
 bun run --filter '@herdr/*' typecheck       # check each package independently
-HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli
+HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli ./tests/compose ./packages/compose   # against the built executables
 ```
 
 `bun install` also installs a git pre-commit hook ([lefthook](https://lefthook.dev), `lefthook.yml`) that runs Biome on staged files, the type check, Knip and the tests. Skip it once with `git commit --no-verify`.

@@ -11,10 +11,10 @@ import {
   withDeploymentLock,
 } from '#store';
 import { recoverAllocations } from './allocation.ts';
-import { Hub } from './hub.ts';
+import { COMPOSE_SELF, Hub, isJoinOf } from './hub.ts';
 import { isCallerMember, prepareLead, type UpResult } from './lead.ts';
 import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './manifest.ts';
-import { dryRunText, keepAgent, needsTab, planChanges } from './plan.ts';
+import { dryRunText, needsTab, planChanges } from './plan.ts';
 import {
   cleanupTabs,
   createAgent,
@@ -25,6 +25,7 @@ import {
   removeAgent,
   save,
 } from './resources.ts';
+import { RetryLater } from './retry.ts';
 
 // Linux caps one argv entry at 128 KiB; reserve space for the member guide.
 const MAX_HELPER_CONTEXT_BYTES = 80_000;
@@ -54,7 +55,16 @@ export async function up({
     const plan = await loadPlan(file, leadHandle, env);
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, current);
-    const lead = prepareLead({ plan, file, hub, pane, current, leadHandle, interactive });
+    // A dry run starts no lead, so it plans from a script too: it says what up would start.
+    const lead = prepareLead({
+      plan,
+      file,
+      hub,
+      pane,
+      current,
+      leadHandle,
+      interactive: interactive || dryRun,
+    });
     const state = states.find((s) => s.name === plan.name) ?? {
       room: workspace,
       name: plan.name,
@@ -64,8 +74,8 @@ export async function up({
       allocations: [],
     };
     const r: Runtime = { hub, root, state, herdr, lines: [], dry: dryRun };
-    preflight(r, plan, states);
-    const changes = await planChanges(r, plan);
+    await preflight(r, plan, states);
+    const { changes, kept } = await planChanges(r, plan);
     if (dryRun) {
       return {
         output: sanitizeForTerminal(dryRunText(plan.name, changes, lead.launch)),
@@ -74,7 +84,7 @@ export async function up({
       };
     }
     await recoverAllocations(r);
-    await reconcile(r, plan);
+    await reconcile(r, plan, kept);
     const summary = sanitizeForTerminal(
       r.lines.join('\n') || `Deployment ${plan.name} is unchanged.`,
     );
@@ -109,27 +119,10 @@ function assertUnmanagedCaller(states: Deployment[], pane: string, current: Agen
   }
 }
 
-function preflight(r: Runtime, plan: ManifestPlan, states: Deployment[]): void {
+async function preflight(r: Runtime, plan: ManifestPlan, states: Deployment[]): Promise<void> {
+  const panes = new Set((await r.herdr.listPaneTopology()).map((p) => p.pane_id));
   for (const desired of Object.values(plan.agents)) {
-    const owner = states.find(
-      (s) =>
-        s.name !== plan.name && Object.values(s.agents).some((a) => a.handle === desired.handle),
-    );
-    // Ownership follows the recorded handle, even when its desired helper key changes.
-    // Unique desired handles ensure its previous helper is retired before recreation.
-    const old = Object.values(r.state.agents).find((agent) => agent.handle === desired.handle);
-    const member = r.hub.member(desired.handle);
-    const ours =
-      old?.handle === desired.handle &&
-      (old.joinedAt === member?.joined_at || member?.terminal_id === old.terminal);
-    if (
-      owner ||
-      (member && !ours && (['pending', 'active'].includes(member.status) || member.queuedFrom))
-    ) {
-      throw new Error(
-        `Handle @${desired.handle} is occupied; choose another handle before running up.`,
-      );
-    }
+    checkHandle(r, plan, states, desired.handle, panes);
     // Linux caps one argv entry at 128 KiB. Leave room for the member guide around the purpose.
     if (Buffer.byteLength(desired.prompt) > MAX_HELPER_CONTEXT_BYTES) {
       throw new Error(`Context for @${desired.handle} exceeds 80 KB; use smaller shared files.`);
@@ -137,9 +130,58 @@ function preflight(r: Runtime, plan: ManifestPlan, states: Deployment[]): void {
   }
 }
 
-async function reconcile(r: Runtime, plan: ManifestPlan): Promise<void> {
+// A helper's handle is free for this deployment: no other deployment owns it, and no member
+// compose didn't start holds it. Waiting frees it when that member's pane has closed (the next
+// tick retires it) or it only has posts left to deliver. panes: the live pane IDs.
+function checkHandle(
+  r: Runtime,
+  plan: ManifestPlan,
+  states: Deployment[],
+  handle: string,
+  panes: Set<string>,
+): void {
+  const owner = states.find(
+    (s) => s.name !== plan.name && Object.values(s.agents).some((a) => a.handle === handle),
+  );
+  // Ownership follows the recorded handle, even when its desired helper key changes.
+  // Unique desired handles ensure its previous helper is retired before recreation.
+  const old = Object.values(r.state.agents).find((agent) => agent.handle === handle);
+  const member = r.hub.member(handle);
+  const ours = !!old && !!member && isJoinOf(member, old);
+  const foreign = member && !ours ? member : null;
+  const holds = !!foreign && ['pending', 'active'].includes(foreign.status);
+  if (owner || (holds && panes.has(foreign.pane_id))) {
+    throw new Error(`Handle @${handle} is occupied; choose another handle before running up.`);
+  }
+  if (holds) {
+    throw new RetryLater(
+      `Handle @${handle} belongs to a member whose pane has closed. Retry ${COMPOSE_SELF} up once a tick has retired it.`,
+    );
+  }
+  if (foreign?.queuedFrom) {
+    throw new RetryLater(
+      `Handle @${handle} still has undelivered posts from its previous member. Retry ${COMPOSE_SELF} up once a tick has delivered them.`,
+    );
+  }
+}
+
+// kept: the recorded helpers the plan keeps; every other one is removed. The plan was read before
+// recovery and seconds of Herdr calls, so a tick may have retired a kept helper since: its
+// membership is read again (from hub only), and a helper that is no longer the same join is replaced.
+async function reconcile(r: Runtime, plan: ManifestPlan, kept: Set<string>): Promise<void> {
+  const members = r.hub.members();
+  const stillKept = (key: string): boolean => {
+    const old = r.state.agents[key];
+    const member = old && members.find((m) => m.handle === old.handle);
+    return (
+      kept.has(key) &&
+      !!member &&
+      member.joined_at === old.joinedAt &&
+      ['active', 'pending'].includes(member.status)
+    );
+  };
   for (const key of Object.keys(r.state.agents)) {
-    if (!(await keepAgent(r, key, plan))) {
+    if (!stillKept(key)) {
       await removeAgent(r, key);
     }
   }
@@ -260,7 +302,8 @@ export async function down({
   const outcome = await withDeploymentLock(root, async (): Promise<DownOutcome> => {
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, await callerAgent(herdr, hub, pane));
-    const state = name === undefined ? onlyDeployment(states) : states.find((s) => s.name === name);
+    const state =
+      name === undefined ? onlyDeployment(states) : (states.find((s) => s.name === name) ?? null);
     if (!state) {
       return name === undefined
         ? { deployment: null, removed: [], text: 'No deployments in this workspace.' }
@@ -295,11 +338,11 @@ async function tearDown(r: Runtime): Promise<void> {
 }
 
 // down without a team: the workspace's only deployment, or none; it can't guess between several.
-function onlyDeployment(states: Deployment[]): Deployment | undefined {
+function onlyDeployment(states: Deployment[]): Deployment | null {
   if (states.length > 1) {
     throw new Error(
       `This workspace has ${states.length} deployments: ${states.map((s) => s.name).join(', ')}. Name the one to take down.`,
     );
   }
-  return states[0];
+  return states[0] ?? null;
 }

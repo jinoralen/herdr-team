@@ -9,7 +9,7 @@ import { type Change, paneFor, type Runtime, save } from './resources.ts';
 
 // A helper is kept while its configuration is unchanged and its conversation is still the one
 // compose started: same agent session, membership and live pane.
-export async function keepAgent(r: Runtime, key: string, plan: ManifestPlan): Promise<boolean> {
+async function keepAgent(r: Runtime, key: string, plan: ManifestPlan): Promise<boolean> {
   const old = r.state.agents[key];
   const desired = plan.agents[key];
   if (!old || !desired || old.fingerprint !== desired.fingerprint || old.phase !== 'ready') {
@@ -53,8 +53,12 @@ export function needsTab(
   return !present || (!tab.root && missing) || outside;
 }
 
-// The changes up makes, in its order, worked out without changing anything.
-export async function planChanges(r: Runtime, plan: ManifestPlan): Promise<Change[]> {
+// The changes up makes, in its order, worked out without changing anything; kept: the recorded
+// helpers it keeps, so reconcile acts on the same answer without asking Herdr and hub again.
+export async function planChanges(
+  r: Runtime,
+  plan: ManifestPlan,
+): Promise<{ changes: Change[]; kept: Set<string> }> {
   const dry = { ...r, dry: true };
   const recover: Change[] = r.state.allocations.length
     ? [{ action: 'recover', allocations: r.state.allocations.length }]
@@ -63,7 +67,10 @@ export async function planChanges(r: Runtime, plan: ManifestPlan): Promise<Chang
   const closed: Change[] = Object.keys(r.state.tabs)
     .filter((key) => !Object.values(plan.agents).some((a) => a.tab === key))
     .map((tab) => ({ action: 'close-tab', tab }));
-  return [...recover, ...changes, ...closed, ...(await tabChanges(dry, plan, kept))];
+  return {
+    changes: [...recover, ...changes, ...closed, ...(await tabChanges(dry, plan, kept))],
+    kept,
+  };
 }
 
 // Recorded helpers: removed, kept or replaced.
@@ -98,13 +105,13 @@ async function tabChanges(r: Runtime, plan: ManifestPlan, kept: Set<string>): Pr
     const recorded = Object.hasOwn(r.state.tabs, tab) ? r.state.tabs[tab] : undefined;
     const rebuilt = needsTab(recorded, panes, spec.layout, order, r.state);
     const placed = order.flatMap((key) =>
-      placement({ r, plan, key, tab, panes, kept, moved: rebuilt ? null : recorded?.id }),
+      placement({ r, plan, key, tab, panes, kept, stays: rebuilt ? null : recorded?.id }),
     );
     return rebuilt ? [{ action: 'arrange-tab', tab }, ...placed] : placed;
   });
 }
 
-// A helper in its tab: started if compose has none, moved if a kept one is elsewhere. moved: the
+// A helper in its tab: started if compose has none, moved if a kept one is elsewhere. stays: the
 // tab it may stay in, or null when the tab is laid out again and every kept helper moves.
 function placement({
   r,
@@ -113,7 +120,7 @@ function placement({
   tab,
   panes,
   kept,
-  moved,
+  stays,
 }: {
   r: Runtime;
   plan: ManifestPlan;
@@ -121,17 +128,21 @@ function placement({
   tab: string;
   panes: Pane[];
   kept: Set<string>;
-  moved: string | null | undefined;
+  stays: string | null | undefined;
 }): Change[] {
   const handle = plan.agents[key]?.handle;
+  if (handle === undefined) {
+    return [];
+  }
   const old = r.state.agents[key];
   if (!old) {
     return [{ action: 'start', agent: key, handle, tab }];
   }
   const live = kept.has(key) ? paneFor(panes, old) : null;
-  return live && live.tab_id !== moved ? [{ action: 'move', agent: key, handle, tab }] : [];
+  return live && live.tab_id !== stays ? [{ action: 'move', agent: key, handle, tab }] : [];
 }
 
+// Each part of a helper's fingerprint as a dry run names it, in the order reasons are listed.
 const PART_NAMES: Record<keyof Parts, string> = {
   definition: 'its definition',
   handle: 'its handle',
@@ -153,18 +164,28 @@ function replaceReasons(old: ManagedAgent, parts: Parts, fingerprint: string): s
     .map((part) => `${PART_NAMES[part]} changed`);
 }
 
-const DESCRIBE: Record<Change['action'], (c: Change) => string> = {
-  recover: (c: Change): string => `Recover ${c.allocations} unfinished pane allocation(s).`,
-  remove: (c: Change): string => `Close @${c.handle} (${c.agent}): it is no longer in the team.`,
-  replace: (c: Change): string => `Replace @${c.handle} (${c.agent}): ${c.reasons?.join(', ')}.`,
-  'close-tab': (c: Change): string => `Close tab ${c.tab}.`,
-  'arrange-tab': (c: Change): string => `Lay out tab ${c.tab} in a new tab.`,
-  start: (c: Change): string => `Start @${c.handle} (${c.agent}) in tab ${c.tab}.`,
-  move: (c: Change): string => `Move @${c.handle} (${c.agent}) to tab ${c.tab}.`,
-};
+// One line of the dry run.
+function describe(c: Change): string {
+  switch (c.action) {
+    case 'recover':
+      return `Recover ${c.allocations} unfinished pane allocation(s).`;
+    case 'remove':
+      return `Close @${c.handle} (${c.agent}): it is no longer in the team.`;
+    case 'replace':
+      return `Replace @${c.handle} (${c.agent}): ${c.reasons.join(', ')}.`;
+    case 'close-tab':
+      return `Close tab ${c.tab}.`;
+    case 'arrange-tab':
+      return `Lay out tab ${c.tab} in a new tab.`;
+    case 'start':
+      return `Start @${c.handle} (${c.agent}) in tab ${c.tab}.`;
+    case 'move':
+      return `Move @${c.handle} (${c.agent}) to tab ${c.tab}.`;
+  }
+}
 
 export function dryRunText(name: string, changes: Change[], launch: UpResult['launch']): string {
-  const lines = changes.map((c) => DESCRIBE[c.action](c));
+  const lines = changes.map(describe);
   if (launch) {
     lines.push(`Start the ${launch.kind} lead in this pane.`);
   }

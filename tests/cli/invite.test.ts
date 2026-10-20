@@ -239,7 +239,7 @@ test('initial tasks are for invite: join takes none', async () => {
     inPane: true,
   });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /unknown option '--prompt'/);
+  assert.match(result.stderr, /Starting an agent moved to invite: .* invite <agent>/);
 });
 
 test('invite startup requires a description even with a handle and initial task', async () => {
@@ -266,7 +266,7 @@ test('model selection is for invite and validates before changing membership', a
   const { run, calls } = await remote();
   assert.match(
     (await run(['join', '--model', 'example', '--description', 'role'])).stderr,
-    /unknown option '--model'/,
+    /Starting an agent moved to invite: .* invite <agent>/,
   );
   for (const model of [
     '',
@@ -296,4 +296,31 @@ test('invite startup preserves Claude extended-context model aliases', async () 
       model,
     ]);
   }
+});
+
+test('invite --pane --json prints one JSON line, saying when the outcome is uncertain', async () => {
+  const ok = await (await remote()).run([...JOIN, '--json'], { inPane: true });
+  assert.equal(ok.code, 0, ok.stderr);
+  assert.deepEqual(JSON.parse(ok.stdout), {
+    ok: true,
+    agent: 'codex',
+    handle: 'reviewer',
+    pane: 'w2:p2',
+    room: 'w2',
+    uncertain: false,
+  });
+  for (const [scenario, uncertain] of [
+    ['busy', false],
+    ['prompt-timeout', true],
+  ] as const) {
+    const result = await (await remote(scenario)).run([...JOIN, '--json'], { inPane: true });
+    assert.equal(result.code, 1);
+    const outcome = JSON.parse(result.stdout);
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.uncertain, uncertain);
+    assert.equal(typeof outcome.error, 'string');
+  }
+  const here = await cli().run(['invite', 'reviewer', '--json'], { inPane: true });
+  assert.equal(here.code, 1);
+  assert.match(here.stderr, /--json needs --pane/);
 });

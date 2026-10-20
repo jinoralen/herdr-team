@@ -1,4 +1,4 @@
-# `skill`
+# `guide`
 
 ## What it does
 
@@ -6,8 +6,8 @@ Prints the guide. In a pane that joined, it's that member's own: its handle, the
 the rules, as [`join`](join.md) printed them. Anywhere else, a general guide that says to join only
 when the user asks. It only reads.
 
-The command is called `skill`, but what it prints is the **guide**; the word "skill" otherwise means
-agent skills.
+It was called `skill`, a word that means agent skills; the old name is refused with the new one,
+for guides and deliveries already in an agent's context.
 
 ## When to use it
 
@@ -18,7 +18,7 @@ agent skills.
 ## Common questions
 
 **What does an agent do after its context is compacted?**
-Run `skill`: it gets its handle, the members and the rules back. Messages delivered before the
+Run `guide`: it gets its handle, the members and the rules back. Messages delivered before the
 compaction are gone ([ADR 0004](../../adr/0004-deliver-in-full-keep-no-history.md)).
 
 ## It's working if

@@ -5,7 +5,9 @@ import { cliLayoutHerdr } from '@herdr/herdr';
 import { down, up } from './commands.ts';
 import { COMPOSE_SELF } from './hub.ts';
 import { execLead } from './lead.ts';
+import { exitCode } from './retry.ts';
 import { status } from './status.ts';
+import { teams } from './teams.ts';
 
 const program = new Command()
   .name(COMPOSE_SELF)
@@ -25,7 +27,8 @@ program
     const result = await up({
       file,
       herdr: cliLayoutHerdr(),
-      interactive: !!process.stdin.isTTY,
+      // JSON is for a script reading stdout, which a lead taking over the terminal would break.
+      interactive: !!process.stdin.isTTY && !options.json,
       dryRun,
     });
     console.log(
@@ -61,6 +64,14 @@ program
     console.log(status({ json: options.json }));
   });
 
+program
+  .command('teams')
+  .summary('list the teams in ~/.config/herdr-team/teams and check each one')
+  .option('--json', 'print the teams as JSON')
+  .action(async (options) => {
+    console.log(await teams({ json: options.json }));
+  });
+
 if (import.meta.main) {
   try {
     if (process.argv.length <= 2) {
@@ -70,6 +81,6 @@ if (import.meta.main) {
     }
   } catch (error) {
     console.error(`error: ${(error as Error).message}`);
-    process.exitCode = 1;
+    process.exitCode = exitCode(error);
   }
 }

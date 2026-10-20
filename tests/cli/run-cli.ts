@@ -52,6 +52,8 @@ export function cli(env: Record<string, string> = {}): Cli {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
     HERDR_TEAM_STATE_DIR: path.join(root, 'state'),
+    // Never the user's own definitions and teams: tests stay the same on any machine.
+    HERDR_TEAM_DIR: path.join(root, 'team'),
     HERDR_BIN_PATH: herdr,
     PROMPTS: promptsLog,
     ...env,

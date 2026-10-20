@@ -4,7 +4,7 @@
 import { requirePaneContext } from '@herdr/herdr';
 import { sanitizeForTerminal } from '@herdr/terminal';
 import { type Deployment, deployments, type ManagedAgent, rootDir } from '#store';
-import { Hub, type Membership } from './hub.ts';
+import { Hub, isJoinOf, type Membership } from './hub.ts';
 
 type Room = Membership['status'] | 'not a member';
 
@@ -58,11 +58,8 @@ function deploymentLine(d: Deployment, room: (a: ManagedAgent) => Room | null): 
   return `Deployment ${d.name}: ${agents.join(', ') || 'no agents'}`;
 }
 
-// The member this helper joined as: same handle, and the join or terminal compose recorded.
-// Another member under the handle (after the helper left) is not it.
+// The room status of the member this helper joined as.
 function roomState(members: Membership[], a: ManagedAgent): Room {
-  const member = members.find(
-    (m) => m.handle === a.handle && (m.joined_at === a.joinedAt || m.terminal_id === a.terminal),
-  );
+  const member = members.find((m) => m.handle === a.handle && isJoinOf(m, a));
   return member?.status ?? 'not a member';
 }

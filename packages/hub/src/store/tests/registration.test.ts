@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { skill, status } from '#agent';
+import { guide, status } from '#agent';
 import { dbPath, Store } from '#store';
 import { installed } from '#testing';
 
@@ -27,8 +27,8 @@ test('handles and membership remain isolated between workspaces', async () => {
   assert.match(await joinAs('p2', 'codex writer'), /as @codex-2\./);
   assert.match(await joinAs('p1', 'different role'), /as @codex\./);
   assert.match(await joinAs('p3', 'codex', 'codex', 'w2'), /as @codex\./);
-  assert.match(skill({ env: env('p1') }), /@codex-2 — codex writer/);
-  assert.doesNotMatch(skill({ env: env('p3', 'w2') }), /codex-2/);
+  assert.match(guide({ env: env('p1') }), /@codex-2 — codex writer/);
+  assert.doesNotMatch(guide({ env: env('p3', 'w2') }), /codex-2/);
 });
 
 test('status is scoped to its workspace and strips terminal control bytes', async () => {

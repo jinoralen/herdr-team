@@ -77,23 +77,26 @@ const isPath = (ref: string, kind: Kind): boolean =>
   ref.includes('/') || kind.ext.some((ext) => ref.endsWith(ext));
 
 // A name is a file in the folder (agents/<name>.md, teams/<name>.yaml); a ref with a slash or the
-// file's extension is a path from cwd, a definition's extension optional.
-function locate(ref: string, kind: Kind, env: NodeJS.ProcessEnv, cwd: string): string {
+// file's extension is a path from cwd, a definition's extension optional. The files it may be.
+function candidates(ref: string, kind: Kind, env: NodeJS.ProcessEnv, cwd: string): string[] {
   if (!isPath(ref, kind)) {
     const dir = path.join(teamDir(env), kind.dir);
-    const names = kind.ext.map((ext) => path.join(dir, `${ref}${ext}`));
-    const file = names.find((name) => fs.existsSync(name));
-    if (!file) {
-      throw missing(ref, kind, dir, names[0] as string);
-    }
-    return file;
+    return kind.ext.map((ext) => path.join(dir, `${ref}${ext}`));
   }
   const hasExt = kind.ext.some((ext) => ref.endsWith(ext));
-  const file = path.resolve(cwd, hasExt || kind === KINDS.team ? ref : `${ref}${kind.ext[0]}`);
-  if (!fs.existsSync(file)) {
-    throw new Error(`No ${kind.what} file ${file}.`);
+  return [path.resolve(cwd, hasExt || kind === KINDS.team ? ref : `${ref}${kind.ext[0]}`)];
+}
+
+function locate(ref: string, kind: Kind, env: NodeJS.ProcessEnv, cwd: string): string {
+  const files = candidates(ref, kind, env, cwd);
+  const file = files.find((name) => fs.existsSync(name));
+  if (file) {
+    return file;
   }
-  return file;
+  if (isPath(ref, kind)) {
+    throw new Error(`No ${kind.what} file ${files[0]}.`);
+  }
+  throw missing(ref, kind, path.dirname(files[0] as string), files[0] as string);
 }
 
 // The names of the files of one kind in dir, without their extension.
@@ -141,6 +144,25 @@ export function teamFile(
   throw new Error(`No ${DEFAULT_TEAM} in ${cwd}. ${named}`);
 }
 
+// The file a definition ref names, or null when there is none (it may still fail to load). Throws
+// when the folder can't be read, so an unreadable folder isn't taken for an empty one.
+export function definitionFile(
+  ref: string,
+  { env = process.env, cwd = process.cwd() }: Options = {},
+): string | null {
+  for (const file of candidates(ref, KINDS.definition, env, cwd)) {
+    try {
+      fs.statSync(file);
+      return file;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+  return null;
+}
+
 export function loadDefinition(
   ref: string,
   { env = process.env, cwd = process.cwd() }: Options = {},
@@ -173,4 +195,37 @@ export function loadDefinition(
     ...(meta.model && { model: meta.model }),
     instructions: body.trim(),
   };
+}
+
+// One file in the folder, and what reading it found: problem says why it can't be used.
+export type Listed<T> = { name: string; file: string; value?: T; problem?: string };
+
+// Every definition in agents/, each read as join and invite would read it.
+export function listDefinitions({ env = process.env }: Options = {}): {
+  dir: string;
+  definitions: Listed<Definition>[];
+} {
+  const dir = path.join(teamDir(env), KINDS.definition.dir);
+  const definitions = namesIn(dir, KINDS.definition).map((name) => {
+    const file = path.join(dir, `${name}.md`);
+    try {
+      return { name, file, value: loadDefinition(file, { env }) };
+    } catch (error) {
+      return { name, file, problem: (error as Error).message };
+    }
+  });
+  return { dir, definitions };
+}
+
+// The team files in teams/, by name; reading them is compose's.
+export function listTeams({ env = process.env }: Options = {}): {
+  dir: string;
+  teams: { name: string; file: string }[];
+} {
+  const dir = path.join(teamDir(env), KINDS.team.dir);
+  const teams = namesIn(dir, KINDS.team).map((name) => ({
+    name,
+    file: locate(name, KINDS.team, env, dir),
+  }));
+  return { dir, teams };
 }

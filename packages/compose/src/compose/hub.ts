@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { shellQuote } from '@herdr/terminal';
 import { z } from 'zod';
+import type { ManagedAgent } from '#store';
+import { RETRY_LATER_EXIT, RetryLater } from './retry.ts';
 
 function words(name: string, source: () => string): string[] {
   if (Bun.main.startsWith('/$bunfs/')) {
@@ -26,6 +28,11 @@ const Membership = z.object({
   queuedFrom: z.boolean(),
 });
 export type Membership = z.infer<typeof Membership>;
+
+// The member is the helper's own join: the join or terminal compose recorded. Another member under
+// its handle (after the helper left) is not.
+export const isJoinOf = (member: Membership, helper: ManagedAgent): boolean =>
+  member.joined_at === helper.joinedAt || member.terminal_id === helper.terminal;
 // The `status --json` version this compose reads; hub bumps it when the shape changes.
 const SNAPSHOT_VERSION = 1;
 const Snapshot = z.object({
@@ -33,6 +40,15 @@ const Snapshot = z.object({
   room: z.string(),
   members: z.array(Membership),
 });
+
+// Hub's stdout as JSON, or null when it isn't: the version check below then names the hub.
+function parseJson(text: string): { version?: unknown } | null {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export class Hub {
   readonly words: string[];
@@ -52,7 +68,7 @@ export class Hub {
     if (result.exitCode !== 0) {
       throw new Error(result.stderr.toString().trim());
     }
-    const json = JSON.parse(result.stdout.toString());
+    const json = parseJson(result.stdout.toString());
     if (json?.version !== SNAPSHOT_VERSION) {
       throw new Error(
         `Hub at ${this.command} reports status version ${json?.version ?? 'none'}; this compose reads version ${SNAPSHOT_VERSION}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
@@ -94,7 +110,9 @@ export class Hub {
       proc.exited,
     ]);
     if (code !== 0) {
-      throw new Error(stderr.trim() || stdout.trim());
+      const message = stderr.trim() || stdout.trim();
+      // Hub's own "retry later" stays one for compose's caller.
+      throw code === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
     }
   }
   // invite starts the lead in the caller's own pane, and helpers with --pane in theirs. Kind,

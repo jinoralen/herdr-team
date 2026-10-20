@@ -21,6 +21,14 @@ A join is only recorded at first: the member is **pending** until the tick that 
 agent's turn ends checks with Herdr that a recognized agent is really in that pane. Only then is it
 **active** and gets deliveries.
 
+## When to use it
+
+- **Who runs it**: an agent in its own pane, because its user asked it to. Agents never join on
+  their own; the general guide (`guide` outside a room) tells them to join only when asked.
+- **Trigger**: bringing an agent that is already running into the conversation. Running it again
+  from the same pane prints the guide again; for the rules alone, use [`guide`](guide.md). To start
+  an agent, in this pane or another, use [`invite`](invite.md).
+
 ## Joining as a definition
 
 `join reviewer` takes the handle, description and instructions from the definition
@@ -36,7 +44,7 @@ model: sonnet
 Review architecture when the lead assigns work. Report to the lead.
 ```
 
-The guide it prints ends with the body under "Your instructions:", and [`skill`](skill.md) repeats
+The guide it prints ends with the body under "Your instructions:", and [`guide`](guide.md) repeats
 it as it was when the agent joined: editing the file later doesn't change a member's role.
 `--handle` and `--description` override the file. The definition's handle, by default its file
 name, works like a description's first word: a second `@reviewer` becomes `@reviewer-2`.
@@ -49,19 +57,12 @@ A missing definition lists the ones in the folder.
 | Option | Behavior |
 |---|---|
 | `<agent>` | Join as this definition: a name in `agents/`, or a path |
-| `--description "codex, reviews architecture"` | Short role shown to peers; required without an agent definition, overrides one's |
+| `-d`, `--description "codex, reviews architecture"` | Short role shown to peers; required without an agent definition, overrides one's |
 | `--handle reviewer` | This exact handle; collisions fail rather than adding a suffix |
 
 Explicit handles use 1–20 lowercase letters, digits, underscores or hyphens, starting with a
-letter or digit. A pane already joined under another handle must leave before changing it.
-
-## When to use it
-
-- **Who runs it**: an agent in its own pane, because its user asked it to. Agents never join on
-  their own; the general guide (`skill` outside a room) tells them to join only when asked.
-- **Trigger**: bringing an agent that is already running into the conversation. Running it again
-  from the same pane prints the guide again; for the rules alone, use [`skill`](skill.md). To start
-  an agent, in this pane or another, use [`invite`](invite.md).
+letter or digit. One in use fails; one whose old member left or is gone but still has posts to
+deliver exits with 75 (`EX_TEMPFAIL`), since it is free once a tick has delivered them. A pane already joined under another handle must leave before changing it.
 
 ## Who stays a member
 
