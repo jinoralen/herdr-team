@@ -2,7 +2,7 @@
 // option is offered, and nothing is offered that no longer exists. A command or option changed in
 // main.ts without its completion fails here.
 
-import { expect, test } from 'bun:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,12 +48,15 @@ for (const [name, program] of [
     .map((c) => c.name());
 
   test(`${name}'s zsh completion lists exactly its visible commands`, () => {
-    expect(listed(script).sort()).toEqual([...commands].sort());
+    assert.deepEqual(listed(script).sort(), [...commands].sort());
   });
 
   test(`${name}'s zsh completion offers exactly its top-level options`, () => {
     const top = script.slice(0, script.indexOf('case $state in'));
-    expect(flagsIn(top.slice(top.indexOf('_arguments -C'))).sort()).toEqual(flags(program).sort());
+    assert.deepEqual(
+      flagsIn(top.slice(top.indexOf('_arguments -C'))).sort(),
+      flags(program).sort(),
+    );
   });
 
   for (const command of program.commands.filter((c) => commands.includes(c.name()))) {
@@ -63,7 +66,7 @@ for (const [name, program] of [
     test(`${name} ${command.name()}: zsh completion offers exactly its options`, () => {
       const body = branch(script, command.name());
       assert.ok(body !== null, `no (${command.name()}) branch in shell/zsh/_${name}`);
-      expect(flagsIn(body).sort()).toEqual(flags(command).sort());
+      assert.deepEqual(flagsIn(body).sort(), flags(command).sort());
     });
   }
 }

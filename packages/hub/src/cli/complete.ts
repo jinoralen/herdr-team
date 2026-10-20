@@ -1,10 +1,9 @@
 // `__complete`: the values only this program knows, for the zsh completion in shell/zsh/. One
-// "value<TAB>description" per line. It runs on every Tab press, so it only reads, never creates
-// the database, and prints nothing rather than failing.
-import fs from 'node:fs';
+// "value<TAB>description" per line. It runs on every Tab press, so it only reads, and prints
+// nothing rather than failing.
 import { listDefinitions } from '@herdr/agents';
 import { sanitizeForTerminal } from '@herdr/terminal';
-import { dbPath, rootDir, Store } from '#store';
+import { peekActiveMembers, rootDir } from '#store';
 
 // What `__complete <what>` can list.
 const SOURCES = {
@@ -13,17 +12,13 @@ const SOURCES = {
     listDefinitions({ env }).definitions.flatMap(({ name, value }) =>
       value ? [[name, value.description]] : [],
     ),
-  // message --to: the other active members of this pane's room; none outside a Herdr pane.
+  // message --to: the other active members of this pane's room; none outside a Herdr pane. Read-only:
+  // a Tab press never creates, migrates or sets aside the database.
   handles: (env: NodeJS.ProcessEnv): [string, string][] => {
     if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
       return [];
     }
-    const root = rootDir(env);
-    if (!fs.existsSync(dbPath(root))) {
-      return [];
-    }
-    return new Store(root, env.HERDR_WORKSPACE_ID)
-      .members('active')
+    return peekActiveMembers(rootDir(env), env.HERDR_WORKSPACE_ID)
       .filter((m) => m.pane_id !== env.HERDR_PANE_ID)
       .map((m) => [m.handle, m.description]);
   },

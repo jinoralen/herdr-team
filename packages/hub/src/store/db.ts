@@ -130,6 +130,14 @@ function compatible(client: Database): boolean {
   );
 }
 
+// Built from exactly this build's migrations, so its tables are the ones this build queries.
+export function isCurrentSchema(client: Database): boolean {
+  return (
+    pragma(client, 'user_version') === MIGRATIONS.length &&
+    pragma(client, 'application_id') === schemaId(MIGRATIONS.length)
+  );
+}
+
 // Runs fn while holding an exclusive lock on <chat.db>.replace-lock, a small SQLite file that is never
 // moved. SQLite's locks are the kernel's advisory file locks, so a process that dies releases its
 // lock, and there is no stale lock to take over; the others wait (busy_timeout).
