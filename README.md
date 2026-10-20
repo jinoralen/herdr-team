@@ -149,7 +149,7 @@ It holds only members and undelivered messages, and it's disposable ([ADR 0010](
 |---|---|
 | `bun test` | run package and repository tests from source |
 | `bun run dev <command>` | run the CLI from source, e.g. `bun run dev status` |
-| `bun run build` | compile `dist/herdr-hub`; Herdr and agents run it, so rebuild after editing `packages/` |
+| `bun run build` | empty `dist/`, then compile `dist/herdr-hub` and `dist/herdr-compose`; Herdr and agents run them, so rebuild after editing `packages/` |
 | `bun run db:generate` | after changing the tables in `packages/hub/src/store/tables.ts`: regenerate the one migration, `packages/hub/drizzle/0000_init.sql` |
 | `bun run verify` | lint, type check, Knip, then the tests |
 | `bun check` | type check all packages and repository tests (Bun's built-in checker) |
