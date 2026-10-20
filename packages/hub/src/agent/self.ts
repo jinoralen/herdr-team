@@ -1,5 +1,5 @@
-// How agents run this program. Nothing puts it on PATH, so the instructions it prints carry the
-// full path of whatever is running now.
+// How agents run this program. Only users' Herdr shells may have it on PATH (shell/init.zsh), so
+// the instructions it prints carry the full path of whatever is running now.
 
 import { shellQuote } from '@herdr/terminal';
 
