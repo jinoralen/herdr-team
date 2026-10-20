@@ -249,20 +249,41 @@ test("tick --startup clears the session's rooms, but only when it knows the sess
 });
 
 test('JSON status exposes room membership and draining handles without Herdr calls', async () => {
-  const { run } = cli();
+  const { run, calls } = cli();
   assert.equal((await run(['tick'])).code, 0);
   assert.equal(
     (await run(['join', '--handle', 'reviewer', '--description', 'reviews'], { inPane: true }))
       .code,
     0,
   );
+  const before = calls().length;
   const pending = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(calls().length, before);
+  assert.deepEqual(
+    Object.keys(pending.members[0]).sort(),
+    [
+      'handle',
+      'description',
+      'pane_id',
+      'joined_at',
+      'status',
+      'terminal_id',
+      'agent',
+      'reason',
+      'held',
+      'queuedFrom',
+    ].sort(),
+  );
   assert.equal(pending.room, 'w1');
   assert.equal(pending.members[0].handle, 'reviewer');
   assert.equal(pending.members[0].status, 'pending');
   assert.equal(pending.members[0].pane_id, 'p1');
+  assert.equal((await run(['tick'])).code, 0);
+  const afterTick = calls().length;
+  assert.ok(afterTick > before, 'the fake records Herdr calls when a tick admits the member');
   assert.equal((await run(['leave'], { inPane: true })).code, 0);
   const left = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(calls().length, afterTick);
   assert.equal(left.members[0].status, 'left');
   assert.equal(typeof left.members[0].queuedFrom, 'boolean');
 });

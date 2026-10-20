@@ -38,9 +38,6 @@ const REUSABLE_HANDLE = ['gone', 'left', 'rejected'];
 // A role, shown to the others in the member list and the "joined" notice; not a place for a brief.
 const MAX_DESCRIPTION_CHARS = 200;
 const STATUS_LOG_LINES = 20;
-// The shape of `status --json`, which compose reads (ADR 0012). Bump it when a field compose may
-// read changes or goes away.
-const STATUS_JSON_VERSION = 1;
 // What --description takes, as the usage lines show it: the agent type first, so the handle
 // derived from its first word names the agent.
 const ROLE = '"<agent type>, <your role>"';
@@ -441,21 +438,13 @@ export function status({
   json = false,
 }: CommandOptions & { json?: boolean } = {}): string {
   const { workspace } = caller(env);
-  const store = new Store(rootDir(env), workspace);
   if (json) {
-    return store.transaction(() =>
-      JSON.stringify({
-        version: STATUS_JSON_VERSION,
-        room: workspace,
-        members: (['pending', 'active', 'left', 'gone', 'rejected'] as const).flatMap((state) =>
-          store.members(state).map((member) => ({
-            ...member,
-            queuedFrom: store.hasQueuedFrom(member.handle),
-          })),
-        ),
-      }),
-    );
+    return JSON.stringify({
+      room: workspace,
+      members: Store.snapshot(rootDir(env), workspace),
+    });
   }
+  const store = new Store(rootDir(env), workspace);
   const active = store.members('active');
   const pending = store.members('pending');
   const lines = [

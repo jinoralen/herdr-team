@@ -15,6 +15,7 @@ const COMMAND: string[] = BIN_DIR ? [path.resolve(BIN_DIR, 'herdr-hub')] : [proc
 // The fake herdr: pane list shows an idle codex and claude; prompts are appended to prompts.log.
 const FAKE_HERDR = `#!/usr/bin/env bun
 const [cmd, sub, pane, text] = process.argv.slice(2);
+require('node:fs').appendFileSync(process.env.CALLS, JSON.stringify(process.argv.slice(2)) + '\\n');
 const out = (result) => console.log(JSON.stringify({ result }));
 const agents = [
   { pane_id: 'p1', terminal_id: 't1', agent: 'codex', agent_status: 'idle' },
@@ -34,6 +35,7 @@ type Result = { stdout: string; stderr: string; code: number };
 type Cli = {
   root: string;
   prompts: () => string;
+  calls: () => string[][];
   // Runs `herdr-hub <args>`, as an agent in pane p1 when inPane is set.
   run: (
     args: string[],
@@ -56,6 +58,7 @@ export function cli(env: Record<string, string> = {}): Cli {
     HERDR_TEAM_DIR: path.join(root, 'team'),
     HERDR_BIN_PATH: herdr,
     PROMPTS: promptsLog,
+    CALLS: path.join(root, 'calls.log'),
     ...env,
   };
   const pane = { HERDR_ENV: '1', HERDR_PANE_ID: 'p1', HERDR_WORKSPACE_ID: 'w1' };
@@ -84,5 +87,15 @@ export function cli(env: Record<string, string> = {}): Cli {
 
   const prompts = (): string =>
     fs.existsSync(promptsLog) ? fs.readFileSync(promptsLog, 'utf8') : '';
-  return { root, prompts, run };
+  const calls = (): string[][] => {
+    const file = path.join(root, 'calls.log');
+    return fs.existsSync(file)
+      ? fs
+          .readFileSync(file, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+      : [];
+  };
+  return { root, prompts, calls, run };
 }
