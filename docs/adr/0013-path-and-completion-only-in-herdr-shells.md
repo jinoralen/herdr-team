@@ -3,6 +3,9 @@
 Typing `<repo>/dist/herdr-hub` by hand is tedious for users, so `shell/init.zsh` puts the plugin's
 `dist/` on PATH and loads completion for both executables. Users source it from `.zshrc` behind
 `[[ -n $HERDR_ENV ]]`, so it takes effect only in Herdr panes, where the commands mean something.
+The snippet finds the script through `herdr plugin list --plugin herdr-team --json`
+(`plugin_root`) rather than a fixed path: `herdr plugin install` and `update` build each version in
+a new managed folder and later delete the old one, so a pasted path would break on the next update.
 Installing into `~/.local/bin` or Homebrew was set aside: it reaches every shell, and needs a
 release pipeline the plugin doesn't have. Herdr offers no pane-init hook that could do it instead:
 plugin hooks run as separate processes and can't change a pane's shell.

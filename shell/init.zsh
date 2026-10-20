@@ -1,7 +1,10 @@
 # herdr-team in Herdr panes: puts herdr-hub and herdr-compose (this plugin's dist/) on PATH and
-# loads their completion. Source it from ~/.zshrc, inside Herdr only:
+# loads their completion. Source it from ~/.zshrc, inside Herdr only, asking Herdr where the plugin
+# is (an installed plugin moves to a new folder on every update):
 #
-#   [[ -n $HERDR_ENV ]] && source <plugin root>/shell/init.zsh
+#   if [[ -n $HERDR_ENV && $(${HERDR_BIN_PATH:-herdr} plugin list --plugin herdr-team --json 2>/dev/null) =~ '"plugin_root":"([^"]+)"' ]]; then
+#     source $match[1]/shell/init.zsh
+#   fi
 #
 # Before or after compinit both work: before, compinit finds the completions on fpath; after,
 # they are registered here.

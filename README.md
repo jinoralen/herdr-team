@@ -23,12 +23,15 @@ Agents run the executable by its full path (`<repo>/dist/herdr-hub`), and every 
 For yourself, put both commands on PATH with Tab completion, in Herdr panes only. Add to `~/.zshrc`:
 
 ```zsh
-[[ -n $HERDR_ENV ]] && source <plugin root>/shell/init.zsh
+if [[ -n $HERDR_ENV && $(${HERDR_BIN_PATH:-herdr} plugin list --plugin herdr-team --json 2>/dev/null) =~ '"plugin_root":"([^"]+)"' ]]; then
+  source $match[1]/shell/init.zsh
+fi
 ```
 
-The plugin root is the checkout you linked, or the path `herdr plugin list` shows. It completes
-commands, options, agent definitions, room handles for `--to` and team names. Shells outside Herdr
-are untouched ([ADR 0013](docs/adr/0013-path-and-completion-only-in-herdr-shells.md)).
+It asks Herdr where the plugin is, so it works for a linked checkout and an installed plugin alike,
+and keeps working after `herdr plugin update`, which builds each version in a new folder. It
+completes commands, options, agent definitions, room handles for `--to` and team names. Shells
+outside Herdr are untouched ([ADR 0013](docs/adr/0013-path-and-completion-only-in-herdr-shells.md)).
 
 ## Quick start
 
