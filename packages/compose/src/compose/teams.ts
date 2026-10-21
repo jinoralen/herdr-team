@@ -16,9 +16,13 @@ export async function teams({
   const read = await Promise.all(
     files.map(async ({ name, file }) => {
       try {
-        // The lead's handle only goes into helpers' prompts; any one reads the team the same.
-        const plan = await loadPlan(file, 'lead', env);
-        return { name, file, deployment: plan.name, agents: Object.keys(plan.agents) };
+        const plan = await loadPlan(file, env);
+        return {
+          name,
+          file,
+          deployment: plan.name,
+          agents: Object.keys(plan.agents).filter((key) => key !== '$lead'),
+        };
       } catch (error) {
         return { name, file, problem: (error as Error).message };
       }

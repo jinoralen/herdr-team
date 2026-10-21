@@ -55,13 +55,7 @@ export async function up({
   return withDeploymentLock(root, async () => {
     // Another up or down may have changed membership while this one waited for the lock.
     hub.refresh();
-    const loaded = await loadPlan(file, 'lead', env);
-    // $ cannot occur in user keys: the lead shares the ordinary managed-agent lifecycle.
-    const plan: ManifestPlan = {
-      ...loaded,
-      tabs: { ...loaded.tabs, $lead: { layout: 'columns' } },
-      agents: { ...loaded.agents, $lead: loaded.lead },
-    };
+    const plan = await loadPlan(file, env);
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, current);
     const state = states.find((s) => s.name === plan.name) ?? {

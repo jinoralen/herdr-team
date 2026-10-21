@@ -49,7 +49,6 @@ export type DesiredAgent = {
 export type Parts = Record<'definition' | 'handle' | 'cwd' | 'purpose' | 'context', string>;
 export type ManifestPlan = {
   name: string;
-  lead: DesiredAgent;
   tabs: Record<string, { layout: 'rows' | 'columns' }>;
   agents: Record<string, DesiredAgent>;
 };
@@ -90,7 +89,6 @@ export async function deploymentName(file: string): Promise<string> {
 }
 export async function loadPlan(
   file: string,
-  leadHandle = 'lead',
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ManifestPlan> {
   const parsed = Manifest.safeParse(Bun.YAML.parse(await Bun.file(file).text()));
@@ -118,7 +116,7 @@ export async function loadPlan(
     }
     handles.add(handle);
     const shared = [
-      `Your coordinating lead is @${leadHandle}. Address reports to this handle.`,
+      'Your coordinating lead is @lead. Address reports to this handle.',
       config.shared.prompt,
       ...context,
     ];
@@ -131,7 +129,7 @@ export async function loadPlan(
       tab: a.tab,
     });
   }
-  const lead = desiredAgent({
+  agents.$lead = desiredAgent({
     definition: startable(config.lead.use, base, env, 'The lead'),
     handle: 'lead',
     cwd: base,
@@ -139,7 +137,8 @@ export async function loadPlan(
     purpose: coordinatorPrompt(config.name, file, agents, config.lead.prompt),
     tab: '$lead',
   });
-  return { name: config.name, lead, tabs: config.tabs, agents };
+  // $ cannot occur in user keys; the lead uses the ordinary managed-agent lifecycle.
+  return { name: config.name, tabs: { ...config.tabs, $lead: { layout: 'columns' } }, agents };
 }
 
 // One helper as compose keeps it. The definition's contents are in the fingerprint, so editing it
