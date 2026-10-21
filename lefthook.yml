@@ -1,4 +1,5 @@
-# Git hooks, installed by `bun install` (the prepare script). Skip once with `git commit --no-verify`.
+# Git hooks, installed by `bun install` (the prepare script). Skip once with `--no-verify`.
+# Pre-commit runs the fast checks (about a second); the slow test suite waits for pre-push.
 pre-commit:
   parallel: true
   jobs:
@@ -9,5 +10,8 @@ pre-commit:
       run: bun check
     - name: knip
       run: bun x knip
+
+pre-push:
+  jobs:
     - name: tests
       run: bun test

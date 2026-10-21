@@ -193,7 +193,7 @@ bun run --filter '@herdr/*' typecheck       # check each package independently
 HERDR_TEST_BIN_DIR="$PWD/dist" bun test ./tests/cli ./tests/compose ./packages/compose   # against the built executables
 ```
 
-`bun install` also installs a git pre-commit hook ([lefthook](https://lefthook.dev), `lefthook.yml`) that runs Biome on staged files, the type check, Knip and the tests. Skip it once with `git commit --no-verify`.
+`bun install` also installs git hooks ([lefthook](https://lefthook.dev), `lefthook.yml`): pre-commit runs Biome on staged files, the type check and Knip; pre-push runs the tests. Skip one once with `--no-verify`.
 
 Biome checks formatting, module import boundaries, cognitive complexity, unused imports, declared parameter and return types (`useExplicitType`), and non-null assertions outside tests.
 
