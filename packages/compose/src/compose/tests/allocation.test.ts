@@ -78,6 +78,15 @@ test('recovery closes a recorded allocation after it moves, preserving unrelated
 
 test('recovery retains an unidentified allocation instead of silently forgetting ownership', async () => {
   const f = setup(false);
+  f.runtime.herdr.listTabs = async () => [
+    { tab_id: 'old-tab', workspace_id: 'w1', label: 'allocation' },
+  ];
+  f.panes.push({
+    pane_id: 'ambiguous',
+    terminal_id: 'other',
+    tab_id: 'old-tab',
+    workspace_id: 'w1',
+  });
   await assert.rejects(recoverAllocations(f.runtime), /identify|locate/);
   assert.equal(f.read().allocations.length, 1);
   assert.deepEqual(f.closed, []);

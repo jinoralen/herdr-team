@@ -112,6 +112,25 @@ for (const [name, replacement, error] of [
   });
 }
 
+for (const retry of ['up', 'down'] as const) {
+  test(`a rejected tab creation does not block the next ${retry}`, async () => {
+    const f = await fixture();
+    await f.change({ rejectCreate: true });
+    await assert.rejects(up(f), /refused/);
+    if (retry === 'up') {
+      await up(f);
+      assert.equal((await f.read()).panes.length, 2);
+    } else {
+      await down(f);
+      assert.deepEqual(
+        (await f.read()).panes.map((p) => p.pane_id),
+        ['lead'],
+      );
+      assert.match(await down(f), /already down/);
+    }
+  });
+}
+
 test('lost allocation responses are recovered before retrying up', async () => {
   const f = await fixture();
   await f.change({ failCreate: true });

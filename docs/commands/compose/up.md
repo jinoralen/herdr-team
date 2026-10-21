@@ -33,7 +33,8 @@ another deployment or an unrelated member are refused before pane changes.
 
 Validation and context reads precede pane changes. Failed operations retain ownership
 for retry. Recovery finds recorded allocation panes even after they move between tabs;
-allocations without a safely identifiable pane remain recorded and stop the command.
+allocations with no recorded pane and no live labelled tab are forgotten so retry can proceed.
+A labelled tab without exactly one pane remains recorded and stops the command.
 An uncertain initial prompt is never repeated into the same conversation.
 Compose does not restart an existing lead or own its pane. See [configuration](../../compose.md).
 

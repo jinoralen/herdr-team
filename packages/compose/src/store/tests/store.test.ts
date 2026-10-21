@@ -1,3 +1,4 @@
+import { Database } from 'bun:sqlite';
 import { onTestFinished, test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -59,4 +60,36 @@ test('ownership is scoped to the Herdr session without sharing hub state', () =>
   };
   assert.notEqual(rootDir(base), rootDir({ ...base, HERDR_SOCKET_PATH: '/tmp/herdr-second.sock' }));
   assert.equal(rootDir({ HERDR_TEAM_STATE_DIR: '/tmp/state-test' }), '/tmp/state-test/compose');
+});
+
+test('ownership reads wait for a concurrent writer to release its lock', async () => {
+  const root = directory();
+  saveDeployment(root, record('w1'));
+  const writer = Bun.spawn(
+    [
+      process.execPath,
+      '-e',
+      `import { Database } from 'bun:sqlite';
+const db = new Database(process.argv[1]);
+db.exec('BEGIN IMMEDIATE');
+console.log('locked');
+setTimeout(() => { db.exec('COMMIT'); db.close(); }, 250);`,
+      path.join(root, 'compose.db'),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  onTestFinished(async () => {
+    await writer.exited;
+  });
+  const output = writer.stdout.getReader();
+  const ready = await output.read();
+  assert.match(new TextDecoder().decode(ready.value), /locked/);
+  assert.deepEqual(deployments(root, 'w1'), [record('w1')]);
+  assert.equal(await writer.exited, 0, await new Response(writer.stderr).text());
+  const db = new Database(path.join(root, 'compose.db'));
+  try {
+    assert.deepEqual(db.query('PRAGMA journal_mode').get(), { journal_mode: 'wal' });
+  } finally {
+    db.close();
+  }
 });

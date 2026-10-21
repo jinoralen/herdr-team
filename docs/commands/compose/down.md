@@ -16,8 +16,9 @@ names when there are several. `--json` prints the deployment taken down and the 
 
 Unfinished allocations with recorded pane IDs are found across tabs, including after
 moves within the workspace. Cleanup retains ownership when closing a pane fails.
-If an allocation has no recorded pane ID and cannot be identified safely from its
-labelled tab, the command stops and keeps its record for investigation and retry.
+An allocation with no recorded pane ID and no live labelled tab is forgotten so cleanup
+can proceed. If its labelled tab exists but does not contain exactly one pane, the
+command stops and keeps its record for investigation and retry.
 
 ## Membership
 
