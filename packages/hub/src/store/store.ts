@@ -1,10 +1,8 @@
 // One room's rows: its members and the messages waiting for them. Every method is scoped to the room.
 
-import { Database } from 'bun:sqlite';
-import fs from 'node:fs';
 import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
 import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
-import { type Db, dbPath, isCurrentSchema, openDb, transaction } from './db.ts';
+import { type Db, isCurrentSchema, openDb, openReadOnly, transaction } from './db.ts';
 import { members, queue, service } from './tables.ts';
 
 // Store methods already know their room, so they read and write members without it.
@@ -358,17 +356,18 @@ export class Store {
   }
 
   // The room's members for `status --json`, read without a write lock so ticks and posts don't wait
-  // for it. A file being created (schema version 0) is an empty room; one from another build is
-  // set aside the way any other command does it, and read again.
+  // for it. No file, or one being created (schema version 0), is an empty room. Any other schema
+  // goes through openDb like every other command: one from another build is set aside, and an
+  // older one of this build's would be migrated.
   static snapshot(
     root: string,
     room: string,
   ): (Omit<Member, 'instructions'> & { queuedFrom: boolean })[] {
     checkRoomName(room);
-    if (!fs.existsSync(dbPath(root))) {
+    const client = openReadOnly(root);
+    if (!client) {
       return [];
     }
-    const client = new Database(dbPath(root), { readonly: true });
     try {
       const version = client
         .query<{ user_version: number }, []>('PRAGMA user_version')

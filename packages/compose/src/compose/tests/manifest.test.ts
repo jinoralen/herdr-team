@@ -1,11 +1,11 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPlan } from './manifest.ts';
+import { loadPlan } from '../manifest.ts';
 
 test('the example team loads with its checked-in definitions', async () => {
   const plan = await loadPlan(
-    fileURLToPath(new URL('../../../../examples/team.yaml', import.meta.url)),
+    fileURLToPath(new URL('../../../../../examples/team.yaml', import.meta.url)),
     'lead',
     {},
   );

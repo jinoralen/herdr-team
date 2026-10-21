@@ -2,11 +2,10 @@
 // `--help`, which only show things and must never create, migrate or set aside the database the
 // way openDb does.
 
-import { Database } from 'bun:sqlite';
-import fs from 'node:fs';
+import type { Database } from 'bun:sqlite';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { dbPath, isCurrentSchema } from './db.ts';
+import { isCurrentSchema, openReadOnly } from './db.ts';
 import type { MemberStatus } from './store.ts';
 import { members } from './tables.ts';
 
@@ -18,13 +17,10 @@ export function peekMembers(
   room: string,
   statuses: MemberStatus[],
 ): { handle: string; description: string; pane_id: string; status: MemberStatus }[] {
-  if (!fs.existsSync(dbPath(root))) {
-    return [];
-  }
   let client: Database | null = null;
   try {
-    client = new Database(dbPath(root), { readonly: true });
-    if (!isCurrentSchema(client)) {
+    client = openReadOnly(root);
+    if (!client || !isCurrentSchema(client)) {
       return [];
     }
     return drizzle({ client })

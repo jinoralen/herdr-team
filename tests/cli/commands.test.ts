@@ -127,6 +127,22 @@ test("help in a member's pane starts with who it is and how to post", async () =
   expect((await run(['--help'], { inPane: true, paneId: 'p9' })).stdout).toMatch(/^Usage:/);
 });
 
+test('status --json answers while another connection holds the write lock', async () => {
+  const { run, root } = cli();
+  await run(['tick']);
+  await run(['join', '--description', 'codex, reviews'], { inPane: true });
+  const writer = new Database(path.join(root, 'state', 'hub', 'chat.db'));
+  writer.exec("BEGIN IMMEDIATE; UPDATE members SET description = 'uncommitted'");
+  try {
+    const result = await run(['status', '--json'], { inPane: true });
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout).members[0].description).toBe('codex, reviews');
+  } finally {
+    writer.exec('ROLLBACK');
+    writer.close();
+  }
+});
+
 test('help in a pane leaves a database from another build as it is', async () => {
   const { run, root } = cli();
   const dir = path.join(root, 'state', 'hub');

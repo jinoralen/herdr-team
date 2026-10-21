@@ -49,6 +49,18 @@ function parseJson(text: string): unknown {
   }
 }
 
+// Why compose refuses a hub's status --json, so the error says where to look.
+function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeParse>): string {
+  if (json === null) {
+    return 'printed no JSON for status --json';
+  }
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path.join('.') || 'the top';
+    return `returned a status this compose doesn't read (at ${field})`;
+  }
+  return `returned the status of room ${parsed.data.room}`;
+}
+
 export class Hub {
   readonly words: string[];
   readonly command: string;
@@ -67,10 +79,11 @@ export class Hub {
     if (result.exitCode !== 0) {
       throw new Error(result.stderr.toString().trim());
     }
-    const parsed = Snapshot.safeParse(parseJson(result.stdout.toString()));
+    const json = parseJson(result.stdout.toString());
+    const parsed = Snapshot.safeParse(json);
     if (!parsed.success || parsed.data.room !== this.env.HERDR_WORKSPACE_ID) {
       throw new Error(
-        `Hub at ${this.command} returned a status this compose doesn't read. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
+        `Hub at ${this.command} ${snapshotProblem(json, parsed)}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
       );
     }
     return parsed.data.members;

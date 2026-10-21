@@ -2,7 +2,6 @@ import { Database } from 'bun:sqlite';
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { status } from '#agent';
 import { dbPath } from '#store';
 import { installed, setup } from '#testing';
@@ -14,16 +13,6 @@ test('JSON status reads a snapshot while another connection holds the write lock
   writer.exec('BEGIN IMMEDIATE');
   try {
     writer.exec("UPDATE members SET description = 'uncommitted' WHERE room = 'w1'");
-    const processResult = Bun.spawnSync(
-      [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli')), 'status', '--json'],
-      {
-        env: env('p1'),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
-    );
-    assert.equal(processResult.exitCode, 0, processResult.stderr.toString());
-    assert.equal(JSON.parse(processResult.stdout.toString()).members[0].description, 'claude');
     const snapshot = JSON.parse(status({ env: env('p1'), json: true }));
     assert.equal(snapshot.members[0].description, 'claude');
     assert.equal(store().member('claude')!.description, 'claude');
@@ -31,7 +20,7 @@ test('JSON status reads a snapshot while another connection holds the write lock
     writer.exec('ROLLBACK');
     writer.close();
   }
-}, 10_000);
+});
 
 test('JSON status before the first tick returns an empty room without creating a database', () => {
   const { root, env } = setup();
