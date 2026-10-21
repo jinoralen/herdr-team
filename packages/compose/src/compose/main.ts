@@ -5,7 +5,6 @@ import { listTeams } from '@herdr/agents';
 import { cliLayoutHerdr } from '@herdr/herdr';
 import { down, up } from './commands.ts';
 import { COMPOSE_SELF } from './hub.ts';
-import { execLead } from './lead.ts';
 import { exitCode } from './retry.ts';
 import { status } from './status.ts';
 import { teams } from './teams.ts';
@@ -17,7 +16,7 @@ export const program = new Command()
   .showSuggestionAfterError(false);
 program
   .command('up')
-  .summary('reconcile a team; start a lead in this pane when none is running')
+  .summary('reconcile a team in separate managed lead and helper panes')
   .argument(
     '[team]',
     'a team name from ~/.config/herdr-team/teams, or a team file (default: ./herdr-team.yaml)',
@@ -29,8 +28,6 @@ program
     const result = await up({
       file,
       herdr: cliLayoutHerdr(),
-      // JSON is for a script reading stdout, which a lead taking over the terminal would break.
-      interactive: !!process.stdin.isTTY && !options.json,
       dryRun,
     });
     console.log(
@@ -43,9 +40,6 @@ program
           })
         : result.output,
     );
-    if (result.launch) {
-      execLead(result.launch);
-    }
   });
 program
   .command('down')

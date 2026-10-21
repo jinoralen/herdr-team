@@ -23,7 +23,7 @@ _herdr-compose_teams() {
 }
 
 local -a commands=(
-  'up:reconcile a team; start a lead in this pane when none is running'
+  'up:reconcile a team in separate managed lead and helper panes'
   'down:dismantle only the agents and tabs owned by a team YAML deployment'
   'status:show deployments in this workspace and their helpers'\'' room membership'
   'teams:list the teams in ~/.config/herdr-team/teams and check each one'

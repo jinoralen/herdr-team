@@ -1,151 +1,22 @@
-// The caller coordinates the team: print instructions for an existing agent, or hand the shell
-// directly to a configured lead after reconciliation has released its deployment lock.
+// The managed lead receives its coordinator task through hub, like every helper.
 import path from 'node:path';
-import type { Agent } from '@herdr/herdr';
 import { sanitizeForTerminal, shellQuote } from '@herdr/terminal';
-import type { Membership } from './hub.ts';
-import { COMPOSE_SELF, Hub, type HubClient } from './hub.ts';
-import type { LeadConfig, ManifestPlan } from './manifest.ts';
-import type { Change } from './resources.ts';
-import { RetryLater } from './retry.ts';
+import { COMPOSE_SELF } from './hub.ts';
+import type { DesiredAgent } from './manifest.ts';
 
-// Hub accepts initial tasks up to 80 KB. Validate before creating helper panes.
-const MAX_LEAD_PROMPT_BYTES = 80_000;
-
-export function isCallerMember(member: Membership | null, current: Agent | null): boolean {
-  return (
-    !!current?.agent &&
-    !!member &&
-    (member.status === 'pending' ||
-      (member.terminal_id === current.terminal_id && member.agent === current.agent))
-  );
-}
-
-export type UpResult = {
-  output: string;
-  launch?: LeadConfig;
-  // What up changed, or would change with --dry-run.
-  changes?: Change[];
-  deployment?: string;
-};
-
-export function prepareLead({
-  plan,
-  file,
-  hub,
-  pane,
-  current,
-  leadHandle,
-  livePanes,
-  interactive,
-}: {
-  plan: ManifestPlan;
-  file: string;
-  hub: HubClient;
-  pane: string;
-  // Herdr's open panes: a member in a closed one holds the lead handle only until a tick.
-  livePanes: Set<string>;
-  current: Agent | null;
-  leadHandle: string;
-  interactive: boolean;
-}): UpResult {
-  const running = !!current?.agent;
-  if (!running && !interactive) {
-    throw new Error(
-      'No agent is recognized in this pane. Run up from an interactive Herdr shell, without --json, to start its configured lead.',
-    );
-  }
-  if (!running && !plan.lead) {
-    throw new Error(
-      'No agent is running in this pane. Add a lead (lead: use: <definition with a kind>) to the team file before running up from a shell.',
-    );
-  }
-  const joined = validateLeadHandle(hub, pane, leadHandle, current, plan, livePanes);
-  const prompt = coordinatorPrompt(plan, file, leadHandle, joined, hub.command);
-  if (Buffer.byteLength(prompt) > MAX_LEAD_PROMPT_BYTES) {
-    throw new Error(
-      'The lead prompt exceeds 80 KB. Shorten lead.prompt or the team before running up.',
-    );
-  }
-  if (running) {
-    return { output: prompt };
-  }
-  // The preceding checks establish this for a shell; keep narrowing explicit for callers.
-  if (!plan.lead) {
-    throw new Error('The shell has no lead configuration.');
-  }
-  return {
-    output: `Starting the ${plan.lead.kind} lead in this pane.`,
-    launch: {
-      ...plan.lead,
-      prompt: prompt.replace(
-        /First join as @[^\n]+/,
-        'Hub starts you as @lead; use the room guide above.',
-      ),
-    },
-  };
-}
-
-function validateLeadHandle(
-  hub: HubClient,
-  pane: string,
-  leadHandle: string,
-  current: Agent | null,
-  plan: ManifestPlan,
-  livePanes: Set<string>,
-): boolean {
-  const member = hub.memberByPane(pane);
-  const joined = isCallerMember(member, current);
-  const occupied = hub.member(leadHandle);
-  // Held by a member of another pane, as helper handles are checked (checkHandle): one in a live
-  // pane is taken; one in a closed pane, or posts still going out, wait for a tick.
-  const holds =
-    !!occupied && occupied.pane_id !== pane && ['active', 'pending'].includes(occupied.status);
-  if (holds && livePanes.has(occupied.pane_id)) {
-    throw new Error(
-      `Handle @${leadHandle} is already in use in another pane. Run up from that lead's pane or choose another room.`,
-    );
-  }
-  if (Object.values(plan.agents).some((a) => a.handle === leadHandle)) {
-    throw new Error(
-      `The caller coordinates as @${leadHandle}; remove that handle from the managed helper entries.`,
-    );
-  }
-  if (holds) {
-    throw new RetryLater(
-      `Handle @${leadHandle} belongs to a member whose pane has closed. Retry ${COMPOSE_SELF} up once a tick has retired it.`,
-    );
-  }
-  if (!joined && occupied && occupied.queuedFrom) {
-    throw new RetryLater(
-      `Handle @${leadHandle} still has undelivered posts from its previous conversation. Retry ${COMPOSE_SELF} up once a tick has delivered them.`,
-    );
-  }
-  return joined;
-}
-
-function coordinatorPrompt(
-  plan: ManifestPlan,
+export function coordinatorPrompt(
+  name: string,
   file: string,
-  handle: string,
-  joined: boolean,
-  hubCommand: string,
+  agents: Record<string, DesiredAgent>,
+  prompt: string,
 ): string {
   const deployment = shellQuote(path.resolve(file));
-  // As the team's lead definition when it names one, so peers see its role and the lead gets its
-  // instructions; else a role made up from the deployment.
-  const as = plan.lead
-    ? `${shellQuote(plan.lead.definition)} --handle ${shellQuote(handle)}`
-    : `--handle ${shellQuote(handle)} --description ${shellQuote(`${handle}, coordinates ${plan.name}`)}`;
-  const membership = joined
-    ? `You are already a member as @${handle}. Read your room guide with: ${hubCommand} guide`
-    : `First join as @${handle}: ${hubCommand} join ${as}. Confirm the returned handle is @${handle}; report a collision instead of dispatching under a different handle.`;
-  const helpers = Object.entries(plan.agents).map(
+  const helpers = Object.entries(agents).map(
     ([key, a]) =>
       `  ${key}: @${a.handle}, ${a.kind}${a.model ? ` / ${a.model}` : ' / harness default'}`,
   );
-  return sanitizeForTerminal(`You are the lead for deployment "${plan.name}" in this Herdr workspace.
-${membership}
+  return sanitizeForTerminal(`You are the lead for deployment "${name}" in this Herdr workspace.
+Hub starts you as @lead; use the room guide above.
 
 Deployment file: ${path.resolve(file)}
 Helpers:
@@ -155,25 +26,10 @@ Coordinate helpers according to their purposes in that YAML file. Continue the u
 task, or wait for one if none was assigned. Starting or reconciling a team does not assign work.
 After posting messages, end your turn; replies arrive through the room. Do not poll or sleep.
 
+The user manages this deployment from a separate pane:
 Team changes: ${COMPOSE_SELF} up ${deployment}
 Recorded state: ${COMPOSE_SELF} status
-Stop managed helpers: ${COMPOSE_SELF} down ${deployment}
-Your current harness, model and user-owned pane are preserved when up is called by an agent.
+Stop the lead and helpers: ${COMPOSE_SELF} down ${deployment}
 
-${plan.lead?.prompt ?? ''}`);
-}
-
-export function execLead(lead: LeadConfig, env = process.env): never {
-  const hub = new Hub(env);
-  if (!process.execve) {
-    throw new Error('This Bun runtime cannot hand the shell to hub. Update Bun and retry.');
-  }
-  const inherited = Object.fromEntries(
-    Object.entries(env).filter((entry) => entry[1] !== undefined),
-  );
-  return process.execve(
-    hub.words[0] as string,
-    [...hub.words, ...hub.startArgs({ ...lead, handle: 'lead' })],
-    inherited,
-  );
+${prompt}`);
 }

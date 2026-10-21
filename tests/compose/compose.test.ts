@@ -22,20 +22,30 @@ test('up lays out every pane before starting, keeps healthy helpers and moves th
     'tab create hub-<id>',
     'pane move pane2 --tab tab1 --target-pane pane1 --split right',
     'pane close pane1',
+    'tab create hub-<id>',
+    'tab rename tab3 test:$lead',
+    'tab create hub-<id>',
+    'pane move pane4 --tab tab3 --target-pane pane3 --split right',
+    'pane close pane3',
     'invite reviewer.md --handle reviewer --pane pane2',
+    'invite coordinator.md --handle lead --pane pane4',
   ]);
   assert.match(s.world.prompts()[0]!.prompt, /Review the code/);
   const first = s.world.changes().length;
   await up(s);
-  assert.deepEqual(s.world.changes().slice(first), ['tab rename tab1 test:helpers']);
+  assert.deepEqual(s.world.changes().slice(first), [
+    'tab rename tab1 test:helpers',
+    'tab rename tab3 test:$lead',
+  ]);
   const second = s.world.changes().length;
   s.write('Review the code', 'rows');
   await up(s);
   assert.deepEqual(s.world.changes().slice(second), [
     'tab create hub-<id>',
-    'tab rename tab5 test:helpers',
-    'pane move pane2 --tab tab5 --target-pane pane5 --split down',
-    'pane close pane5',
+    'tab rename tab9 test:helpers',
+    'pane move pane2 --tab tab9 --target-pane pane9 --split down',
+    'pane close pane9',
+    'tab rename tab3 test:$lead',
   ]);
   assert.ok(fs.existsSync(path.join(s.root, 'state', 'compose', 'compose.db')));
 });
@@ -45,11 +55,11 @@ test('changed purpose waits for hub to retire the old membership before replacin
   await up(s);
   s.write('Review security');
   await assert.rejects(up(s), retryLater(/occupied|draining/));
-  assert.equal(s.world.panes.filter((p) => p.agent === 'codex').length, 1);
+  assert.equal(s.world.panes.filter((p) => p.agent === 'codex').length, 2);
   s.world.tick();
   await up(s);
-  assert.equal(s.world.prompts().length, 2);
-  assert.match(s.world.prompts()[1]!.prompt, /Review security/);
+  assert.equal(s.world.prompts().length, 3);
+  assert.match(s.world.prompts().at(-1)!.prompt, /Review security/);
 });
 
 test('down retains unrelated panes and ownership survives hub state removal', async () => {
@@ -108,7 +118,7 @@ for (const retry of ['up', 'down'] as const) {
     await assert.rejects(up(s), /refused/);
     if (retry === 'up') {
       await up(s);
-      assert.equal(s.world.panes.length, 2);
+      assert.equal(s.world.panes.length, 3);
     } else {
       await down(s);
       assert.deepEqual(
@@ -125,8 +135,8 @@ test('lost allocation responses are recovered before retrying up', async () => {
   s.world.failNext('create-lost');
   await assert.rejects(up(s), /timeout/);
   await up(s);
-  assert.equal(s.world.panes.length, 2);
-  assert.equal(s.world.prompts().length, 1);
+  assert.equal(s.world.panes.length, 3);
+  assert.equal(s.world.prompts().length, 2);
 });
 
 test('uncertain startup prompts are never repeated into the same conversation', async () => {
@@ -137,7 +147,7 @@ test('uncertain startup prompts are never repeated into the same conversation', 
   s.world.tick();
   await up(s);
   const [first, second] = s.world.prompts();
-  assert.equal(s.world.prompts().length, 2);
+  assert.equal(s.world.prompts().length, 3);
   assert.notEqual(first!.pane, second!.pane);
 });
 
@@ -147,16 +157,16 @@ test('new helpers start together, and one that fails leaves the others ready', a
   s.world.startDelay = 20;
   s.world.failNext('prompt');
   await assert.rejects(up(s), /Inspect the pane/);
-  assert.equal(s.world.maxStarting, 2);
-  // Both panes were laid out before either agent started.
+  assert.equal(s.world.maxStarting, 3);
+  // All panes were laid out before either agent started.
   assert.deepEqual(
     s.world.changes().filter((c) => c.startsWith('invite')),
-    s.world.changes().slice(-2),
+    s.world.changes().slice(-3),
   );
   const phases = JSON.parse(status({ ...s, json: true }))
     .deployments[0].agents.map((a: { phase: string }) => a.phase)
     .sort();
-  assert.deepEqual(phases, ['ready', 'started']);
+  assert.deepEqual(phases, ['ready', 'ready', 'started']);
 });
 
 test('shared context is resolved before changes and changing it replaces the helper', async () => {
@@ -191,19 +201,6 @@ test('status reports ownership without Herdr access and down needs no context fi
   fs.writeFileSync(s.file, 'name: test\nshared:\n  files: [missing.md]\n');
   await down(s);
   assert.match(status(s), /No deployments/);
-});
-
-test('shell bootstrap delegates the lead to hub and keeps the lead outside ownership', async () => {
-  const s = sim();
-  s.world.panes[0]!.agent = null;
-  const result = await up({ ...s, interactive: true });
-  assert.equal(result.launch?.kind, 'codex');
-  assert.match(result.launch!.prompt, /Hub starts you as @lead/);
-  await down(s);
-  assert.deepEqual(
-    s.world.panes.map((p) => p.pane_id),
-    ['lead'],
-  );
 });
 
 for (const swap of [false, true]) {
@@ -243,12 +240,12 @@ test('editing a definition replaces the helper on the next up', async () => {
   const s = sim();
   await up(s);
   await up(s);
-  assert.equal(s.world.prompts().length, 1);
+  assert.equal(s.world.prompts().length, 2);
   s.define('reviewer', '---\ndescription: reviews the code\nkind: codex\n---\nReview security.\n');
   await assert.rejects(up(s), retryLater(/occupied|draining/));
   s.world.tick();
   await up(s);
-  assert.equal(s.world.prompts().length, 2);
+  assert.equal(s.world.prompts().length, 4);
 });
 
 test('inline kind and missing definitions are refused before any layout change', async () => {
@@ -312,10 +309,11 @@ test('up without a team reads herdr-team.yaml in the current folder only', async
 test('down without a team takes down the only deployment, and names them when there are several', async () => {
   const s = sim();
   assert.equal(await down({ ...s, file: undefined }), 'No deployments in this workspace.');
-  await up(s);
   const other = path.join(s.root, 'other.yaml');
-  fs.writeFileSync(other, 'name: other\ntabs: {}\nagents: {}\n');
-  await up({ ...s, file: other });
+  fs.writeFileSync(other, fs.readFileSync(s.file, 'utf8').replace('name: test', 'name: other'));
+  s.world.failNext('create-refused');
+  await assert.rejects(up({ ...s, file: other }), /refused/);
+  await up(s);
   await assert.rejects(
     down({ ...s, file: undefined }),
     /This workspace has 2 deployments: (other, test|test, other)\. Name the one to take down\./,
@@ -329,7 +327,7 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
   const fresh = await up({ ...s, dryRun: true });
   assert.equal(
     fresh.output,
-    'Dry run of test; nothing was changed.\nLay out tab helpers in a new tab.\nStart @reviewer (reviewer) in tab helpers.',
+    'Dry run of test; nothing was changed.\nLay out tab helpers in a new tab.\nStart @reviewer (reviewer) in tab helpers.\nLay out tab $lead in a new tab.\nStart @lead ($lead) in tab $lead.',
   );
   assert.deepEqual(s.world.changes(), []);
   assert.equal(status(s), 'No deployments in this workspace.');
@@ -358,14 +356,6 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
   assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
 });
 
-test('up --dry-run plans from a script in a shell pane, where up itself is refused', async () => {
-  const s = sim();
-  s.world.panes[0]!.agent = null;
-  const planned = await up({ ...s, interactive: false, dryRun: true });
-  assert.match(planned.output, /Start the codex lead in this pane\.$/);
-  await assert.rejects(up({ ...s, interactive: false }), /No agent is recognized in this pane/);
-});
-
 test("status shows each helper's room membership, and JSON for status and down", async () => {
   const s = sim();
   await up(s);
@@ -388,41 +378,12 @@ test("status shows each helper's room membership, and JSON for status and down",
   });
   assert.deepEqual(JSON.parse(await down({ ...s, json: true })), {
     deployment: 'test',
-    removed: ['reviewer'],
+    removed: ['reviewer', 'lead'],
   });
   assert.deepEqual(JSON.parse(await down({ ...s, file: undefined, json: true })), {
     deployment: null,
     removed: [],
   });
-});
-
-test("a running lead is told to join as the team's lead definition, else with a made-up role", async () => {
-  const s = sim();
-  const coordinator = path.join(s.root, 'team', 'agents', 'coordinator.md');
-  assert.match(
-    (await up(s)).output,
-    new RegExp(`First join as @lead: .* join '?${coordinator}'? --handle lead\\. Confirm`),
-  );
-  await down(s);
-  s.world.tick();
-  fs.writeFileSync(
-    s.file,
-    fs.readFileSync(s.file, 'utf8').replace('lead:\n  use: coordinator\n', ''),
-  );
-  assert.match(
-    (await up(s)).output,
-    /First join as @lead: .* join --handle lead --description 'lead, coordinates test'\. Confirm/,
-  );
-});
-
-test('@lead held from another pane is taken while that pane is open, and retried once it closes', async () => {
-  const s = sim();
-  s.world.panes.push({ ...s.world.panes[0]!, pane_id: 'other', terminal_id: 'other-terminal' });
-  s.world.join('lead', 'other');
-  await assert.rejects(up(s), /already in use in another pane/);
-  s.world.panes = s.world.panes.filter((p) => p.pane_id !== 'other');
-  await assert.rejects(up(s), retryLater(/pane has closed/));
-  assert.deepEqual(s.world.changes(), []);
 });
 
 test('teams lists the team files, each read as up would, without Herdr', async () => {

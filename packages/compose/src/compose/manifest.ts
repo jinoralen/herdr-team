@@ -4,6 +4,7 @@ import path from 'node:path';
 import { type Definition, loadDefinition, teamFile } from '@herdr/agents';
 import { sanitizeForTerminal } from '@herdr/terminal';
 import { z } from 'zod';
+import { coordinatorPrompt } from './lead.ts';
 
 // Keys double as default handles and must fit the room's handle grammar.
 const Key = z.string().regex(/^[a-z][a-z0-9_-]{0,19}$/);
@@ -18,8 +19,6 @@ const Lead = z.strictObject({
   use: Use,
   prompt: z.string().default(''),
 });
-// The lead as hub starts it: its definition's file and kind, and this team's task.
-export type LeadConfig = { definition: string; kind: string; prompt: string };
 const Agent = z.strictObject({
   use: Use,
   handle: Key.optional(),
@@ -29,7 +28,7 @@ const Agent = z.strictObject({
 });
 const Manifest = z.strictObject({
   name: Key,
-  lead: Lead.optional(),
+  lead: Lead,
   shared: Shared.default({ prompt: '', files: [] }),
   tabs: z.record(Key, z.strictObject({ layout: z.enum(['rows', 'columns']).default('columns') })),
   agents: z.record(Key, Agent),
@@ -50,7 +49,7 @@ export type DesiredAgent = {
 export type Parts = Record<'definition' | 'handle' | 'cwd' | 'purpose' | 'context', string>;
 export type ManifestPlan = {
   name: string;
-  lead?: LeadConfig;
+  lead: DesiredAgent;
   tabs: Record<string, { layout: 'rows' | 'columns' }>;
   agents: Record<string, DesiredAgent>;
 };
@@ -107,7 +106,7 @@ export async function loadPlan(
     }),
   );
   const agents: Record<string, DesiredAgent> = {};
-  const handles = new Set<string>();
+  const handles = new Set<string>(['lead']);
   for (const [key, a] of Object.entries(config.agents)) {
     if (!Object.hasOwn(config.tabs, a.tab)) {
       throw new Error(`Agent ${key} names unknown tab ${a.tab}.`);
@@ -132,19 +131,15 @@ export async function loadPlan(
       tab: a.tab,
     });
   }
-  return { name: config.name, lead: leadConfig(config.lead, base, env), tabs: config.tabs, agents };
-}
-
-function leadConfig(
-  lead: z.infer<typeof Lead> | undefined,
-  base: string,
-  env: NodeJS.ProcessEnv,
-): LeadConfig | undefined {
-  if (!lead) {
-    return undefined;
-  }
-  const { file, kind } = startable(lead.use, base, env, 'The lead');
-  return { definition: file, kind, prompt: lead.prompt };
+  const lead = desiredAgent({
+    definition: startable(config.lead.use, base, env, 'The lead'),
+    handle: 'lead',
+    cwd: base,
+    shared: [],
+    purpose: coordinatorPrompt(config.name, file, agents, config.lead.prompt),
+    tab: '$lead',
+  });
+  return { name: config.name, lead, tabs: config.tabs, agents };
 }
 
 // One helper as compose keeps it. The definition's contents are in the fingerprint, so editing it

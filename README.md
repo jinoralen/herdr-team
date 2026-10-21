@@ -68,8 +68,8 @@ For a repeatable team with its own pane layout, use [compose](docs/compose.md) a
 
 | Command | Use it to… |
 |---|---|
-| [`herdr-compose up [team]`](docs/commands/compose/up.md) | Start or update a team from YAML. Preview changes with `--dry-run`. |
-| [`herdr-compose down [team]`](docs/commands/compose/down.md) | Close the team's helpers, keeping your lead pane. |
+| [`herdr-compose up [team]`](docs/commands/compose/up.md) | Start or update a team in separate lead and helper panes. Preview with `--dry-run`. |
+| [`herdr-compose down [team]`](docs/commands/compose/down.md) | Close the team's lead and helper panes. |
 | [`herdr-compose status`](docs/commands/compose/status.md) | See the teams running in this workspace. |
 | [`herdr-compose teams`](docs/commands/compose/teams.md) | List saved team definitions. |
 

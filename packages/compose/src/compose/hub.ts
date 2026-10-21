@@ -147,8 +147,7 @@ export class Hub {
       throw code === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
     }
   }
-  // invite starts the lead in the caller's own pane, and helpers with --pane in theirs. Kind,
-  // model and description come from the definition.
+  // Kind, model and description come from the definition; start targets an owned pane.
   startArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
     return ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
   }

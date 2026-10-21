@@ -12,10 +12,10 @@ import {
 } from '#store';
 import { recoverAllocations } from './allocation.ts';
 import { COMPOSE_SELF, Hub, type HubClient, isJoinOf } from './hub.ts';
-import { isCallerMember, prepareLead, type UpResult } from './lead.ts';
 import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './manifest.ts';
 import { dryRunText, needsTab, planChanges } from './plan.ts';
 import {
+  type Change,
   cleanupTabs,
   dropPlaceholder,
   newTab,
@@ -37,15 +37,16 @@ const MAX_HELPER_CONTEXT_BYTES = 80_000;
 // hub's command line unless given, as Herdr is.
 type Options = { file?: string; herdr: LayoutHerdr; hub?: HubClient; env?: NodeJS.ProcessEnv };
 
+type UpResult = { output: string; changes: Change[]; deployment: string };
+
 export async function up({
   file: team,
   herdr,
   env = process.env,
   hub = new Hub(env),
   cwd = process.cwd(),
-  interactive = true,
   dryRun = false,
-}: Options & { cwd?: string; interactive?: boolean; dryRun?: boolean }): Promise<UpResult> {
+}: Options & { cwd?: string; dryRun?: boolean }): Promise<UpResult> {
   const { pane, workspace } = requirePaneContext(env);
   const file = resolveTeam(team, env, cwd);
   const root = rootDir(env);
@@ -54,23 +55,15 @@ export async function up({
   return withDeploymentLock(root, async () => {
     // Another up or down may have changed membership while this one waited for the lock.
     hub.refresh();
-    const member = hub.memberByPane(pane);
-    const joined = isCallerMember(member, current);
-    const leadHandle = joined && member ? member.handle : 'lead';
-    const plan = await loadPlan(file, leadHandle, env);
+    const loaded = await loadPlan(file, 'lead', env);
+    // $ cannot occur in user keys: the lead shares the ordinary managed-agent lifecycle.
+    const plan: ManifestPlan = {
+      ...loaded,
+      tabs: { ...loaded.tabs, $lead: { layout: 'columns' } },
+      agents: { ...loaded.agents, $lead: loaded.lead },
+    };
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, current);
-    // A dry run starts no lead, so it plans from a script too: it says what up would start.
-    const lead = prepareLead({
-      plan,
-      file,
-      hub,
-      pane,
-      current,
-      leadHandle,
-      livePanes: new Set((await herdr.listPaneTopology()).map((p) => p.pane_id)),
-      interactive: interactive || dryRun,
-    });
     const state = states.find((s) => s.name === plan.name) ?? {
       room: workspace,
       name: plan.name,
@@ -84,7 +77,7 @@ export async function up({
     const { changes, kept } = await planChanges(r, plan);
     if (dryRun) {
       return {
-        output: sanitizeForTerminal(dryRunText(plan.name, changes, lead.launch)),
+        output: sanitizeForTerminal(dryRunText(plan.name, changes)),
         changes,
         deployment: plan.name,
       };
@@ -95,8 +88,7 @@ export async function up({
       r.lines.join('\n') || `Deployment ${plan.name} is unchanged.`,
     );
     return {
-      output: `${summary}\n\n${lead.output}`,
-      launch: lead.launch,
+      output: summary,
       changes,
       deployment: plan.name,
     };
@@ -123,9 +115,7 @@ function assertUnmanagedCaller(states: Deployment[], pane: string, current: Agen
     Object.values(s.agents).some((a) => a.pane === pane || a.terminal === current?.terminal_id),
   );
   if (managed) {
-    throw new Error(
-      'This caller is a managed helper. Run up or down from the user-owned lead pane.',
-    );
+    throw new Error('This caller is a managed agent. Run up or down from a separate control pane.');
   }
 }
 
