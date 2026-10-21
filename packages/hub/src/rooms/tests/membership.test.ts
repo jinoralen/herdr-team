@@ -101,7 +101,7 @@ test('while Herdr is unreachable, posts wait, even from a member whose join is n
   assert.match(herdr.promptsTo('p2')[0]!.text, /posted right after joining/);
 });
 
-test('posts from a refused join are dropped, and so is what waited for it', async () => {
+test('posts from a refused join are dropped and authors of posts for it are warned', async () => {
   const { herdr, env, tick, joinAs, store } = await installed();
   await joinAs('p2', 'claude');
   join({ description: 'ghost', env: env('p9') }); // no agent in that pane
@@ -112,7 +112,8 @@ test('posts from a refused join are dropped, and so is what waited for it', asyn
   assert.equal(store().member('ghost')!.status, 'rejected');
   assert.deepEqual(store().queued('claude'), []);
   assert.deepEqual(store().queued('ghost'), []);
-  assert.equal(herdr.prompts.length, 0);
+  assert.equal(herdr.prompts.length, 1);
+  assert.match(herdr.promptsTo('p2')[0]!.text, /was not delivered.*dropped/);
 });
 
 test('while Herdr is unreachable, an established room keeps posts for later', async () => {

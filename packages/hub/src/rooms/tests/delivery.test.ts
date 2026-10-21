@@ -272,3 +272,20 @@ test('a batch of many posts from one author can always be written ahead', async 
   assert.equal(herdr.promptsTo('p1').length, 1);
   assert.deepEqual(store().queued('claude'), []);
 });
+
+test('a recipient leaving during a prompt that sends nothing keeps the drop warning', async () => {
+  const { herdr, say, joinAs, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  herdr.prompt = async () => {
+    const s = store();
+    s.remove(s.member('claude')!, 'left', 'left the room');
+    throw new HerdrError('agent_blocked', 'blocked');
+  };
+  await say('p2', 'hello');
+  const warnings = store()
+    .queued('codex')
+    .filter((q) => q.kind === 'undelivered');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!.text, /dropped/);
+});

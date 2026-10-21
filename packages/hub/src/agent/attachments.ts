@@ -6,7 +6,7 @@ import path from 'node:path';
 import { filesDir } from '#store';
 
 // An attachment as it will be posted: where it is read from, and the path the others are given.
-type Attachment = { source: string; target: string };
+export type Attachment = { source: string; target: string };
 
 // Checks every path before anything is copied, so a bad one leaves nothing behind. Paths are
 // resolved against cwd (the agent's shell). A file already under files/ is posted as it is.
@@ -49,6 +49,16 @@ export function copyAttachments(attachments: Attachment[]): void {
     if (source !== target) {
       fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
       fs.copyFileSync(source, target);
+    }
+  }
+}
+
+// Takes back what copyAttachments copied, when the post was not queued after all. Each post's copies
+// have a folder of their own.
+export function removeAttachments(attachments: Attachment[]): void {
+  for (const { source, target } of attachments) {
+    if (source !== target) {
+      fs.rmSync(path.dirname(target), { recursive: true, force: true });
     }
   }
 }
