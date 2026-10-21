@@ -38,14 +38,20 @@ In `status`'s recent activity, and in Herdr's plugin log:
 
 ## Automation
 
-Use `status --json` for a machine-readable snapshot of the caller's workspace room.
-The object contains `version`, `room` and `members` (including left, gone and
-rejected records). `version` (now 1) changes when a field others may read changes or goes away;
-compose reads this snapshot and refuses a version it doesn't know
-([ADR 0012](../../adr/0012-hub-stands-alone-compose-builds-on-its-cli.md)). Each member includes its handle, description, launch pane,
+Use `status --json` for a machine-readable snapshot of the caller's workspace room. It is
+compose's view of the room, not a stable API: it carries no version, and its fields change with
+the build. Compose comes from the same build and refuses a snapshot it can't parse
+([ADR 0012](../../adr/0012-hub-stands-alone-compose-builds-on-its-cli.md)). Scripts may read it,
+but must be updated with the plugin.
+
+The object contains `room` and `members` (including left, gone and rejected records). Each member includes its handle, description, launch pane,
 join timestamp, status, terminal, agent, reason, held state, and `queuedFrom`.
-The snapshot is read in one transaction and makes no Herdr calls. It describes
-recorded membership, not live pane health.
+Members are ordered by handle. The snapshot includes only these fields, without member
+instructions. It is read in one statement, makes no Herdr calls, and describes recorded
+membership, not live pane health. Before the first tick, or while the database is still being
+created, it returns an empty room without creating one. A database this build is current with is
+read without reserving a write lock; any other is opened as every command opens it, so one from
+another build is moved aside and a fresh one started.
 
 A handle is reusable when its status is left, gone or rejected and `queuedFrom`
 is false. Orchestrators closing a pane must wait for a tick to mark it gone and

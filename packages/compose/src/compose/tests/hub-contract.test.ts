@@ -55,7 +55,7 @@ const AGENT = { definition: 'reviewer', handle: 'reviewer', prompt: 'Review the 
 const NOT_UNDERSTOOD =
   /unknown option|unknown command|too many arguments|positional now|option now/;
 
-test("compose reads the members from hub's versioned status --json", () => {
+test("compose reads the members from hub's status --json", () => {
   const { hub, run } = setup();
   assert.equal(run(['tick']).code, 0);
   assert.equal(run(['join', '--handle', 'reviewer', '--description', 'reviews']).code, 0);
@@ -73,22 +73,22 @@ test("compose reads the members from hub's versioned status --json", () => {
   );
 });
 
-test('compose refuses a hub whose status --json version it does not read, or that prints no JSON', () => {
+test('compose refuses a hub whose status --json it does not read, or that prints no JSON', () => {
   const { root, env } = setup();
   const other = path.join(root, 'other-hub');
   fs.writeFileSync(
     other,
-    `#!${process.execPath}\nconsole.log(JSON.stringify({ version: 2, room: 'w1', members: [] }));\n`,
+    `#!${process.execPath}\nconsole.log(JSON.stringify({ room: 'w1', members: [{ handle: 'x' }] }));\n`,
     { mode: 0o755 },
   );
   assert.throws(
     () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
-    /status version 2; this compose reads version 1\. Rebuild both, or fix HERDR_TEAM_HUB_BIN\./,
+    /returned a status this compose doesn't read \(at members\.0\.pane_id\)\. Rebuild both, or fix HERDR_TEAM_HUB_BIN\./,
   );
   fs.writeFileSync(other, `#!${process.execPath}\nconsole.log('usage: other-hub');\n`);
   assert.throws(
     () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
-    /reports status version none; this compose reads version 1/,
+    /printed no JSON for status --json\. Rebuild both/,
   );
 });
 

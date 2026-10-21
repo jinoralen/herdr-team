@@ -33,21 +33,32 @@ export type Membership = z.infer<typeof Membership>;
 // its handle (after the helper left) is not.
 export const isJoinOf = (member: Membership, helper: ManagedAgent): boolean =>
   member.joined_at === helper.joinedAt || member.terminal_id === helper.terminal;
-// The `status --json` version this compose reads; hub bumps it when the shape changes.
-const SNAPSHOT_VERSION = 1;
+// What compose reads from `status --json`. Hub and compose come from one build (ADR 0012), so
+// output that doesn't parse means HERDR_TEAM_HUB_BIN points at another build.
 const Snapshot = z.object({
-  version: z.literal(SNAPSHOT_VERSION),
   room: z.string(),
   members: z.array(Membership),
 });
 
-// Hub's stdout as JSON, or null when it isn't: the version check below then names the hub.
-function parseJson(text: string): { version?: unknown } | null {
+// Hub's stdout as JSON, or null when it isn't: the snapshot check below then names the hub.
+function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
     return null;
   }
+}
+
+// Why compose refuses a hub's status --json, so the error says where to look.
+function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeParse>): string {
+  if (json === null) {
+    return 'printed no JSON for status --json';
+  }
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path.join('.') || 'the top';
+    return `returned a status this compose doesn't read (at ${field})`;
+  }
+  return `returned the status of room ${parsed.data.room}`;
 }
 
 export class Hub {
@@ -69,14 +80,11 @@ export class Hub {
       throw new Error(result.stderr.toString().trim());
     }
     const json = parseJson(result.stdout.toString());
-    if (json?.version !== SNAPSHOT_VERSION) {
-      throw new Error(
-        `Hub at ${this.command} reports status version ${json?.version ?? 'none'}; this compose reads version ${SNAPSHOT_VERSION}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
-      );
-    }
     const parsed = Snapshot.safeParse(json);
     if (!parsed.success || parsed.data.room !== this.env.HERDR_WORKSPACE_ID) {
-      throw new Error('Hub returned an invalid membership snapshot. Rebuild hub and retry.');
+      throw new Error(
+        `Hub at ${this.command} ${snapshotProblem(json, parsed)}. Rebuild both, or fix HERDR_TEAM_HUB_BIN.`,
+      );
     }
     return parsed.data.members;
   }

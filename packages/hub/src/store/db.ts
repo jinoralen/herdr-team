@@ -121,6 +121,26 @@ function pragma(client: Database, name: 'user_version' | 'application_id'): numb
   return row?.[name] ?? 0;
 }
 
+// The database opened read-only, for reads that must not create, migrate or set it aside, or null
+// when there is none. It may be renamed aside between the check and the open, which is also none.
+// Waits for locks like any other connection.
+export function openReadOnly(root: string): Database | null {
+  if (!fs.existsSync(dbPath(root))) {
+    return null;
+  }
+  let client: Database;
+  try {
+    client = new Database(dbPath(root), { readonly: true });
+  } catch (error) {
+    if (!fs.existsSync(dbPath(root))) {
+      return null;
+    }
+    throw error;
+  }
+  client.exec('PRAGMA busy_timeout = 5000;');
+  return client;
+}
+
 // A new file, or one built from a prefix of this build's migrations.
 function compatible(client: Database): boolean {
   const version = pragma(client, 'user_version');

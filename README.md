@@ -67,7 +67,7 @@ commands by who runs them.
 | [`leave`](docs/commands/hub/leave.md) | agent | Leave the room; the others are told, and authors are warned of dropped posts |
 | [`invite [agent]`](docs/commands/hub/invite.md) | user or lead agent | Start an agent in this shell pane, or in another with `--pane` (`--json` there), and bring it into its room |
 | [`agents`](docs/commands/hub/agents.md) | user or lead agent | List the agent definitions and what is wrong with any broken one; `--json` |
-| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` (versioned) for automation |
+| [`status`](docs/commands/hub/status.md) | anyone | Members, what waits and why, recent activity; `--json` for automation |
 | [`tick`](docs/commands/hub/tick.md) | Herdr | Bring every room up to date: admit joins, deliver to idle/done agents; not in `--help` |
 
 Agents never name a room: the agent commands act on the room of the agent's workspace.

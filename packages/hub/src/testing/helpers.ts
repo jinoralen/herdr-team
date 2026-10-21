@@ -60,13 +60,13 @@ class FakeHerdr implements Herdr {
     }
   }
 
-  addAgent(pane: string, kind: string, terminal = `t-${pane}`): void {
+  addAgent(pane: string, kind: string, terminal = `t-${pane}`, interactiveReady = true): void {
     this.agents.push({
       pane_id: pane,
       terminal_id: terminal,
       agent: kind,
       agent_status: 'idle',
-      interactive_ready: true,
+      interactive_ready: interactiveReady,
     });
   }
 

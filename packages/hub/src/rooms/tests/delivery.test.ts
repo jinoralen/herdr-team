@@ -289,3 +289,34 @@ test('a recipient leaving during a prompt that sends nothing keeps the drop warn
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!.text, /dropped/);
 });
+
+test('agents whose input is not ready are held until input becomes ready', async () => {
+  const { herdr, say, joinAs, tick, store } = await installed();
+  herdr.addAgent('p1', 'claude', 't-p1', false);
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  await say('p2', 'check this');
+  assert.equal(herdr.promptsTo('p1').length, 0);
+  assert.equal(store().member('claude')!.held, 'its input is not ready');
+  herdr.set('p1', { interactive_ready: true });
+  await tick();
+  assert.equal(herdr.promptsTo('p1').length, 1);
+  assert.match(herdr.promptsTo('p1')[0]!.text, /check this/);
+});
+
+test('JSON status ignores other rooms and undelivered warnings when reporting draining handles', async () => {
+  const { env, joinAs, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'codex');
+  await joinAs('p3', 'pi', 'pi', 'w2');
+  store().enqueue('claude', 'warning', ['codex'], { kind: 'undelivered' });
+  let snapshot = JSON.parse(status({ env: env('p1'), json: true }));
+  assert.deepEqual(
+    snapshot.members.map((m: { handle: string }) => m.handle),
+    ['claude', 'codex'],
+  );
+  assert.equal(snapshot.members[0].queuedFrom, false);
+  store().enqueue('claude', 'post', ['codex']);
+  snapshot = JSON.parse(status({ env: env('p1'), json: true }));
+  assert.equal(snapshot.members[0].queuedFrom, true);
+});

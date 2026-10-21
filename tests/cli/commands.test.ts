@@ -127,6 +127,22 @@ test("help in a member's pane starts with who it is and how to post", async () =
   expect((await run(['--help'], { inPane: true, paneId: 'p9' })).stdout).toMatch(/^Usage:/);
 });
 
+test('status --json answers while another connection holds the write lock', async () => {
+  const { run, root } = cli();
+  await run(['tick']);
+  await run(['join', '--description', 'codex, reviews'], { inPane: true });
+  const writer = new Database(path.join(root, 'state', 'hub', 'chat.db'));
+  writer.exec("BEGIN IMMEDIATE; UPDATE members SET description = 'uncommitted'");
+  try {
+    const result = await run(['status', '--json'], { inPane: true });
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout).members[0].description).toBe('codex, reviews');
+  } finally {
+    writer.exec('ROLLBACK');
+    writer.close();
+  }
+});
+
 test('help in a pane leaves a database from another build as it is', async () => {
   const { run, root } = cli();
   const dir = path.join(root, 'state', 'hub');
@@ -249,20 +265,41 @@ test("tick --startup clears the session's rooms, but only when it knows the sess
 });
 
 test('JSON status exposes room membership and draining handles without Herdr calls', async () => {
-  const { run } = cli();
+  const { run, calls } = cli();
   assert.equal((await run(['tick'])).code, 0);
   assert.equal(
     (await run(['join', '--handle', 'reviewer', '--description', 'reviews'], { inPane: true }))
       .code,
     0,
   );
+  const before = calls().length;
   const pending = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(calls().length, before);
+  assert.deepEqual(
+    Object.keys(pending.members[0]).sort(),
+    [
+      'handle',
+      'description',
+      'pane_id',
+      'joined_at',
+      'status',
+      'terminal_id',
+      'agent',
+      'reason',
+      'held',
+      'queuedFrom',
+    ].sort(),
+  );
   assert.equal(pending.room, 'w1');
   assert.equal(pending.members[0].handle, 'reviewer');
   assert.equal(pending.members[0].status, 'pending');
   assert.equal(pending.members[0].pane_id, 'p1');
+  assert.equal((await run(['tick'])).code, 0);
+  const afterTick = calls().length;
+  assert.ok(afterTick > before, 'the fake records Herdr calls when a tick admits the member');
   assert.equal((await run(['leave'], { inPane: true })).code, 0);
   const left = JSON.parse((await run(['status', '--json'], { inPane: true })).stdout);
+  assert.equal(calls().length, afterTick);
   assert.equal(left.members[0].status, 'left');
   assert.equal(typeof left.members[0].queuedFrom, 'boolean');
 });

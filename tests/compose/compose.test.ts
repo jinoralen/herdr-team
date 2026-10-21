@@ -85,6 +85,33 @@ test('invalid manifests make no layout changes', async () => {
   );
 });
 
+for (const [name, replacement, error] of [
+  [
+    'duplicate handles',
+    '    handle: reviewer\n    tab: helpers\n  duplicate:\n    use: reviewer\n    handle: reviewer\n    tab: helpers',
+    /Handle @reviewer is used by more than one agent/,
+  ],
+  ['unknown tab', '    tab: missing', /Agent reviewer names unknown tab missing/],
+  [
+    'missing cwd',
+    '    tab: helpers\n    cwd: missing-directory',
+    /Working directory .*missing-directory is missing or is not a directory/,
+  ],
+] as const) {
+  test(`${name} is rejected before any layout or agent changes`, async () => {
+    const f = await fixture();
+    await Bun.write(
+      f.file,
+      (await Bun.file(f.file).text()).replace('    tab: helpers', replacement),
+    );
+    await assert.rejects(up(f), error);
+    assert.equal(
+      (await f.read()).calls.some((a) => ['create', 'start', 'close'].includes(a[1]!)),
+      false,
+    );
+  });
+}
+
 test('lost allocation responses are recovered before retrying up', async () => {
   const f = await fixture();
   await f.change({ failCreate: true });

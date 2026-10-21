@@ -1,7 +1,8 @@
 // One room's rows: its members and the messages waiting for them. Every method is scoped to the room.
 
 import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
-import { type Db, openDb, transaction } from './db.ts';
+import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
+import { type Db, isCurrentSchema, openDb, openReadOnly, transaction } from './db.ts';
 import { members, queue, service } from './tables.ts';
 
 // Store methods already know their room, so they read and write members without it.
@@ -309,9 +310,7 @@ export class Store {
     return !!this.db
       .select({ id: queue.message_id })
       .from(queue)
-      .where(
-        and(eq(queue.room, this.room), eq(queue.sender, handle), ne(queue.kind, 'undelivered')),
-      )
+      .where(and(eq(queue.room, this.room), sentBy(handle)))
       .limit(1)
       .get();
   }
@@ -355,4 +354,65 @@ export class Store {
   private forRecipient(recipient: string): ReturnType<typeof and> {
     return and(eq(queue.room, this.room), eq(queue.recipient, recipient));
   }
+
+  // The room's members for `status --json`, read without a write lock so ticks and posts don't wait
+  // for it. No file, or one being created (schema version 0), is an empty room. Any other schema
+  // goes through openDb like every other command: one from another build is set aside, and an
+  // older one of this build's would be migrated.
+  static snapshot(
+    root: string,
+    room: string,
+  ): (Omit<Member, 'instructions'> & { queuedFrom: boolean })[] {
+    checkRoomName(room);
+    const client = openReadOnly(root);
+    if (!client) {
+      return [];
+    }
+    try {
+      const version = client
+        .query<{ user_version: number }, []>('PRAGMA user_version')
+        .get()?.user_version;
+      if (version === 0) {
+        return [];
+      }
+      if (isCurrentSchema(client)) {
+        return readSnapshot(drizzle({ client }), room);
+      }
+    } finally {
+      client.close();
+    }
+    return readSnapshot(openDb(root), room);
+  }
+}
+
+// What reserves a handle while it waits: posts and notices from it. Warnings about it are for other
+// authors, so they don't. One condition for hasQueuedFrom and the snapshot's queuedFrom.
+const sentBy = (handle: string | typeof members.handle): ReturnType<typeof and> =>
+  and(eq(queue.sender, handle), ne(queue.kind, 'undelivered'));
+
+// One statement, so it reads one consistent state of the room.
+function readSnapshot(
+  db: BunSQLiteDatabase,
+  room: string,
+): (Omit<Member, 'instructions'> & { queuedFrom: boolean })[] {
+  return db
+    .select({
+      handle: members.handle,
+      description: members.description,
+      pane_id: members.pane_id,
+      joined_at: members.joined_at,
+      status: members.status,
+      terminal_id: members.terminal_id,
+      agent: members.agent,
+      reason: members.reason,
+      held: members.held,
+      queuedFrom: sql<number>`exists ${db
+        .select({ one: sql`1` })
+        .from(queue)
+        .where(and(eq(queue.room, members.room), sentBy(members.handle)))}`.mapWith(Boolean),
+    })
+    .from(members)
+    .where(eq(members.room, room))
+    .orderBy(asc(members.handle))
+    .all();
 }
