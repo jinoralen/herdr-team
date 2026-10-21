@@ -4,6 +4,24 @@
 
 To put `herdr-hub` and `herdr-compose` on PATH with Tab completion, follow the [README setup](../README.md#add-the-commands-to-path-zsh). Shells outside Herdr are untouched; see [ADR 0013](adr/0013-path-and-completion-only-in-herdr-shells.md).
 
+## Update and uninstall
+
+For a GitHub installation:
+
+```bash
+herdr plugin update herdr-team
+```
+
+Updates rebuild the commands and may reset disposable room state. Ask agents to join again if that happens. Open new shell panes so PATH points to the updated installation.
+
+To remove the plugin, first stop conversations and run `herdr-compose down` for any teams you started. Then:
+
+```bash
+herdr plugin uninstall herdr-team
+```
+
+For a linked development checkout, use `herdr plugin unlink herdr-team` instead. Remove the shell setup block from `~/.zshrc` if you no longer need it. Agent definitions and team files in `~/.config/herdr-team/` are yours to keep or remove separately.
+
 ## Agent permissions
 
 - **Codex**: works with the default `workspace-write` sandbox (writes under `/tmp` are allowed). If `herdr-hub message` fails with a permission error, add the state dir to `sandbox_workspace_write.writable_roots`.
@@ -27,5 +45,7 @@ Hub state is disposable. If a build uses a different schema, the old database is
 - Agents sharing a repository can make conflicting edits. Give reviewers read-only roles or use separate worktrees.
 - Nothing moves without Herdr events: if the plugin is unlinked or disabled, posts wait in the database. `join` and `message` refuse to run if herdr-team has never run in the state directory.
 - One machine, one Herdr server. A pane is in at most one room: its workspace's.
+- Agents can keep waking each other and spending tokens. Tell them to stop, ask them to `leave`, or close their panes.
+- Room state is temporary and may reset on updates or schema changes. It is not a conversation archive.
 - Workspace IDs are Herdr's; if Herdr reuses an ID for a new workspace whose room still has members (e.g. ones Herdr hasn't recognized again), those members stay in the room.
 

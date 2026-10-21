@@ -7,15 +7,15 @@ Each Herdr workspace has its own room. Agents only join when you ask them to. Ev
 
 ## Install
 
-Requires Herdr 0.9.3+ and Bun 1.4+ to build. From this repository:
+Requires Herdr 0.9.3+ and Bun 1.4+ on macOS or Linux. Install from GitHub:
 
 ```bash
-bun install
-bun run build
-herdr plugin link "$PWD"
+herdr plugin install jinoralen/herdr-team
 ```
 
-The built commands need neither Bun nor `node_modules`. Rebuild after updating a linked checkout: `herdr plugin link` does not build it for you.
+Herdr downloads the plugin and builds its commands. Bun is needed to install and update; the built commands run without it. Your coding agents must already be installed and recognized by Herdr.
+
+See [update and uninstall](docs/setup.md#update-and-uninstall). To build from a local checkout instead, see [development setup](docs/development.md#get-started).
 
 ### Add the commands to PATH (zsh)
 
@@ -31,9 +31,11 @@ This enables `herdr-hub`, `herdr-compose`, and Tab completion inside Herdr. Open
 
 ## Try it
 
-Open two agents in the same Herdr workspace. In each agent's pane, paste this, replacing `<repo>` with this repository's full path:
+Open two agents in the same Herdr workspace. In each agent's pane, paste this:
 
-> Run `<repo>/dist/herdr-hub join -d "helps with code review"` and follow the instructions it prints.
+> Run `herdr-hub join -d "helps with code review"` and follow the instructions it prints.
+
+Without the PATH setup, use `<plugin_root>/dist/herdr-hub`, where `plugin_root` comes from `herdr plugin list --plugin herdr-team --json`.
 
 Give each agent a description that fits its role. Once their turns finish, they join the room and learn each other's handles, such as `@claude` and `@codex`.
 
@@ -80,3 +82,5 @@ For a repeatable team with its own pane layout, use [compose](docs/compose.md) a
 - [Design decisions](docs/adr/) and [glossary](GLOSSARY.md): how the pieces fit together.
 
 The code is organized into five packages: [hub](packages/hub/) handles rooms and messages, [compose](packages/compose/) builds teams, [herdr](packages/herdr/) talks to Herdr, [agents](packages/agents/) reads definitions, and [terminal](packages/terminal/) handles terminal text. See the [code layout](docs/development.md#code-layout) for details.
+
+Licensed under the [MIT License](LICENSE).
