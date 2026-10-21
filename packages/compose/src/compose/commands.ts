@@ -11,7 +11,7 @@ import {
   withDeploymentLock,
 } from '#store';
 import { recoverAllocations } from './allocation.ts';
-import { COMPOSE_SELF, Hub, isJoinOf } from './hub.ts';
+import { COMPOSE_SELF, Hub, type HubClient, isJoinOf } from './hub.ts';
 import { isCallerMember, prepareLead, type UpResult } from './lead.ts';
 import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './manifest.ts';
 import { dryRunText, needsTab, planChanges } from './plan.ts';
@@ -33,13 +33,15 @@ import { RetryLater } from './retry.ts';
 const MAX_HELPER_CONTEXT_BYTES = 80_000;
 
 // file: a team name (teams/<name>.yaml in the herdr-team folder) or a path. Without it, up reads
-// herdr-team.yaml in the current folder, and down takes the workspace's only deployment.
-type Options = { file?: string; herdr: LayoutHerdr; env?: NodeJS.ProcessEnv };
+// herdr-team.yaml in the current folder, and down takes the workspace's only deployment. hub:
+// hub's command line unless given, as Herdr is.
+type Options = { file?: string; herdr: LayoutHerdr; hub?: HubClient; env?: NodeJS.ProcessEnv };
 
 export async function up({
   file: team,
   herdr,
   env = process.env,
+  hub = new Hub(env),
   cwd = process.cwd(),
   interactive = true,
   dryRun = false,
@@ -47,7 +49,6 @@ export async function up({
   const { pane, workspace } = requirePaneContext(env);
   const file = resolveTeam(team, env, cwd);
   const root = rootDir(env);
-  const hub = new Hub(env);
   hub.check();
   const current = await callerAgent(herdr, hub, pane);
   return withDeploymentLock(root, async () => {
@@ -102,7 +103,11 @@ export async function up({
   });
 }
 
-async function callerAgent(herdr: LayoutHerdr, hub: Hub, pane: string): Promise<Agent | null> {
+async function callerAgent(
+  herdr: LayoutHerdr,
+  hub: HubClient,
+  pane: string,
+): Promise<Agent | null> {
   const terminal = hub.memberByPane(pane)?.terminal_id;
   if (terminal) {
     const moved = (await herdr.listPanes()).find((a) => a.terminal_id === terminal);
@@ -306,12 +311,12 @@ export async function down({
   file,
   herdr,
   env = process.env,
+  hub = new Hub(env),
   json = false,
 }: Options & { json?: boolean }): Promise<string> {
   const { pane, workspace } = requirePaneContext(env);
   const name = file === undefined ? undefined : await deploymentName(resolveTeam(file, env));
   const root = rootDir(env);
-  const hub = new Hub(env);
   const outcome = await withDeploymentLock(root, async (): Promise<DownOutcome> => {
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, await callerAgent(herdr, hub, pane));

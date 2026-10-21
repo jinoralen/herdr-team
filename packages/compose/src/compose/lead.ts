@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Agent } from '@herdr/herdr';
 import { sanitizeForTerminal, shellQuote } from '@herdr/terminal';
 import type { Membership } from './hub.ts';
-import { COMPOSE_SELF, Hub } from './hub.ts';
+import { COMPOSE_SELF, Hub, type HubClient } from './hub.ts';
 import type { LeadConfig, ManifestPlan } from './manifest.ts';
 import type { Change } from './resources.ts';
 import { RetryLater } from './retry.ts';
@@ -41,7 +41,7 @@ export function prepareLead({
 }: {
   plan: ManifestPlan;
   file: string;
-  hub: Hub;
+  hub: HubClient;
   pane: string;
   // Herdr's open panes: a member in a closed one holds the lead handle only until a tick.
   livePanes: Set<string>;
@@ -87,7 +87,7 @@ export function prepareLead({
 }
 
 function validateLeadHandle(
-  hub: Hub,
+  hub: HubClient,
   pane: string,
   leadHandle: string,
   current: Agent | null,

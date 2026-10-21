@@ -9,8 +9,6 @@ import { fakeBin } from '../fake-bin.ts';
 
 type State = {
   calls: string[][];
-  // The most agent starts that were running at once.
-  maxStarting?: number;
   panes: {
     pane_id: string;
     terminal_id: string;
@@ -62,15 +60,7 @@ const file = process.env.FAKE_STATE;
 const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const lock = () => { for (;;) { try { fs.mkdirSync(file + '.lock'); return; } catch { pause(2); } } };
 const unlock = () => fs.rmSync(file + '.lock', { recursive: true, force: true });
-const update = change => { lock(); const t = JSON.parse(fs.readFileSync(file, 'utf8')); change(t); fs.writeFileSync(file, JSON.stringify(t)); unlock(); };
 const a = process.argv.slice(2);
-// An agent takes startDelay ms to start; starts running at once are counted.
-if (a[0] === 'agent' && a[1] === 'start') {
- let delay = 0;
- update(t => { t.starting = (t.starting ?? 0) + 1; t.maxStarting = Math.max(t.maxStarting ?? 0, t.starting); delay = t.startDelay ?? 0; });
- pause(delay);
- update(t => { t.starting--; });
-}
 lock();
 process.on('exit', unlock);
 const s = JSON.parse(fs.readFileSync(file, 'utf8'));
