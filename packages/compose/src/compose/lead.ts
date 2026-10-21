@@ -36,12 +36,15 @@ export function prepareLead({
   pane,
   current,
   leadHandle,
+  livePanes,
   interactive,
 }: {
   plan: ManifestPlan;
   file: string;
   hub: Hub;
   pane: string;
+  // Herdr's open panes: a member in a closed one holds the lead handle only until a tick.
+  livePanes: Set<string>;
   current: Agent | null;
   leadHandle: string;
   interactive: boolean;
@@ -57,7 +60,7 @@ export function prepareLead({
       'No agent is running in this pane. Add a lead (lead: use: <definition with a kind>) to the team file before running up from a shell.',
     );
   }
-  const joined = validateLeadHandle(hub, pane, leadHandle, current, plan);
+  const joined = validateLeadHandle(hub, pane, leadHandle, current, plan, livePanes);
   const prompt = coordinatorPrompt(plan, file, leadHandle, joined, hub.command);
   if (Buffer.byteLength(prompt) > MAX_LEAD_PROMPT_BYTES) {
     throw new Error(
@@ -89,15 +92,16 @@ function validateLeadHandle(
   leadHandle: string,
   current: Agent | null,
   plan: ManifestPlan,
+  livePanes: Set<string>,
 ): boolean {
   const member = hub.memberByPane(pane);
   const joined = isCallerMember(member, current);
   const occupied = hub.member(leadHandle);
-  if (
-    occupied &&
-    occupied.pane_id !== pane &&
-    (['active', 'pending'].includes(occupied.status) || occupied.queuedFrom)
-  ) {
+  // Held by a member of another pane, as helper handles are checked (checkHandle): one in a live
+  // pane is taken; one in a closed pane, or posts still going out, wait for a tick.
+  const holds =
+    !!occupied && occupied.pane_id !== pane && ['active', 'pending'].includes(occupied.status);
+  if (holds && livePanes.has(occupied.pane_id)) {
     throw new Error(
       `Handle @${leadHandle} is already in use in another pane. Run up from that lead's pane or choose another room.`,
     );
@@ -105,6 +109,11 @@ function validateLeadHandle(
   if (Object.values(plan.agents).some((a) => a.handle === leadHandle)) {
     throw new Error(
       `The caller coordinates as @${leadHandle}; remove that handle from the managed helper entries.`,
+    );
+  }
+  if (holds) {
+    throw new RetryLater(
+      `Handle @${leadHandle} belongs to a member whose pane has closed. Retry ${COMPOSE_SELF} up once a tick has retired it.`,
     );
   }
   if (!joined && occupied && occupied.queuedFrom) {

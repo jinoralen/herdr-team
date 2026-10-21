@@ -63,6 +63,7 @@ export async function up({
       pane,
       current,
       leadHandle,
+      livePanes: new Set((await herdr.listPaneTopology()).map((p) => p.pane_id)),
       interactive: interactive || dryRun,
     });
     const state = states.find((s) => s.name === plan.name) ?? {
