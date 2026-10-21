@@ -1,9 +1,9 @@
 // Starts a room member in the user's current Herdr shell pane, with its guide as the first prompt.
 import { cliHerdr } from '@herdr/herdr';
-import { join, SELF, sanitizeForTerminal } from '#agent';
+import { join, SELF } from '#agent';
 import { rootDir, Store } from '#store';
-import { initialTask, joinLine, memberPrompt, pasteLine } from './prompt.ts';
-import { resolveStart, type Start } from './start.ts';
+import { joinLine, memberPrompt } from './prompt.ts';
+import { prepareStart, refuseRunningAgent, type Start } from './start.ts';
 
 function callerPane(env: NodeJS.ProcessEnv): string {
   if (env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID || !env.HERDR_WORKSPACE_ID) {
@@ -22,14 +22,8 @@ export async function launch({
   prompt?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<string> {
-  const start = resolveStart(given, as, env);
-  const { agent, model, handle } = start;
-  let { description } = start;
-  if (!['codex', 'claude', 'pi'].includes(agent)) {
-    throw new Error('Supported agents are codex, claude and pi.');
-  }
+  const { agent, model, handle, description, task } = prepareStart(given, as, prompt, env);
   const args = modelArgs(model);
-  const task = initialTask(prompt);
   const current = callerPane(env);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Starting an agent requires an interactive terminal.');
@@ -51,12 +45,7 @@ export async function launch({
       `The current Herdr pane no longer exists. Run ${SELF} invite from its current shell.`,
     );
   }
-  description = sanitizeForTerminal(description).trim();
-  if (pane.agent) {
-    throw new Error(
-      `${pane.agent} is already running in this pane. Ask it to run: ${pasteLine({ as, handle, description })}`,
-    );
-  }
+  refuseRunningAgent(pane.agent, 'This pane', { as, handle, description });
   const store = new Store(rootDir(env), env.HERDR_WORKSPACE_ID ?? '');
   const initial = store.transaction(() => {
     const guide = join({ as, description, handle, env });
@@ -71,7 +60,7 @@ export async function launch({
   return process.execve(binary, [binary, ...args, '--', initial], inherited);
 }
 
-// The model was checked by resolveStart.
+// The model was checked by prepareStart.
 function modelArgs(model: string | undefined): string[] {
   return model === undefined ? [] : ['--model', model];
 }

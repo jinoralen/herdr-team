@@ -1,10 +1,10 @@
 // `invite`: starts and enrolls a member in an existing shell pane, leaving pane ownership to the
 // caller. A pane where an agent already runs is never typed into: the caller gets the line to paste.
 import { type Agent, cliHerdr } from '@herdr/herdr';
-import { join, sanitizeForTerminal } from '#agent';
+import { join } from '#agent';
 import { rootDir, Store } from '#store';
-import { initialTask, memberPrompt, pasteLine } from './prompt.ts';
-import { resolveStart, type Start } from './start.ts';
+import { memberPrompt } from './prompt.ts';
+import { prepareStart, refuseRunningAgent, type Start } from './start.ts';
 
 // Who was started where. The text is what a user reads; --json prints the rest.
 export type Invited = { agent: string; handle: string; pane: string; room: string; text: string };
@@ -25,11 +25,7 @@ export function invite({
   prompt?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<Invited> {
-  const start = resolveStart(given, as, env);
-  if (!['codex', 'claude', 'pi'].includes(start.agent)) {
-    throw new Error('Supported agents are codex, claude and pi.');
-  }
-  return launchInPane({ ...start, as, task: initialTask(prompt), pane, env });
+  return launchInPane({ ...prepareStart(given, as, prompt, env), as, pane, env });
 }
 
 function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
@@ -70,18 +66,13 @@ async function launchInPane({
       'The target pane does not exist or has no workspace. Choose an existing Herdr shell pane.',
     );
   }
-  if (pane.agent) {
-    throw new Error(
-      `${target} already runs ${pane.agent}. Ask it to run: ${pasteLine({ as, handle, description })}\nor invite a shell pane.`,
-    );
-  }
+  refuseRunningAgent(pane.agent, target, { as, handle, description }, 'or invite a shell pane.');
   const targetEnv = {
     ...env,
     HERDR_ENV: '1',
     HERDR_PANE_ID: target,
     HERDR_WORKSPACE_ID: pane.workspace_id,
   };
-  description = sanitizeForTerminal(description).trim();
   // Reserve the exact handle before starting anything. A startup tick can reject this shell join;
   // the second join below recovers it after detection, with the same collision checks.
   const store = new Store(rootDir(targetEnv), pane.workspace_id);
