@@ -64,7 +64,7 @@ function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeP
 // Membership is read from hub's `status --json` once and then reused, so lookups don't each run a
 // process. up and down call refresh() where hub's view may have moved on: on taking the deployment
 // lock, and before reconciling (ticks may have run during seconds of Herdr calls). start() refreshes
-// on its own, since it changes membership.
+// on its own, before and after, since it changes membership.
 export class Hub {
   readonly words: string[];
   readonly command: string;
@@ -132,6 +132,8 @@ export class Hub {
       new Response(proc.stderr).text(),
       proc.exited,
     ]);
+    // Other starts may run alongside this one: the next lookup reads hub after this start ended.
+    this.refresh();
     if (code !== 0) {
       const message = stderr.trim() || stdout.trim();
       // Hub's own "retry later" stays one for compose's caller.
