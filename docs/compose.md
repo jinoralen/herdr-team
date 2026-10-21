@@ -31,8 +31,8 @@ description peers see and the instructions come from the definition, which needs
 `kind` and `model` in the team file are refused. Handles default to agent keys, not the
 definition's handle, so two agents may use one definition. Keys and handles are
 1–20 lowercase letters, digits, underscores or hyphens, starting with a letter.
-Team files live in `~/.config/herdr-team/teams/` (`$XDG_CONFIG_HOME/herdr-team`, or
-`HERDR_TEAM_DIR`), and `up <name>` finds them there. All paths, `use` included, resolve
+Team files live in `~/.config/herdr-team/teams/` (`$XDG_CONFIG_HOME/herdr-team`, or an
+absolute `HERDR_TEAM_DIR`), and `up <name>` finds them there. All paths, `use` included, resolve
 relative to the manifest. Shared file contents are included
 in helpers' initial context; shared and agent prompts together define their purpose.
 
@@ -48,8 +48,8 @@ or bypass membership collision checks. A prompt timeout can mean it arrived;
 a retry replaces the uncertain helper instead of repeating its prompt.
 
 Ownership is stored with Drizzle in a separate SQLite database, `compose.db`,
-under `/tmp/herdr-team-<uid>/compose`, beside hub's `hub/`. `HERDR_TEAM_STATE_DIR` overrides
-the base for both.
+under `/tmp/herdr-team-<uid>/compose`, beside hub's `hub/`. An absolute `HERDR_TEAM_STATE_DIR`
+overrides the base for both; a relative one is refused.
 Like hub, compose scopes state by `HERDR_SOCKET_PATH` when present. Hub state
 resets do not erase ownership. An incompatible compose schema fails and preserves
 the database; losing ownership requires manual cleanup of the remaining panes.

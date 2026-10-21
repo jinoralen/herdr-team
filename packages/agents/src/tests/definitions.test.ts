@@ -181,3 +181,10 @@ test('definitionFile tells a missing definition from a folder it cannot read', (
     fs.chmodSync(path.join(dir, 'agents'), 0o755);
   }
 });
+
+test('relative HERDR_TEAM_DIR is refused so processes share one folder', () => {
+  assert.throws(
+    () => loadDefinition('reviewer', { env: { HERDR_TEAM_DIR: 'relative' } }),
+    /HERDR_TEAM_DIR must be an absolute path/,
+  );
+});

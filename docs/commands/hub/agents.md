@@ -2,8 +2,8 @@
 
 ## What it does
 
-Lists the agent definitions in `~/.config/herdr-team/agents/` (`$XDG_CONFIG_HOME/herdr-team`, or
-`HERDR_TEAM_DIR`): each one's handle, kind, model and description, read exactly as
+Lists the agent definitions in `~/.config/herdr-team/agents/` (`$XDG_CONFIG_HOME/herdr-team`, or an
+absolute `HERDR_TEAM_DIR`): each one's handle, kind, model and description, read exactly as
 [`join`](join.md) and [`invite`](invite.md) would read it. A definition that can't be used is
 listed with what is wrong with it rather than left out, and one without a `kind` is marked as able
 to join but not to be started. It only reads the folder, so it needs no Herdr and no room.

@@ -93,3 +93,10 @@ setTimeout(() => { db.exec('COMMIT'); db.close(); }, 250);`,
     db.close();
   }
 });
+
+test('relative HERDR_TEAM_STATE_DIR is refused so processes share one folder', () => {
+  assert.throws(
+    () => rootDir({ HERDR_TEAM_STATE_DIR: 'relative' }),
+    /HERDR_TEAM_STATE_DIR must be an absolute path/,
+  );
+});
