@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { cliHerdr } from '../client.ts';
+import { cliHerdr, run } from '../client.ts';
 
 function fakeBinary(body: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-herdr-'));
@@ -32,10 +32,25 @@ test('prompt text reaches herdr as one argv entry, untouched', async () => {
 
 test('herdr JSON errors become coded errors', async () => {
   const { bin } = fakeBinary(
-    `console.error('{"error":{"code":"agent_blocked","message":"blocked"}}'); process.exit(1);`,
+    `process.stderr.write('{"error":{"code":"agent_blocked","message":"blocked"}}\\n'); process.exit(1);`,
   );
   await assert.rejects(cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).prompt('p', 'x'), {
     code: 'agent_blocked',
+  });
+});
+
+test('a failure without herdr JSON is a process exit, not a timeout', async () => {
+  const { bin } = fakeBinary(`process.stderr.write('panic: socket closed\\n'); process.exit(2);`);
+  await assert.rejects(run(bin, ['pane', 'list'], { timeout: 10000, env: process.env }), {
+    code: 'process_exit',
+    message: 'panic: socket closed',
+  });
+});
+
+test('a herdr that outlives its timeout is killed and reported as one', async () => {
+  const { bin } = fakeBinary('setTimeout(() => {}, 10000);');
+  await assert.rejects(run(bin, ['pane', 'list'], { timeout: 200, env: process.env }), {
+    code: 'timeout',
   });
 });
 
@@ -59,7 +74,7 @@ test('listPanes parses the pane list, panes without an agent included', async ()
 
 test('a closed pane is null', async () => {
   const { bin } = fakeBinary(
-    `console.error('{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}'); process.exit(1);`,
+    `process.stderr.write('{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}\\n'); process.exit(1);`,
   );
   assert.equal(await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).pane('w1:p9'), null);
 });

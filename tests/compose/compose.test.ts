@@ -1,88 +1,80 @@
+// Compose against an in-memory Herdr and hub (world.ts): each test runs up and down in-process and
+// compares the commands they sent. What only the real hub shows is in e2e.test.ts.
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { down, status, teams, up } from '@herdr/compose';
-import { fixture } from './fixture.ts';
+import { sim } from './world.ts';
 
-test('up starts through hub, keeps healthy conversations and moves layout without restarting', async () => {
-  const f = await fixture();
-  await up(f);
-  let history = (await f.read()).calls;
-  assert.equal(history.filter((a: string[]) => a[1] === 'start').length, 1);
-  assert.deepEqual(history.find((a: string[]) => a[1] === 'start')!.slice(-3), [
-    '--',
-    '--model',
-    'example-v1',
+// A failure that waiting fixes: the command line exits with 75 (EX_TEMPFAIL).
+const retryLater =
+  (message: RegExp) =>
+  (error: Error & { exitCode?: number }): boolean =>
+    error.exitCode === 75 && message.test(error.message);
+
+test('up lays out every pane before starting, keeps healthy helpers and moves them for a new layout', async () => {
+  const s = sim();
+  await up(s);
+  assert.deepEqual(s.world.changes(), [
+    'tab create hub-<id>',
+    'tab rename tab1 test:helpers',
+    'tab create hub-<id>',
+    'pane move pane2 --tab tab1 --target-pane pane1 --split right',
+    'pane close pane1',
+    'invite reviewer.md --handle reviewer --pane pane2',
   ]);
-  assert.match(
-    history.find((a: string[]) => a[1] === 'prompt')![3]!,
-    /Your initial task:[\s\S]*Review the code/,
-  );
-  await up(f);
-  await f.write('Review the code', 'rows');
-  await up(f);
-  history = (await f.read()).calls;
-  assert.equal(history.filter((a: string[]) => a[1] === 'start').length, 1);
-  assert.equal(history.filter((a: string[]) => a[1] === 'prompt').length, 1);
-  assert.ok(fs.existsSync(path.join(f.root, 'state', 'compose', 'compose.db')));
-  assert.ok(fs.existsSync(path.join(f.root, 'state', 'hub', 'chat.db')));
+  assert.match(s.world.prompts()[0]!.prompt, /Review the code/);
+  const first = s.world.changes().length;
+  await up(s);
+  assert.deepEqual(s.world.changes().slice(first), ['tab rename tab1 test:helpers']);
+  const second = s.world.changes().length;
+  s.write('Review the code', 'rows');
+  await up(s);
+  assert.deepEqual(s.world.changes().slice(second), [
+    'tab create hub-<id>',
+    'tab rename tab5 test:helpers',
+    'pane move pane2 --tab tab5 --target-pane pane5 --split down',
+    'pane close pane5',
+  ]);
+  assert.ok(fs.existsSync(path.join(s.root, 'state', 'compose', 'compose.db')));
 });
 
 test('changed purpose waits for hub to retire the old membership before replacing', async () => {
-  const f = await fixture();
-  await up(f);
-  await f.write('Review security');
-  await assert.rejects(up(f), /occupied|draining/);
-  // Retrying after a tick fixes it, so the command line says so with EX_TEMPFAIL.
-  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file], {
-    env: f.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  assert.equal(await cli.exited, 75, await new Response(cli.stderr).text());
-  assert.equal((await f.read()).panes.filter((p) => p.agent === 'codex').length, 1);
-  await f.tick();
-  await up(f);
-  assert.equal((await f.read()).calls.filter((a: string[]) => a[1] === 'start').length, 2);
-}, 10_000);
+  const s = sim();
+  await up(s);
+  s.write('Review security');
+  await assert.rejects(up(s), retryLater(/occupied|draining/));
+  assert.equal(s.world.panes.filter((p) => p.agent === 'codex').length, 1);
+  s.world.tick();
+  await up(s);
+  assert.equal(s.world.prompts().length, 2);
+  assert.match(s.world.prompts()[1]!.prompt, /Review security/);
+});
 
 test('down retains unrelated panes and ownership survives hub state removal', async () => {
-  const f = await fixture();
-  await up(f);
-  const state = await f.read();
-  const tab = state.panes.find((p: { pane_id: string }) => p.pane_id !== 'lead')!.tab_id;
-  await f.change({
-    panes: [
-      ...state.panes,
-      {
-        pane_id: 'foreign',
-        terminal_id: 'foreign-t',
-        workspace_id: 'w1',
-        tab_id: tab,
-        agent: null,
-        agent_status: 'idle',
-      },
-    ],
+  const s = sim();
+  await up(s);
+  const tab = s.world.panes.find((p) => p.pane_id !== 'lead')!.tab_id;
+  s.world.panes.push({
+    pane_id: 'foreign',
+    terminal_id: 'foreign-t',
+    workspace_id: 'w1',
+    tab_id: tab,
+    agent: null,
+    agent_status: 'idle',
   });
-  fs.rmSync(path.join(f.root, 'state', 'hub'), { recursive: true });
-  await down(f);
-  assert.deepEqual((await f.read()).panes.map((p: { pane_id: string }) => p.pane_id).sort(), [
-    'foreign',
-    'lead',
-  ]);
-  assert.match(await down(f), /already down/);
+  s.world.forgetMembers();
+  await down(s);
+  assert.deepEqual(s.world.panes.map((p) => p.pane_id).sort(), ['foreign', 'lead']);
+  assert.match(await down(s), /already down/);
 });
 
 test('invalid manifests make no layout changes', async () => {
-  const f = await fixture();
-  await Bun.write(f.file, 'name: test\nagents: broken');
-  await assert.rejects(up(f), /Invalid team YAML/);
-  assert.equal(
-    (await f.read()).calls.some((a: string[]) => ['create', 'start', 'close'].includes(a[1]!)),
-    false,
-  );
+  const s = sim();
+  fs.writeFileSync(s.file, 'name: test\nagents: broken');
+  await assert.rejects(up(s), /Invalid team YAML/);
+  assert.deepEqual(s.world.changes(), []);
 });
 
 for (const [name, replacement, error] of [
@@ -99,204 +91,165 @@ for (const [name, replacement, error] of [
   ],
 ] as const) {
   test(`${name} is rejected before any layout or agent changes`, async () => {
-    const f = await fixture();
-    await Bun.write(
-      f.file,
-      (await Bun.file(f.file).text()).replace('    tab: helpers', replacement),
+    const s = sim();
+    fs.writeFileSync(
+      s.file,
+      fs.readFileSync(s.file, 'utf8').replace('    tab: helpers', replacement),
     );
-    await assert.rejects(up(f), error);
-    assert.equal(
-      (await f.read()).calls.some((a) => ['create', 'start', 'close'].includes(a[1]!)),
-      false,
-    );
+    await assert.rejects(up(s), error);
+    assert.deepEqual(s.world.changes(), []);
   });
 }
 
 for (const retry of ['up', 'down'] as const) {
   test(`a rejected tab creation does not block the next ${retry}`, async () => {
-    const f = await fixture();
-    await f.change({ rejectCreate: true });
-    await assert.rejects(up(f), /refused/);
+    const s = sim();
+    s.world.failNext('create-refused');
+    await assert.rejects(up(s), /refused/);
     if (retry === 'up') {
-      await up(f);
-      assert.equal((await f.read()).panes.length, 2);
+      await up(s);
+      assert.equal(s.world.panes.length, 2);
     } else {
-      await down(f);
+      await down(s);
       assert.deepEqual(
-        (await f.read()).panes.map((p) => p.pane_id),
+        s.world.panes.map((p) => p.pane_id),
         ['lead'],
       );
-      assert.match(await down(f), /already down/);
+      assert.match(await down(s), /already down/);
     }
   });
 }
 
 test('lost allocation responses are recovered before retrying up', async () => {
-  const f = await fixture();
-  await f.change({ failCreate: true });
-  await assert.rejects(up(f), /timeout/);
-  await up(f);
-  const state = await f.read();
-  assert.equal(state.panes.length, 2);
-  assert.equal(state.calls.filter((a: string[]) => a[1] === 'start').length, 1);
+  const s = sim();
+  s.world.failNext('create-lost');
+  await assert.rejects(up(s), /timeout/);
+  await up(s);
+  assert.equal(s.world.panes.length, 2);
+  assert.equal(s.world.prompts().length, 1);
 });
 
 test('uncertain startup prompts are never repeated into the same conversation', async () => {
-  const f = await fixture();
-  await f.change({ failPrompt: true });
-  await assert.rejects(up(f), /Inspect the pane/);
-  await assert.rejects(up(f), /occupied|draining/);
-  await f.tick();
-  await up(f);
-  const prompts = (await f.read()).calls.filter((a: string[]) => a[1] === 'prompt');
-  assert.equal(prompts.length, 2);
-  assert.notEqual(prompts[0]![2], prompts[1]![2]);
+  const s = sim();
+  s.world.failNext('prompt');
+  await assert.rejects(up(s), /Inspect the pane/);
+  await assert.rejects(up(s), retryLater(/occupied|draining/));
+  s.world.tick();
+  await up(s);
+  const [first, second] = s.world.prompts();
+  assert.equal(s.world.prompts().length, 2);
+  assert.notEqual(first!.pane, second!.pane);
 });
 
 test('new helpers start together, and one that fails leaves the others ready', async () => {
-  const f = await fixture();
-  const auditor = '  auditor:\n    use: reviewer\n    tab: helpers\n';
-  await Bun.write(f.file, (await Bun.file(f.file).text()) + auditor);
-  await f.change({ startDelay: 300, failPrompt: true });
-  await assert.rejects(up(f), /Inspect the pane/);
-  assert.equal((await f.read()).maxStarting, 2);
-  const phases = JSON.parse(status({ env: f.env, json: true }))
+  const s = sim();
+  fs.appendFileSync(s.file, '  auditor:\n    use: reviewer\n    tab: helpers\n');
+  s.world.startDelay = 20;
+  s.world.failNext('prompt');
+  await assert.rejects(up(s), /Inspect the pane/);
+  assert.equal(s.world.maxStarting, 2);
+  // Both panes were laid out before either agent started.
+  assert.deepEqual(
+    s.world.changes().filter((c) => c.startsWith('invite')),
+    s.world.changes().slice(-2),
+  );
+  const phases = JSON.parse(status({ ...s, json: true }))
     .deployments[0].agents.map((a: { phase: string }) => a.phase)
     .sort();
   assert.deepEqual(phases, ['ready', 'started']);
 });
 
 test('shared context is resolved before changes and changing it replaces the helper', async () => {
-  const f = await fixture();
-  const yaml = await Bun.file(f.file).text();
-  await Bun.write(f.file, `${yaml}shared:\n  files: [context.md]\n`);
-  await assert.rejects(up(f), /No such file|ENOENT/);
-  assert.equal((await f.read()).panes.length, 1);
-  await Bun.write(path.join(f.root, 'context.md'), 'First brief');
-  await up(f);
-  await Bun.write(path.join(f.root, 'context.md'), 'Second brief');
-  await assert.rejects(up(f), /occupied|draining/);
-  await f.tick();
-  await up(f);
-  const prompts = (await f.read()).calls.filter((a) => a[1] === 'prompt');
-  assert.match(prompts.at(-1)![3]!, /Second brief/);
+  const s = sim();
+  fs.appendFileSync(s.file, 'shared:\n  files: [context.md]\n');
+  await assert.rejects(up(s), /No such file|ENOENT/);
+  assert.deepEqual(s.world.changes(), []);
+  fs.writeFileSync(path.join(s.root, 'context.md'), 'First brief');
+  await up(s);
+  fs.writeFileSync(path.join(s.root, 'context.md'), 'Second brief');
+  await assert.rejects(up(s), retryLater(/occupied|draining/));
+  s.world.tick();
+  await up(s);
+  assert.match(s.world.prompts().at(-1)!.prompt, /Second brief/);
 });
 
 test('colliding deployments do not close or start any additional helpers', async () => {
-  const f = await fixture();
-  await up(f);
-  const before = (await f.read()).calls.filter((a) => ['start', 'close'].includes(a[1]!)).length;
-  await Bun.write(f.file, (await Bun.file(f.file).text()).replace('name: test', 'name: other'));
-  await assert.rejects(up(f), /occupied/);
-  assert.equal(
-    (await f.read()).calls.filter((a) => ['start', 'close'].includes(a[1]!)).length,
-    before,
-  );
+  const s = sim();
+  await up(s);
+  const before = s.world.changes().length;
+  fs.writeFileSync(s.file, fs.readFileSync(s.file, 'utf8').replace('name: test', 'name: other'));
+  await assert.rejects(up(s), /occupied/);
+  assert.deepEqual(s.world.changes().slice(before), []);
 });
 
 test('status reports ownership without Herdr access and down needs no context files', async () => {
-  const f = await fixture();
-  await up(f);
-  const before = (await f.read()).calls.length;
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
-  assert.equal((await f.read()).calls.length, before);
-  await Bun.write(f.file, 'name: test\nshared:\n  files: [missing.md]\n');
-  await down(f);
-  assert.match(status({ env: f.env }), /No deployments/);
+  const s = sim();
+  await up(s);
+  const before = s.world.calls.length;
+  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
+  assert.equal(s.world.calls.length, before);
+  fs.writeFileSync(s.file, 'name: test\nshared:\n  files: [missing.md]\n');
+  await down(s);
+  assert.match(status(s), /No deployments/);
 });
 
 test('shell bootstrap delegates the lead to hub and keeps the lead outside ownership', async () => {
-  const f = await fixture();
-  const state = await f.read();
-  state.panes[0]!.agent = null;
-  await f.change({ panes: state.panes });
-  const result = await up({ ...f, interactive: true });
+  const s = sim();
+  s.world.panes[0]!.agent = null;
+  const result = await up({ ...s, interactive: true });
   assert.equal(result.launch?.kind, 'codex');
   assert.match(result.launch!.prompt, /Hub starts you as @lead/);
-  await down(f);
-  assert.equal((await f.read()).panes[0]!.pane_id, 'lead');
-});
-
-test('compose preserves Claude extended-context model aliases through hub startup', async () => {
-  const f = await fixture();
-  await f.define(
-    'reviewer',
-    '---\ndescription: reviews\nkind: claude\nmodel: sonnet[1m]\n---\nx\n',
+  await down(s);
+  assert.deepEqual(
+    s.world.panes.map((p) => p.pane_id),
+    ['lead'],
   );
-  await up(f);
-  const start = (await f.read()).calls.find((args) => args[1] === 'start')!;
-  assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
 });
 
 for (const swap of [false, true]) {
   test(`${swap ? 'swapping' : 'reassigning'} owned handles retires helpers before waiting for reuse`, async () => {
-    const f = await fixture();
-    const original = await Bun.file(f.file).text();
+    const s = sim();
+    const original = fs.readFileSync(s.file, 'utf8');
     const auditor = '  auditor:\n    use: reviewer\n    tab: helpers\n';
-    await Bun.write(f.file, original + auditor);
-    await up(f);
+    fs.writeFileSync(s.file, original + auditor);
+    await up(s);
     const changed = original.replace(
       '    use: reviewer\n    tab: helpers',
       '    use: reviewer\n    handle: auditor\n    tab: helpers',
     );
-    await Bun.write(
-      f.file,
+    fs.writeFileSync(
+      s.file,
       changed +
         (swap ? auditor.replace('    tab: helpers', '    handle: reviewer\n    tab: helpers') : ''),
     );
-    await assert.rejects(up(f), /occupied|draining/);
+    await assert.rejects(up(s), retryLater(/occupied|draining/));
     assert.deepEqual(
-      (await f.read()).panes.filter((p) => p.agent).map((p) => p.pane_id),
+      s.world.panes.filter((p) => p.agent).map((p) => p.pane_id),
       ['lead'],
     );
-    await f.tick();
-    await up(f);
-    assert.match(status({ env: f.env }), /reviewer=@auditor \(ready; room: \w+\)/);
+    s.world.tick();
+    await up(s);
+    assert.match(status(s), /reviewer=@auditor \(ready; room: active\)/);
     if (swap) {
-      assert.match(status({ env: f.env }), /auditor=@reviewer \(ready; room: \w+\)/);
+      assert.match(status(s), /auditor=@reviewer \(ready; room: active\)/);
     }
-    const starts = (await f.read()).calls.filter((args) => args[1] === 'start').length;
-    await up(f);
-    assert.equal((await f.read()).calls.filter((args) => args[1] === 'start').length, starts);
-  }, 10_000);
+    const starts = s.world.prompts().length;
+    await up(s);
+    assert.equal(s.world.prompts().length, starts);
+  });
 }
 
-test('helpers start from their definition: its kind, model and description reach hub and peers', async () => {
-  const f = await fixture();
-  await up(f);
-  const calls = (await f.read()).calls;
-  const start = calls.find((a: string[]) => a[1] === 'start')!;
-  assert.deepEqual(start.slice(3, 5), ['--kind', 'codex']);
-  const prompt = calls.find((a: string[]) => a[1] === 'prompt')![3]!;
-  assert.match(
-    prompt,
-    /Your instructions:\nReview when asked\.[\s\S]*Your initial task:[\s\S]*Review the code/,
-  );
-  const hub = Bun.spawnSync([...(await hubCommand()), 'status', '--json'], { env: f.env });
-  const members = JSON.parse(hub.stdout.toString()).members as { handle: string }[];
-  assert.ok(members.some((m) => m.handle === 'reviewer'));
-  assert.match(
-    Bun.spawnSync([...(await hubCommand()), 'status'], { env: f.env }).stdout.toString(),
-    /@reviewer — reviews the code/,
-  );
-});
-
 test('editing a definition replaces the helper on the next up', async () => {
-  const f = await fixture();
-  await up(f);
-  await up(f);
-  assert.equal((await f.read()).calls.filter((a: string[]) => a[1] === 'start').length, 1);
-  await f.define(
-    'reviewer',
-    '---\ndescription: reviews the code\nkind: codex\n---\nReview security.\n',
-  );
-  await assert.rejects(up(f), /occupied|draining/);
-  await f.tick();
-  await up(f);
-  const prompts = (await f.read()).calls.filter((a: string[]) => a[1] === 'prompt');
-  assert.equal(prompts.length, 2);
-  assert.match(prompts.at(-1)![3]!, /Review security\./);
-}, 10_000);
+  const s = sim();
+  await up(s);
+  await up(s);
+  assert.equal(s.world.prompts().length, 1);
+  s.define('reviewer', '---\ndescription: reviews the code\nkind: codex\n---\nReview security.\n');
+  await assert.rejects(up(s), retryLater(/occupied|draining/));
+  s.world.tick();
+  await up(s);
+  assert.equal(s.world.prompts().length, 2);
+});
 
 test('inline kind and missing definitions are refused before any layout change', async () => {
   for (const [entry, error] of [
@@ -306,90 +259,89 @@ test('inline kind and missing definitions are refused before any layout change',
       /No agent definition "nobody" .* Definitions there: coordinator, reviewer\./,
     ],
   ] as const) {
-    const f = await fixture();
-    await Bun.write(
-      f.file,
-      (await Bun.file(f.file).text()).replace('    use: reviewer\n    tab: helpers', entry),
+    const s = sim();
+    fs.writeFileSync(
+      s.file,
+      fs.readFileSync(s.file, 'utf8').replace('    use: reviewer\n    tab: helpers', entry),
     );
-    await assert.rejects(up(f), error);
-    assert.equal(
-      (await f.read()).calls.some((a: string[]) => ['create', 'start', 'close'].includes(a[1]!)),
-      false,
-    );
+    await assert.rejects(up(s), error);
+    assert.deepEqual(s.world.changes(), []);
   }
 });
 
 test('a team is found by name in the herdr-team folder, and use: paths are relative to it', async () => {
-  const f = await fixture();
-  const teams = path.join(f.root, 'team', 'teams');
-  fs.mkdirSync(path.join(teams, 'local'), { recursive: true });
+  const s = sim();
+  const dir = path.join(s.root, 'team', 'teams');
+  fs.mkdirSync(path.join(dir, 'local'), { recursive: true });
   fs.writeFileSync(
-    path.join(teams, 'local', 'helper.md'),
+    path.join(dir, 'local', 'helper.md'),
     '---\ndescription: helps locally\nkind: codex\n---\nHelp.\n',
   );
-  const yaml = (await Bun.file(f.file).text()).replace(
-    '    use: reviewer',
-    '    use: ./local/helper.md',
+  fs.writeFileSync(
+    path.join(dir, 'test.yaml'),
+    fs.readFileSync(s.file, 'utf8').replace('    use: reviewer', '    use: ./local/helper.md'),
   );
-  fs.writeFileSync(path.join(teams, 'test.yaml'), yaml);
-  await up({ ...f, file: 'test' });
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
-  const prompt = (await f.read()).calls.find((a: string[]) => a[1] === 'prompt')![3]!;
-  assert.match(prompt, /Your instructions:\nHelp\./);
-  assert.match(await down({ ...f, file: 'test' }), /is down/);
+  await up({ ...s, file: 'test' });
+  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
+  assert.equal(
+    s.world.calls.find((c) => c[0] === 'invite')![1],
+    path.join(dir, 'local', 'helper.md'),
+  );
+  assert.match(await down({ ...s, file: 'test' }), /is down/);
 });
 
 test('up without a team reads herdr-team.yaml in the current folder only', async () => {
-  const f = await fixture();
-  const project = path.join(f.root, 'project');
+  const s = sim();
+  const project = path.join(s.root, 'project');
   fs.mkdirSync(path.join(project, 'nested'), { recursive: true });
-  fs.mkdirSync(path.join(f.root, 'team', 'teams'), { recursive: true });
-  fs.writeFileSync(path.join(f.root, 'team', 'teams', 'review.yaml'), 'name: review\n');
+  fs.mkdirSync(path.join(s.root, 'team', 'teams'), { recursive: true });
+  fs.writeFileSync(path.join(s.root, 'team', 'teams', 'review.yaml'), 'name: review\n');
   await assert.rejects(
-    up({ ...f, file: undefined, cwd: project }),
+    up({ ...s, file: undefined, cwd: project }),
     new RegExp(`No herdr-team\\.yaml in ${project}\\. Teams in .*teams: review; name one\\.`),
   );
-  fs.copyFileSync(f.file, path.join(project, 'herdr-team.yaml'));
+  fs.copyFileSync(s.file, path.join(project, 'herdr-team.yaml'));
   await assert.rejects(
-    up({ ...f, file: undefined, cwd: path.join(project, 'nested') }),
+    up({ ...s, file: undefined, cwd: path.join(project, 'nested') }),
     /No herdr-team/,
   );
-  await up({ ...f, file: undefined, cwd: project });
-  assert.match(status({ env: f.env }), /Deployment test: reviewer=@reviewer \(ready; room: \w+\)/);
+  await up({ ...s, file: undefined, cwd: project });
+  assert.match(status(s), /Deployment test: reviewer=@reviewer \(ready; room: active\)/);
 });
 
 test('down without a team takes down the only deployment, and names them when there are several', async () => {
-  const f = await fixture();
-  assert.equal(await down({ ...f, file: undefined }), 'No deployments in this workspace.');
-  await up(f);
-  const other = path.join(f.root, 'other.yaml');
+  const s = sim();
+  assert.equal(await down({ ...s, file: undefined }), 'No deployments in this workspace.');
+  await up(s);
+  const other = path.join(s.root, 'other.yaml');
   fs.writeFileSync(other, 'name: other\ntabs: {}\nagents: {}\n');
-  await up({ ...f, file: other });
+  await up({ ...s, file: other });
   await assert.rejects(
-    down({ ...f, file: undefined }),
+    down({ ...s, file: undefined }),
     /This workspace has 2 deployments: (other, test|test, other)\. Name the one to take down\./,
   );
-  await down({ ...f, file: other });
-  assert.match(await down({ ...f, file: undefined }), /Deployment test is down\./);
+  await down({ ...s, file: other });
+  assert.match(await down({ ...s, file: undefined }), /Deployment test is down\./);
 });
 
 test('up --dry-run says what it would do and why, and changes nothing', async () => {
-  const f = await fixture();
-  const fresh = await up({ ...f, dryRun: true });
+  const s = sim();
+  const fresh = await up({ ...s, dryRun: true });
   assert.equal(
     fresh.output,
     'Dry run of test; nothing was changed.\nLay out tab helpers in a new tab.\nStart @reviewer (reviewer) in tab helpers.',
   );
-  assert.equal(status({ env: f.env }), 'No deployments in this workspace.');
-  await up(f);
-  const before = (await f.read()).calls.length;
-  assert.match((await up({ ...f, dryRun: true })).output, /Deployment test is unchanged\./);
-  await f.write('Review security');
-  await f.define(
+  assert.deepEqual(s.world.changes(), []);
+  assert.equal(status(s), 'No deployments in this workspace.');
+  await up(s);
+  const before = s.world.changes().length;
+  assert.match((await up({ ...s, dryRun: true })).output, /Deployment test is unchanged\./);
+  s.write('Review security');
+  s.define(
     'reviewer',
     '---\ndescription: reviews security\nkind: codex\nmodel: example-v1\n---\nReview.\n',
   );
-  const changed = await up({ ...f, dryRun: true });
+  const changed = await up({ ...s, dryRun: true });
   assert.match(
     changed.output,
     /Replace @reviewer \(reviewer\): its definition changed, its prompt changed\./,
@@ -402,115 +354,91 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
       reasons: ['its definition changed', 'its prompt changed'],
     },
   ]);
-  const after = (await f.read()).calls.slice(before);
-  assert.equal(
-    after.some((a: string[]) => ['create', 'start', 'close', 'move', 'prompt'].includes(a[1]!)),
-    false,
-  );
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: \w+\)/);
+  assert.deepEqual(s.world.changes().slice(before), []);
+  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
 });
 
 test('up --dry-run plans from a script in a shell pane, where up itself is refused', async () => {
-  const f = await fixture();
-  const { panes } = await f.read();
-  await f.change({ panes: panes.map((p) => ({ ...p, agent: null })) });
-  const planned = await up({ ...f, interactive: false, dryRun: true });
+  const s = sim();
+  s.world.panes[0]!.agent = null;
+  const planned = await up({ ...s, interactive: false, dryRun: true });
   assert.match(planned.output, /Start the codex lead in this pane\.$/);
-  await assert.rejects(up({ ...f, interactive: false }), /No agent is recognized in this pane/);
+  await assert.rejects(up({ ...s, interactive: false }), /No agent is recognized in this pane/);
 });
 
-test("status shows each helper's room membership, and JSON for status, down and up", async () => {
-  const f = await fixture();
-  await up(f);
-  const listed = JSON.parse(status({ env: f.env, json: true }));
+test("status shows each helper's room membership, and JSON for status and down", async () => {
+  const s = sim();
+  await up(s);
+  const listed = JSON.parse(status({ ...s, json: true }));
   assert.equal(listed.deployments[0].name, 'test');
-  assert.deepEqual(
-    { ...listed.deployments[0].agents[0], pane: 'p' },
-    { key: 'reviewer', handle: 'reviewer', phase: 'ready', pane: 'p', room: 'active' },
-  );
-  fs.rmSync(path.join(f.root, 'state', 'hub'), { recursive: true });
-  await f.tick();
-  assert.match(status({ env: f.env }), /reviewer=@reviewer \(ready; room: not a member\)/);
-  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file, '--dry-run', '--json'], {
-    env: f.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
+  assert.deepEqual(listed.deployments[0].agents[0], {
+    key: 'reviewer',
+    handle: 'reviewer',
+    phase: 'ready',
+    pane: 'pane2',
+    room: 'active',
   });
-  const planned = JSON.parse(await new Response(cli.stdout).text());
-  assert.equal(await cli.exited, 0);
-  assert.equal(planned.deployment, 'test');
-  assert.equal(planned.dryRun, true);
-  assert.deepEqual(planned.changes[0], {
+  s.world.forgetMembers();
+  assert.match(status(s), /reviewer=@reviewer \(ready; room: not a member\)/);
+  assert.deepEqual((await up({ ...s, dryRun: true })).changes?.[0], {
     action: 'replace',
     agent: 'reviewer',
     handle: 'reviewer',
     reasons: ['its conversation is gone'],
   });
-  assert.deepEqual(JSON.parse(await down({ ...f, json: true })), {
+  assert.deepEqual(JSON.parse(await down({ ...s, json: true })), {
     deployment: 'test',
     removed: ['reviewer'],
   });
-  assert.deepEqual(JSON.parse(await down({ ...f, file: undefined, json: true })), {
+  assert.deepEqual(JSON.parse(await down({ ...s, file: undefined, json: true })), {
     deployment: null,
     removed: [],
   });
 });
 
 test("a running lead is told to join as the team's lead definition, else with a made-up role", async () => {
-  const f = await fixture();
-  const coordinator = path.join(f.root, 'team', 'agents', 'coordinator.md');
+  const s = sim();
+  const coordinator = path.join(s.root, 'team', 'agents', 'coordinator.md');
   assert.match(
-    (await up(f)).output,
+    (await up(s)).output,
     new RegExp(`First join as @lead: .* join '?${coordinator}'? --handle lead\\. Confirm`),
   );
-  await down(f);
-  await f.tick();
-  await Bun.write(
-    f.file,
-    (await Bun.file(f.file).text()).replace('lead:\n  use: coordinator\n', ''),
+  await down(s);
+  s.world.tick();
+  fs.writeFileSync(
+    s.file,
+    fs.readFileSync(s.file, 'utf8').replace('lead:\n  use: coordinator\n', ''),
   );
   assert.match(
-    (await up(f)).output,
+    (await up(s)).output,
     /First join as @lead: .* join --handle lead --description 'lead, coordinates test'\. Confirm/,
   );
 });
 
 test('@lead held from another pane is taken while that pane is open, and retried once it closes', async () => {
-  const f = await fixture();
-  const { panes } = await f.read();
-  const other = { ...panes[0]!, pane_id: 'other', terminal_id: 'other-terminal' };
-  await f.change({ panes: [...panes, other] });
-  const join = Bun.spawn(
-    [...(await hubCommand()), 'join', '--handle', 'lead', '--description', 'lead, elsewhere'],
-    { env: { ...f.env, HERDR_PANE_ID: 'other' }, stdout: 'pipe', stderr: 'pipe' },
-  );
-  assert.equal(await join.exited, 0, await new Response(join.stderr).text());
-  await assert.rejects(up(f), /already in use in another pane/);
-  await f.change({ panes });
-  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file], {
-    env: f.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  assert.equal(await cli.exited, 75);
-  assert.match(await new Response(cli.stderr).text(), /pane has closed/);
-}, 10_000);
+  const s = sim();
+  s.world.panes.push({ ...s.world.panes[0]!, pane_id: 'other', terminal_id: 'other-terminal' });
+  s.world.join('lead', 'other');
+  await assert.rejects(up(s), /already in use in another pane/);
+  s.world.panes = s.world.panes.filter((p) => p.pane_id !== 'other');
+  await assert.rejects(up(s), retryLater(/pane has closed/));
+  assert.deepEqual(s.world.changes(), []);
+});
 
 test('teams lists the team files, each read as up would, without Herdr', async () => {
-  const f = await fixture();
-  assert.match(await teams({ env: f.env }), /^No teams in .*teams\./);
-  const dir = path.join(f.root, 'team', 'teams');
+  const s = sim();
+  assert.match(await teams(s), /^No teams in .*teams\./);
+  const dir = path.join(s.root, 'team', 'teams');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, 'review.yaml'),
-    (await Bun.file(f.file).text()).replace('name: test', 'name: review'),
+    fs.readFileSync(s.file, 'utf8').replace('name: test', 'name: review'),
   );
   fs.writeFileSync(path.join(dir, 'broken.yml'), 'name: broken\nagents:\n  a:\n    use: nobody\n');
-  const before = (await f.read()).calls.length;
-  const listed = await teams({ env: f.env });
+  const listed = await teams(s);
   assert.match(listed, / {2}review: deployment review, agents reviewer/);
   assert.match(listed, / {2}broken: /);
-  const json = JSON.parse(await teams({ env: f.env, json: true }));
+  const json = JSON.parse(await teams({ ...s, json: true }));
   assert.deepEqual(
     json.teams.map((t: { name: string; problem?: string }) => [t.name, !!t.problem]),
     [
@@ -518,19 +446,5 @@ test('teams lists the team files, each read as up would, without Herdr', async (
       ['review', false],
     ],
   );
-  assert.equal((await f.read()).calls.length, before);
+  assert.deepEqual(s.world.calls, []);
 });
-
-// The compose executable, as users run it.
-async function composeCommand(): Promise<string[]> {
-  return process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-compose')]
-    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/compose/cli'))];
-}
-
-// The hub executable compose itself runs.
-async function hubCommand(): Promise<string[]> {
-  return process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
-    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
-}

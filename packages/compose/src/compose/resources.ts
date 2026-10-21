@@ -3,12 +3,12 @@
 import type { LayoutHerdr, Pane } from '@herdr/herdr';
 import { type Deployment, type ManagedAgent, type ManagedTab, saveDeployment } from '#store';
 import { allocate, consume } from './allocation.ts';
-import { COMPOSE_SELF, type Hub } from './hub.ts';
+import { COMPOSE_SELF, type HubClient } from './hub.ts';
 import type { DesiredAgent } from './manifest.ts';
 import { RetryLater } from './retry.ts';
 
 export type Runtime = {
-  hub: Hub;
+  hub: HubClient;
   root: string;
   state: Deployment;
   herdr: LayoutHerdr;

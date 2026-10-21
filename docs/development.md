@@ -42,7 +42,7 @@ packages use `@herdr/...` names and declared `workspace:*` dependencies.
 | `agent/` | what agents run (`join`, `message`, `status`, …) and the text they read | `store` |
 | `store/` | the SQLite database: tables, migrations, queries | — |
 
-Each hub module keeps its tests in its own `tests/` folder (`rooms/tests/delivery.test.ts`, `store/tests/store.test.ts`, …), one file per subject. Tests may use their own module's internal files, but other modules only through `index.ts`. Their shared helpers (a fake Herdr, a fresh state directory) are in `testing/`. The command line is tested by running the real program in a child process against a fake `herdr` executable (`tests/cli/`).
+Each hub module keeps its tests in its own `tests/` folder (`rooms/tests/delivery.test.ts`, `store/tests/store.test.ts`, …), one file per subject. Tests may use their own module's internal files, but other modules only through `index.ts`. Their shared helpers (a fake Herdr, a fresh state directory) are in `testing/`. The command line is tested by running the real program in a child process against a fake `herdr` executable (`tests/cli/`). Compose's tests run `up` and `down` in-process against an in-memory Herdr and hub that record every command (`tests/compose/world.ts`), and compare those commands; `tests/compose/e2e.test.ts` checks the few things that need the real hub. Fake executables are written once per content and reused (`tests/fake-bin.ts`): macOS checks a new executable on its first run, which takes 200–300ms.
 
 ```bash
 bun run build:hub                           # build only hub

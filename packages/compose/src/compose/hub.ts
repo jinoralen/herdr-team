@@ -61,6 +61,13 @@ function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeP
   return `returned the status of room ${parsed.data.room}`;
 }
 
+// What up, down and status ask of hub. Hub (below) runs hub's command line; tests pass an
+// in-memory one.
+export type HubClient = Pick<
+  Hub,
+  'command' | 'check' | 'refresh' | 'members' | 'member' | 'memberByPane' | 'start'
+>;
+
 // Membership is read from hub's `status --json` once and then reused, so lookups don't each run a
 // process. up and down call refresh() where hub's view may have moved on: on taking the deployment
 // lock, and before reconciling (ticks may have run during seconds of Herdr calls). start() refreshes

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fakeBin } from '../fake-bin.ts';
 
 const MAIN = fileURLToPath(import.meta.resolve('@herdr/hub/cli'));
 const BIN_DIR: string | undefined = process.env.HERDR_TEST_BIN_DIR;
@@ -47,8 +48,7 @@ type Cli = {
 export function cli(env: Record<string, string> = {}): Cli {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-cli-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
-  const herdr = path.join(root, 'herdr');
-  fs.writeFileSync(herdr, FAKE_HERDR, { mode: 0o755 });
+  const herdr = fakeBin('herdr', FAKE_HERDR);
   const promptsLog = path.join(root, 'prompts.log');
   const base = {
     PATH: process.env.PATH ?? '',

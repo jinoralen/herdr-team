@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fakeBin } from '../fake-bin.ts';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
@@ -21,13 +22,10 @@ await Bun.write(process.env.LAUNCH_RESULT, JSON.stringify({
 }));
 process.exit(23);
 `;
-  for (const agent of ['codex', 'claude', 'pi']) {
-    const file = Bun.file(path.join(fixture.root, agent));
-    await Bun.write(file, harness);
-    fs.chmodSync(file.name!, 0o755);
-  }
-  await Bun.write(
-    path.join(fixture.root, 'herdr'),
+  // The agents' folder, with one harness per agent.
+  const agents = path.dirname(['codex', 'claude', 'pi'].map((a) => fakeBin(a, harness))[0]!);
+  const herdr = fakeBin(
+    'herdr',
     `#!${process.execPath}
 console.log(JSON.stringify({result: {pane: {
   pane_id: 'p1', terminal_id: 't1', agent: process.env.LIVE_AGENT || null, agent_status: 'idle'
@@ -35,12 +33,12 @@ console.log(JSON.stringify({result: {pane: {
 `,
   );
   const env = {
-    PATH: `${fixture.root}:${process.env.PATH ?? ''}`,
+    PATH: `${agents}:${process.env.PATH ?? ''}`,
     HERDR_ENV: '1',
     HERDR_PANE_ID: 'p1',
     HERDR_WORKSPACE_ID: 'w1',
     HERDR_TEAM_STATE_DIR: path.join(fixture.root, 'state'),
-    HERDR_BIN_PATH: path.join(fixture.root, 'herdr'),
+    HERDR_BIN_PATH: herdr,
     LAUNCH_RESULT: result,
     LAUNCH_MARKER: 'preserved',
   };
@@ -141,7 +139,7 @@ test('invite without --pane requires a handle and an interactive Herdr terminal'
 
 test('a missing agent executable fails before registering the pane', async () => {
   const { start, root, result, run } = await shell();
-  fs.unlinkSync(path.join(root, 'codex'));
+  // The agents are in their own folder, so PATH here has no codex.
   const launched = await start('codex', { PATH: root });
   assert.equal(launched.code, 1);
   assert.equal(await Bun.file(result).exists(), false);

@@ -4,15 +4,17 @@
 import { requirePaneContext } from '@herdr/herdr';
 import { sanitizeForTerminal } from '@herdr/terminal';
 import { type Deployment, deployments, type ManagedAgent, rootDir } from '#store';
-import { Hub, isJoinOf, type Membership } from './hub.ts';
+import { Hub, type HubClient, isJoinOf, type Membership } from './hub.ts';
 
 type Room = Membership['status'] | 'not a member';
 
 export function status({
   env = process.env,
+  hub,
   json = false,
 }: {
   env?: NodeJS.ProcessEnv;
+  hub?: HubClient;
   json?: boolean;
 } = {}): string {
   const { workspace } = requirePaneContext(env);
@@ -22,7 +24,7 @@ export function status({
   let unavailable = '';
   if (states.length) {
     try {
-      members = new Hub(env).members();
+      members = (hub ?? new Hub(env)).members();
     } catch (error) {
       unavailable = (error as Error).message;
     }

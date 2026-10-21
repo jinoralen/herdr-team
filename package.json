@@ -11,7 +11,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "knip": "knip",
-    "verify": "biome check . && bun check && knip && bun test",
+    "verify": "biome check . && bun check && knip && bun test --parallel",
     "prepare": "lefthook install",
     "db:generate": "bun run --filter @herdr/hub db:generate",
     "build:hub": "bun run --filter @herdr/hub build",

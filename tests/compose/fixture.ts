@@ -5,11 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cliLayoutHerdr, type LayoutHerdr } from '@herdr/herdr';
+import { fakeBin } from '../fake-bin.ts';
 
 type State = {
   calls: string[][];
-  // The most agent starts that were running at once.
-  maxStarting?: number;
   panes: {
     pane_id: string;
     terminal_id: string;
@@ -34,7 +33,6 @@ export async function fixture(): Promise<Fixture> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-test-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = path.join(root, 'herdr.json');
-  const fake = path.join(root, 'herdr');
   await Bun.write(
     state,
     JSON.stringify({
@@ -53,8 +51,8 @@ export async function fixture(): Promise<Fixture> {
       ],
     }),
   );
-  await Bun.write(
-    fake,
+  const fake = fakeBin(
+    'herdr',
     `#!${process.execPath}
 import fs from 'node:fs';
 const file = process.env.FAKE_STATE;
@@ -62,15 +60,7 @@ const file = process.env.FAKE_STATE;
 const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const lock = () => { for (;;) { try { fs.mkdirSync(file + '.lock'); return; } catch { pause(2); } } };
 const unlock = () => fs.rmSync(file + '.lock', { recursive: true, force: true });
-const update = change => { lock(); const t = JSON.parse(fs.readFileSync(file, 'utf8')); change(t); fs.writeFileSync(file, JSON.stringify(t)); unlock(); };
 const a = process.argv.slice(2);
-// An agent takes startDelay ms to start; starts running at once are counted.
-if (a[0] === 'agent' && a[1] === 'start') {
- let delay = 0;
- update(t => { t.starting = (t.starting ?? 0) + 1; t.maxStarting = Math.max(t.maxStarting ?? 0, t.starting); delay = t.startDelay ?? 0; });
- pause(delay);
- update(t => { t.starting--; });
-}
 lock();
 process.on('exit', unlock);
 const s = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -109,7 +99,6 @@ else if (a[0] === 'tab' && a[1] === 'create') {
 } else fail('unsupported');
 `,
   );
-  fs.chmodSync(fake, 0o755);
   const hub = process.env.HERDR_TEST_BIN_DIR
     ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
