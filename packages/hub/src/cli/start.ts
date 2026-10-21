@@ -1,10 +1,47 @@
-// What `invite` starts: the flags given, and the agent definition for the rest.
+// What `invite` starts: the flags given, and the agent definition for the rest. Both invite modes
+// (this pane, launch.ts; another pane, remote.ts) check what they start here.
 import { loadDefinition } from '@herdr/agents';
 import { sanitizeForTerminal } from '#agent';
+import { initialTask, pasteLine } from './prompt.ts';
 
 export type Start = { agent: string; model?: string; handle: string; description: string };
 
-export function resolveStart(
+const SUPPORTED = ['codex', 'claude', 'pi'];
+
+// What to start, checked before anything is touched: a supported agent, a terminal-safe
+// description, and the initial task (or the default one).
+export function prepareStart(
+  given: Partial<Start>,
+  as: string | undefined,
+  prompt: string | undefined,
+  env: NodeJS.ProcessEnv,
+): Start & { task: string } {
+  const start = resolveStart(given, as, env);
+  if (!SUPPORTED.includes(start.agent)) {
+    throw new Error('Supported agents are codex, claude and pi.');
+  }
+  return {
+    ...start,
+    description: sanitizeForTerminal(start.description).trim(),
+    task: initialTask(prompt),
+  };
+}
+
+// A pane where an agent already runs is never typed into: the caller gets the line to paste.
+// where: the pane as the message names it; otherwise: another way out, on a line of its own.
+export function refuseRunningAgent(
+  running: string | null | undefined,
+  where: string,
+  start: { as?: string; handle: string; description: string },
+  otherwise?: string,
+): void {
+  if (running) {
+    const other = otherwise ? `\n${otherwise}` : '';
+    throw new Error(`${where} already runs ${running}. Ask it to run: ${pasteLine(start)}${other}`);
+  }
+}
+
+function resolveStart(
   given: Partial<Start>,
   as: string | undefined,
   env: NodeJS.ProcessEnv,
