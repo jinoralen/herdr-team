@@ -13,7 +13,7 @@ test('each workspace gets its own room, served by the same ticks', async () => {
   join({ description: 'pi', env: env('w2:p2', 'w2') });
   await tick();
   const out = join({ description: 'claude', env: env('w2:p1', 'w2') }); // instructions again, now with members
-  assert.match(out, /as @claude\./, 'handles are per room');
+  assert.match(out, /You are @claude in chat room/, 'handles are per room');
   assert.match(out, /@pi — pi/);
   assert.doesNotMatch(out, /@codex/, 'members of other workspaces are not listed');
 

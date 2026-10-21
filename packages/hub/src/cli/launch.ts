@@ -1,6 +1,7 @@
 // Starts a room member in the user's current Herdr shell pane, with its guide as the first prompt.
 import { cliHerdr } from '@herdr/herdr';
 import { join, SELF, sanitizeForTerminal } from '#agent';
+import { rootDir, Store } from '#store';
 import { initialTask, joinLine, memberPrompt, pasteLine } from './prompt.ts';
 import { resolveStart, type Start } from './start.ts';
 
@@ -56,11 +57,14 @@ export async function launch({
       `${pane.agent} is already running in this pane. Ask it to run: ${pasteLine({ as, handle, description })}`,
     );
   }
-  const guide = join({ as, description, handle, env });
-  // A tick may have rejected the pending join while the pane was still a shell.
-  const confirm = joinLine({ as, handle, description });
-  const instructions = `Your user asked you to join the room as @${handle} with this role: ${description}\n\nFirst confirm your membership by running: ${confirm}\nUse the returned guide. If joining fails, report the error to your user and stop.\n\n${guide}`;
-  const initial = memberPrompt(instructions, task);
+  const store = new Store(rootDir(env), env.HERDR_WORKSPACE_ID ?? '');
+  const initial = store.transaction(() => {
+    const guide = join({ as, description, handle, env });
+    // A tick may have rejected the pending join while the pane was still a shell.
+    const confirm = joinLine({ as, handle, description });
+    const instructions = `Your user asked you to join the room as @${handle} with this role: ${description}\n\nFirst confirm your membership by running: ${confirm}\nUse the returned guide. If joining fails, report the error to your user and stop.\n\n${guide}`;
+    return memberPrompt(instructions, task);
+  });
   const inherited = Object.fromEntries(
     Object.entries(env).filter((entry) => entry[1] !== undefined),
   );

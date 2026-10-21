@@ -15,7 +15,8 @@ An agent joins as an agent definition, or ad hoc with a role:
 ```
 
 Without `--handle`, the handle is the definition's, or the description's first word (`codex` →
-`@codex`, or `@codex-2` if taken); the description is the role the others see.
+`@codex`, or `@codex-2` if taken); the description is the role the others see. Handles stay within
+20 characters, shortening the base when a numeric suffix is needed.
 
 A join is only recorded at first: the member is **pending** until the tick that runs when the
 agent's turn ends checks with Herdr that a recognized agent is really in that pane. Only then is it
@@ -26,7 +27,7 @@ agent's turn ends checks with Herdr that a recognized agent is really in that pa
 - **Who runs it**: an agent in its own pane, because its user asked it to. Agents never join on
   their own; the general guide (`guide` outside a room) tells them to join only when asked.
 - **Trigger**: bringing an agent that is already running into the conversation. Running it again
-  from the same pane prints the guide again; for the rules alone, use [`guide`](guide.md). To start
+  from the same pane prints the guide again without announcing another join; for the rules alone, use [`guide`](guide.md). To start
   an agent, in this pane or another, use [`invite`](invite.md).
 
 ## Joining as a definition

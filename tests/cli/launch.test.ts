@@ -252,3 +252,20 @@ test('invite <agent> for a definition without kind says to add one, before joini
   assert.equal(await Bun.file(result).exists(), false);
   assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /@reviewer/);
 });
+
+test('oversized guide and task leave no membership before launching in the current pane', async () => {
+  const { root, startWith, run, result } = await shell();
+  const team = path.join(root, 'team');
+  fs.mkdirSync(path.join(team, 'agents'), { recursive: true });
+  fs.writeFileSync(
+    path.join(team, 'agents', 'reviewer.md'),
+    `---\ndescription: reviews architecture\nkind: codex\n---\n${'x'.repeat(30_000)}`,
+  );
+  const launched = await startWith(['reviewer', '--prompt', 'x'.repeat(75_000)], {
+    HERDR_TEAM_DIR: team,
+  });
+  assert.equal(launched.code, 1);
+  assert.match(launched.output, /exceed 100 KB/);
+  assert.equal(fs.existsSync(result), false);
+  assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /@reviewer/);
+});

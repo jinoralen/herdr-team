@@ -15,7 +15,7 @@ test('register a pane, rediscover its handle and see it in its workspace status'
     inPane: true,
   });
   expect(again.code).toBe(0);
-  expect(again.stdout).toContain('as @codex.');
+  expect(again.stdout).toContain('You are @codex in chat room');
   const guide = await run(['guide'], { inPane: true });
   expect(guide.code).toBe(0);
   expect(guide.stdout).toContain('You are @codex in chat room "w1"');
