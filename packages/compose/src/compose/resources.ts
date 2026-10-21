@@ -82,13 +82,18 @@ export async function dropPlaceholder(r: Runtime, tab: ManagedTab): Promise<void
   save(r);
 }
 
-export async function createAgent(
+// A new helper whose pane is laid out, waiting for startAgents.
+export type Placed = { key: string; desired: DesiredAgent; pane: string };
+
+// Lays out a new helper's pane in its tab. Starting it is left to startAgents, so every helper's
+// pane is in place before any agent boots.
+export async function placeNewAgent(
   r: Runtime,
   key: string,
   desired: DesiredAgent,
   tab: ManagedTab,
   anchor: string | null,
-): Promise<string> {
+): Promise<Placed> {
   requireFreeHandle(r, desired.handle);
   const created = await allocate(r, desired.cwd);
   const pane = created.pane;
@@ -122,22 +127,53 @@ export async function createAgent(
   if (!current) {
     throw new Error(`Managed pane ${pane} disappeared after moving; retry up.`);
   }
+  return { key, desired, pane: current.pane_id };
+}
+
+// Starts the placed helpers together: each one waits seconds for its agent to boot and take the
+// guide, so one at a time would add those waits up. Each start is journaled before it begins and
+// records its own outcome, so a failed one leaves the others ready. Fails after all have settled.
+export async function startAgents(r: Runtime, placed: Placed[]): Promise<void> {
+  const results = await Promise.allSettled(placed.map((p) => startAgent(r, p)));
+  const errors: Error[] = [];
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      r.lines.push(`Created @${placed[i]?.desired.handle}.`);
+    } else {
+      errors.push(result.reason as Error);
+    }
+  });
+  const [first] = errors;
+  if (errors.length === 1 && first) {
+    throw first;
+  }
+  if (errors.length) {
+    const message = errors.map((e) => e.message).join('\n');
+    throw errors.every((e) => e instanceof RetryLater)
+      ? new RetryLater(message)
+      : new Error(message);
+  }
+}
+
+async function startAgent(r: Runtime, { key, desired, pane }: Placed): Promise<void> {
+  const a = r.state.agents[key];
+  if (!a) {
+    throw new Error(`@${desired.handle} is no longer recorded; retry up.`);
+  }
   // Startup or prompt failures can be uncertain. A retry replaces this owned pane.
   a.phase = 'started';
   save(r);
-  await r.hub.start(desired, current.pane_id);
+  await r.hub.start(desired, pane);
   const member = r.hub.member(desired.handle);
-  if (!member || member.pane_id !== current.pane_id || member.status !== 'active') {
+  if (!member || member.pane_id !== pane || member.status !== 'active') {
     throw new Error(
       `Membership of @${desired.handle} changed during startup. Inspect hub status before retrying.`,
     );
   }
   a.joinedAt = member.joined_at;
-  a.session = (await r.herdr.pane(current.pane_id))?.agent_session?.value ?? null;
+  a.session = (await r.herdr.pane(pane))?.agent_session?.value ?? null;
   a.phase = 'ready';
   save(r);
-  r.lines.push(`Created @${a.handle}.`);
-  return current.pane_id;
 }
 
 export async function cleanupTabs(r: Runtime): Promise<void> {

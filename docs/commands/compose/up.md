@@ -38,6 +38,9 @@ for retry. Recovery finds recorded allocation panes even after they move between
 allocations with no recorded pane and no live labelled tab are forgotten so retry can proceed.
 A labelled tab without exactly one pane remains recorded and stops the command.
 An uncertain initial prompt is never repeated into the same conversation.
+New helpers start together once every pane is laid out, so `up` waits about as long as its
+slowest agent. A helper that fails to start doesn't stop the others: they are recorded ready,
+`up` reports every failure, and a retry replaces only the uncertain helpers.
 Compose does not restart an existing lead or own its pane. See [configuration](../../compose.md).
 
 ## It's working if

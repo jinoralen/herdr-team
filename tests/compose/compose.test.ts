@@ -153,6 +153,19 @@ test('uncertain startup prompts are never repeated into the same conversation', 
   assert.notEqual(prompts[0]![2], prompts[1]![2]);
 });
 
+test('new helpers start together, and one that fails leaves the others ready', async () => {
+  const f = await fixture();
+  const auditor = '  auditor:\n    use: reviewer\n    tab: helpers\n';
+  await Bun.write(f.file, (await Bun.file(f.file).text()) + auditor);
+  await f.change({ startDelay: 300, failPrompt: true });
+  await assert.rejects(up(f), /Inspect the pane/);
+  assert.equal((await f.read()).maxStarting, 2);
+  const phases = JSON.parse(status({ env: f.env, json: true }))
+    .deployments[0].agents.map((a: { phase: string }) => a.phase)
+    .sort();
+  assert.deepEqual(phases, ['ready', 'started']);
+});
+
 test('shared context is resolved before changes and changing it replaces the helper', async () => {
   const f = await fixture();
   const yaml = await Bun.file(f.file).text();

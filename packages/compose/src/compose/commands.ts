@@ -17,13 +17,15 @@ import { deploymentName, loadPlan, type ManifestPlan, resolveTeam } from './mani
 import { dryRunText, needsTab, planChanges } from './plan.ts';
 import {
   cleanupTabs,
-  createAgent,
   dropPlaceholder,
   newTab,
+  type Placed,
   paneFor,
+  placeNewAgent,
   type Runtime,
   removeAgent,
   save,
+  startAgents,
 } from './resources.ts';
 import { RetryLater } from './retry.ts';
 
@@ -194,13 +196,16 @@ async function reconcile(r: Runtime, plan: ManifestPlan, kept: Set<string>): Pro
       await retireTab(r, key);
     }
   }
+  // Every pane is laid out first; then the new helpers start together.
+  const placed: Placed[] = [];
   for (const [key, spec] of Object.entries(plan.tabs)) {
     const order = Object.keys(plan.agents).filter((a) => plan.agents[a]?.tab === key);
     if (!order.length) {
       continue;
     }
-    await arrangeTab(r, plan, key, spec.layout, order);
+    await arrangeTab(r, plan, key, spec.layout, order, placed);
   }
+  await startAgents(r, placed);
   await cleanupTabs(r);
   save(r);
 }
@@ -227,6 +232,7 @@ async function arrangeTab(
   key: string,
   layout: 'rows' | 'columns',
   order: string[],
+  placed: Placed[],
 ): Promise<void> {
   const first = plan.agents[order[0] ?? ''];
   if (!first) {
@@ -243,7 +249,7 @@ async function arrangeTab(
   await r.herdr.renameTab(tab.id, `${r.state.name}:${key}`);
   let anchor: string | null = null;
   for (const agentKey of order) {
-    anchor = await placeAgent(r, plan, agentKey, tab, anchor);
+    anchor = await placeAgent(r, plan, agentKey, tab, anchor, placed);
   }
 }
 
@@ -253,6 +259,7 @@ async function placeAgent(
   key: string,
   tab: ManagedTab,
   anchor: string | null,
+  placed: Placed[],
 ): Promise<string | null> {
   const desired = plan.agents[key];
   if (!desired) {
@@ -261,7 +268,9 @@ async function placeAgent(
   const old = r.state.agents[key];
   const live = old ? paneFor(await r.herdr.listPaneTopology(), old) : null;
   if (!live) {
-    return createAgent(r, key, desired, tab, anchor);
+    const created = await placeNewAgent(r, key, desired, tab, anchor);
+    placed.push(created);
+    return created.pane;
   }
   await moveToTab(r, live, tab.id, anchor ?? tab.root, tab.layout);
   const pane =
