@@ -52,8 +52,7 @@ console.log(JSON.stringify({ result: { panes: [] } }));
 
 const AGENT = { definition: 'reviewer', handle: 'reviewer', prompt: 'Review the cache.' };
 // What hub prints when it doesn't understand the line it was given.
-const NOT_UNDERSTOOD =
-  /unknown option|unknown command|too many arguments|positional now|option now/;
+const NOT_UNDERSTOOD = /unknown option|unknown command|too many arguments/;
 
 test("compose reads the members from hub's status --json", () => {
   const { hub, run } = setup();
