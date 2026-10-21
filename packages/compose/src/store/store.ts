@@ -144,6 +144,10 @@ export function rootDir(env = process.env): string {
   if (!process.getuid) {
     throw new Error('herdr-compose requires Linux or macOS.');
   }
+  // Compose runs from any folder, and hub from others: a relative path would split the state.
+  if (env.HERDR_TEAM_STATE_DIR && !path.isAbsolute(env.HERDR_TEAM_STATE_DIR)) {
+    throw new Error('HERDR_TEAM_STATE_DIR must be an absolute path.');
+  }
   // Compose's own folder under the state base it shares with hub; it never opens hub's.
   const base = path.join(
     env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${process.getuid()}`),

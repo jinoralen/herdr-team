@@ -12,6 +12,14 @@ test('with no arguments, prints the help and points agents to guide', async () =
   expect(stdout).toMatch(/Agents: run `.* guide` to learn how to use the room\./);
 });
 
+test('help still prints in a pane whose state folder setting is relative', async () => {
+  const { stdout, code } = await cli({ HERDR_TEAM_STATE_DIR: 'relative' }).run(['--help'], {
+    inPane: true,
+  });
+  expect(code).toBe(0);
+  expect(stdout).toContain('Agent commands:');
+});
+
 test('each command has help with its usage', async () => {
   const { run } = cli();
   for (const command of ['join', 'message', 'leave', 'guide', 'status', 'tick']) {

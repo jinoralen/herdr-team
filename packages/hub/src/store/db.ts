@@ -36,6 +36,10 @@ function uid(): number {
 // workspace IDs are only unique within one. Herdr gives every pane and plugin command
 // HERDR_SOCKET_PATH; without it (run by hand outside Herdr), hub's folder itself.
 export function rootDir(env = process.env): string {
+  // Herdr's ticks and the agents run from different folders: a relative path would split the state.
+  if (env.HERDR_TEAM_STATE_DIR && !path.isAbsolute(env.HERDR_TEAM_STATE_DIR)) {
+    throw new Error('HERDR_TEAM_STATE_DIR must be an absolute path.');
+  }
   // /tmp is writable from Codex's default workspace-write sandbox; override with HERDR_TEAM_STATE_DIR.
   const base = path.join(
     env.HERDR_TEAM_STATE_DIR || path.join('/tmp', `herdr-team-${uid()}`),

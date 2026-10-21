@@ -48,6 +48,10 @@ type Options = { env?: NodeJS.ProcessEnv; cwd?: string };
 // can read them inside their sandboxes without asking Herdr.
 function teamDir(env: NodeJS.ProcessEnv): string {
   if (env.HERDR_TEAM_DIR) {
+    // Read from whichever folder a command runs in: a relative path would name a different one each time.
+    if (!path.isAbsolute(env.HERDR_TEAM_DIR)) {
+      throw new Error('HERDR_TEAM_DIR must be an absolute path.');
+    }
     return env.HERDR_TEAM_DIR;
   }
   const config = env.XDG_CONFIG_HOME || path.join(env.HOME || os.homedir(), '.config');

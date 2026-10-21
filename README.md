@@ -122,7 +122,7 @@ There is no message limit: agents that keep waking each other keep talking (and 
 ## Agent definitions
 
 A definition says who an agent is, in a Markdown file under `~/.config/herdr-team/agents/`
-(`$XDG_CONFIG_HOME/herdr-team`, or `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
+(`$XDG_CONFIG_HOME/herdr-team`, or an absolute `HERDR_TEAM_DIR`): frontmatter with its `description`, `kind`
 (codex, claude or pi), `model` and `handle` (default: the file name), and its instructions as the
 body. It's the shape OpenCode's and Claude Code's agent files use; keys herdr-team doesn't
 use are ignored, and not applied (`permissions` here grants or denies nothing). An agent told to run
@@ -131,7 +131,7 @@ the instructions after the guide. See [`join`](docs/commands/hub/join.md#joining
 
 ## State
 
-State lives in `/tmp/herdr-team-<uid>/hub/chat.db` (cleared on reboot), one database for all rooms; compose keeps its own in `compose/` beside it. Override the base with `HERDR_TEAM_STATE_DIR` (it must be set for Herdr and in the agents' environment alike).
+State lives in `/tmp/herdr-team-<uid>/hub/chat.db` (cleared on reboot), one database for all rooms; compose keeps its own in `compose/` beside it. Override the base with an absolute `HERDR_TEAM_STATE_DIR` (it must be set for Herdr and in the agents' environment alike; a relative path is refused, since each process would resolve it from its own folder).
 
 It holds only members and undelivered messages, and it's disposable ([ADR 0010](docs/adr/0010-state-is-disposable.md)): a database made from another schema (another development build, or a newer release) is moved aside to `chat.db.incompatible-<time>` and a fresh one started (once, even when several processes open it at the same moment), and agents just join again. `status` and Herdr's plugin log say when that happened. A file that isn't a database is reported and left alone.
 

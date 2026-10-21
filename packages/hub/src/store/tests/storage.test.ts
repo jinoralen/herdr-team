@@ -111,3 +111,10 @@ test('each Herdr session gets its own state directory, named for its socket', ()
   assert.match(main, /^\/tmp\/state\/hub\/session-[0-9a-f]+$/);
   assert.notEqual(main, codex);
 });
+
+test('relative HERDR_TEAM_STATE_DIR is refused so processes share one folder', () => {
+  assert.throws(
+    () => rootDir({ HERDR_TEAM_STATE_DIR: 'relative' }),
+    /HERDR_TEAM_STATE_DIR must be an absolute path/,
+  );
+});

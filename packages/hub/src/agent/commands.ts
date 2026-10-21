@@ -219,7 +219,14 @@ export function orientation({ env = process.env }: CommandOptions = {}): string 
     return '';
   }
   const room = env.HERDR_WORKSPACE_ID;
-  const rows = peekMembers(rootDir(env), room, ['pending', 'active']);
+  let root: string;
+  try {
+    root = rootDir(env);
+  } catch {
+    // A bad state folder setting is reported by the commands that use it; help still prints.
+    return '';
+  }
+  const rows = peekMembers(root, room, ['pending', 'active']);
   const member = rows.find((m) => m.pane_id === env.HERDR_PANE_ID);
   if (!member) {
     return '';

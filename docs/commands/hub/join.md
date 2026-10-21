@@ -34,7 +34,7 @@ agent's turn ends checks with Herdr that a recognized agent is really in that pa
 
 `join reviewer` takes the handle, description and instructions from the definition
 `~/.config/herdr-team/agents/reviewer.md` (`$XDG_CONFIG_HOME/herdr-team` when that is set,
-`HERDR_TEAM_DIR` to use another folder); a path such as `./agents/reviewer.md` works too.
+an absolute `HERDR_TEAM_DIR` to use another folder); a path such as `./agents/reviewer.md` works too.
 
 ```markdown
 ---
