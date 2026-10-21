@@ -42,6 +42,9 @@ else if (args[0] === 'pane') {
   out({pane});
 } else if (args[1] === 'start') {
   if (scenario === 'start-timeout') fail('timeout');
+  // A new pane whose shell hasn't reached its prompt yet: Herdr refuses the first start.
+  const starts = fs.readFileSync(path.join(root, 'calls.jsonl'), 'utf8').split('"start"').length - 1;
+  if (scenario === 'shell-starting' && starts === 1) fail('agent_pane_busy');
   if (scenario === 'reject') {
     const tick = Bun.spawnSync([...${JSON.stringify(COMMAND)}, 'tick'], {env: process.env});
     if (tick.exitCode !== 0) process.exit(tick.exitCode);
@@ -114,6 +117,14 @@ test('invite recovers when a startup tick rejects the initial shell join', async
   const { run } = await remote('reject');
   const result = await run(JOIN, { inPane: true });
   assert.equal(result.code, 0, result.stderr);
+  assert.match((await run(['status'])).stdout, /@reviewer — reviews architecture \[codex/);
+});
+
+test('invite waits for a new pane shell to reach its prompt', async () => {
+  const { run, calls } = await remote('shell-starting');
+  const result = await run(JOIN, { inPane: true });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal((await calls()).filter((args) => args[1] === 'start').length, 2);
   assert.match((await run(['status'])).stdout, /@reviewer — reviews architecture \[codex/);
 });
 
