@@ -462,6 +462,27 @@ test("a running lead is told to join as the team's lead definition, else with a 
   );
 });
 
+test('@lead held from another pane is taken while that pane is open, and retried once it closes', async () => {
+  const f = await fixture();
+  const { panes } = await f.read();
+  const other = { ...panes[0]!, pane_id: 'other', terminal_id: 'other-terminal' };
+  await f.change({ panes: [...panes, other] });
+  const join = Bun.spawn(
+    [...(await hubCommand()), 'join', '--handle', 'lead', '--description', 'lead, elsewhere'],
+    { env: { ...f.env, HERDR_PANE_ID: 'other' }, stdout: 'pipe', stderr: 'pipe' },
+  );
+  assert.equal(await join.exited, 0, await new Response(join.stderr).text());
+  await assert.rejects(up(f), /already in use in another pane/);
+  await f.change({ panes });
+  const cli = Bun.spawn([...(await composeCommand()), 'up', f.file], {
+    env: f.env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  assert.equal(await cli.exited, 75);
+  assert.match(await new Response(cli.stderr).text(), /pane has closed/);
+}, 10_000);
+
 test('teams lists the team files, each read as up would, without Herdr', async () => {
   const f = await fixture();
   assert.match(await teams({ env: f.env }), /^No teams in .*teams\./);

@@ -26,7 +26,9 @@ Definition edits (kind, model, description, instructions), and purpose, handle, 
 changes, replace helpers. Layout changes
 move terminals. Hub must finish retiring the old membership and draining outgoing
 messages before its handle can be reused; `up` reports this, exits with 75 (`EX_TEMPFAIL`), and
-asks you to retry after a tick. A handle held by an unrelated live member exits with 1.
+asks you to retry after a tick. A handle held by an unrelated live member exits with 1. The
+lead's handle is checked the same way: held from another open pane exits with 1, from a closed
+one with 75.
 Handles may be reassigned or swapped between helpers in the same deployment:
 `up` retires the affected helpers before waiting for reuse. Handles belonging to
 another deployment or an unrelated member are refused before pane changes.
