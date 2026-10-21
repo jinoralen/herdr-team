@@ -84,6 +84,41 @@ test('delivery warnings alone do not reserve their subject handle', async () => 
   assert.equal(store().hasQueuedFrom('gone'), false);
 });
 
+// Notices wake nobody, so an idle recipient may hold them indefinitely.
+test('join and leave notices alone do not reserve a departed handle', async () => {
+  const { env, joinAs, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'pi');
+  store().remove(store().member('pi')!, 'gone', 'left: pane closed');
+  assert.equal(store().hasQueuedFrom('pi'), false);
+  join({ description: 'pi again', handle: 'pi', env: env('p3') });
+  assert.deepEqual(
+    store()
+      .queued('claude')
+      .map((q) => [q.from, q.kind]),
+    [
+      ['pi', 'joined'],
+      ['pi', 'left'],
+      ['pi', 'joined'],
+    ],
+  );
+});
+
+test('refusing a join keeps the left notice of the handle previous member', async () => {
+  const { env, joinAs, store } = await installed();
+  await joinAs('p1', 'claude');
+  await joinAs('p2', 'pi');
+  store().remove(store().member('pi')!, 'gone', 'left: pane closed');
+  join({ description: 'pi again', handle: 'pi', env: env('p3') });
+  store().reject(store().member('pi')!, 'no agent');
+  assert.deepEqual(
+    store()
+      .queued('claude')
+      .map((q) => q.text),
+    ['@pi left: pane closed.'],
+  );
+});
+
 test('a post reports recipients that left while retaining the remaining recipients', async () => {
   const { env, joinAs, store } = await installed();
   await joinAs('p1', 'claude');

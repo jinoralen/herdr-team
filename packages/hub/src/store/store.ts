@@ -1,6 +1,6 @@
 // One room's rows: its members and the messages waiting for them. Every method is scoped to the room.
 
-import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, notInArray, sql } from 'drizzle-orm';
 import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
 import { type Db, isCurrentSchema, openDb, openReadOnly, transaction } from './db.ts';
 import { members, queue, service } from './tables.ts';
@@ -305,7 +305,7 @@ export class Store {
     });
   }
 
-  // Whether a post or notice from `handle` still waits; warnings about it do not reserve its handle.
+  // Whether a post from `handle` still waits; notices and warnings about it do not reserve its handle.
   hasQueuedFrom(handle: string): boolean {
     return !!this.db
       .select({ id: queue.message_id })
@@ -341,12 +341,17 @@ export class Store {
     }
   }
 
-  // Warnings are about the member, for other authors, so they stay.
+  // Takes back a pending member's join notice and posts. Warnings are about the member, for other
+  // authors, so they stay; a left notice is its handle's previous member's, so it stays too.
   dropSender(handle: string): void {
     this.db
       .delete(queue)
       .where(
-        and(eq(queue.room, this.room), eq(queue.sender, handle), ne(queue.kind, 'undelivered')),
+        and(
+          eq(queue.room, this.room),
+          eq(queue.sender, handle),
+          notInArray(queue.kind, ['undelivered', 'left']),
+        ),
       )
       .run();
   }
@@ -385,10 +390,12 @@ export class Store {
   }
 }
 
-// What reserves a handle while it waits: posts and notices from it. Warnings about it are for other
-// authors, so they don't. One condition for hasQueuedFrom and the snapshot's queuedFrom.
+// What reserves a handle while it waits: posts from it, so a reply never reaches a newer member
+// under that handle. Notices wake nobody, so they may wait for an idle recipient indefinitely, and
+// warnings about it are for other authors: neither does. One condition for hasQueuedFrom and the
+// snapshot's queuedFrom.
 const sentBy = (handle: string | typeof members.handle): ReturnType<typeof and> =>
-  and(eq(queue.sender, handle), ne(queue.kind, 'undelivered'));
+  and(eq(queue.sender, handle), inArray(queue.kind, ['message', 'fyi']));
 
 // One statement, so it reads one consistent state of the room.
 function readSnapshot(

@@ -26,7 +26,7 @@ Definition edits (kind, model, description, instructions), and purpose, handle, 
 changes replace managed agents, including the lead. Layout changes
 move terminals. Hub must finish retiring the old membership and draining outgoing
 messages before its handle can be reused; `up` reports this, exits with 75 (`EX_TEMPFAIL`), and
-asks you to retry after a tick. Join and leave notices travel with the recipient's next message, so send that recipient a message if notices still reserve the handle. A handle held by an unrelated live member exits with 1. The
+asks you to retry after a tick. Only posts reserve the handle; join and leave notices don't. A handle held by an unrelated live member exits with 1. The
 lead's handle is checked the same way: held from another open pane exits with 1, from a closed
 one with 75.
 Handles may be reassigned or swapped between helpers in the same deployment:
