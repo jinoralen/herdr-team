@@ -2,14 +2,14 @@
 
 ## What it does
 
-Closes the helpers owned by a deployment. The lead and unrelated panes remain. `down review` names
+Closes the lead and helpers owned by a deployment. The caller and unrelated panes remain. `down review` names
 it by team name or file, of which only the manifest's name is read, so it works even if context
 files disappeared. `down` alone takes this workspace's only deployment, and refuses with their
 names when there are several. `--json` prints the deployment taken down and the handles removed.
 
 ## When to use it
 
-- Run from the user-owned lead pane to dismantle the managed team.
+- Run from a separate shell or agent pane to dismantle the managed team. Managed agents cannot run it.
 - Run again after a partial failure; recorded ownership survives until cleanup completes.
 
 ## Recovery
@@ -27,7 +27,7 @@ outgoing messages under its normal rules; down never writes membership itself.
 
 ## It's working if
 
-- Managed helpers close and the lead stays open.
+- The managed lead and helpers close; your calling pane stays open.
 - Repeating down reports the deployment is already down.
 
 ## Where it fits

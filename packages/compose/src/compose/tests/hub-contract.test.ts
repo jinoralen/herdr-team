@@ -1,5 +1,5 @@
 // What compose relies on from hub's command line (ADR 0012), checked against the real hub:
-// `status --json` and its version, and the two `invite` forms compose runs.
+// `status --json` and its version, and the pane-targeted `invite` compose runs.
 import { onTestFinished, test } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -114,12 +114,7 @@ test('lookups share one status --json until refresh', () => {
 test('hub accepts the invite lines compose starts the lead and helpers with', async () => {
   const { hub, run } = setup();
   assert.equal(run(['tick']).code, 0);
-  // The lead, in the caller's pane: refused only for want of a terminal here.
-  const lead = run(hub.startArgs(AGENT));
-  assert.equal(lead.code, 1);
-  assert.match(lead.stderr, /interactive terminal/);
-  assert.doesNotMatch(lead.stderr, NOT_UNDERSTOOD);
-  // A helper, in its pane: refused only because this herdr has no such pane.
+  // Lead and helpers use the same pane-targeted invitation.
   await assert.rejects(hub.start(AGENT, 'w1:p9'), (error: Error) => {
     assert.match(error.message, /target pane does not exist/);
     assert.doesNotMatch(error.message, NOT_UNDERSTOOD);

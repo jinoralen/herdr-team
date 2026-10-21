@@ -3,7 +3,6 @@
 
 import type { Pane } from '@herdr/herdr';
 import type { Deployment, ManagedAgent, ManagedTab } from '#store';
-import type { UpResult } from './lead.ts';
 import type { ManifestPlan, Parts } from './manifest.ts';
 import { type Change, paneFor, type Runtime, save } from './resources.ts';
 
@@ -184,11 +183,8 @@ function describe(c: Change): string {
   }
 }
 
-export function dryRunText(name: string, changes: Change[], launch: UpResult['launch']): string {
+export function dryRunText(name: string, changes: Change[]): string {
   const lines = changes.map(describe);
-  if (launch) {
-    lines.push(`Start the ${launch.kind} lead in this pane.`);
-  }
   return [
     `Dry run of ${name}; nothing was changed.`,
     ...(lines.length ? lines : [`Deployment ${name} is unchanged.`]),

@@ -12,10 +12,10 @@ test('helpers start through hub from their definition: kind, model, guide, instr
   const f = await fixture();
   await up(f);
   const calls = (await f.read()).calls;
-  const start = calls.find((a) => a[1] === 'start')!;
+  const start = calls.find((a) => a[1] === 'start' && a.includes('example-v1'))!;
   assert.deepEqual(start.slice(3, 5), ['--kind', 'codex']);
   assert.deepEqual(start.slice(-3), ['--', '--model', 'example-v1']);
-  const prompt = calls.find((a) => a[1] === 'prompt')![3]!;
+  const prompt = calls.find((a) => a[1] === 'prompt' && a[3]?.includes('Review the code'))![3]!;
   assert.match(
     prompt,
     /as @reviewer\.[\s\S]*Your instructions:\nReview when asked\.[\s\S]*Your initial task:[\s\S]*Review the code/,
@@ -23,7 +23,7 @@ test('helpers start through hub from their definition: kind, model, guide, instr
   const hub = Bun.spawnSync([...command('hub'), 'status'], { env: f.env }).stdout.toString();
   assert.match(hub, /@reviewer — reviews the code/);
   await up(f);
-  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 1);
+  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 2);
 });
 
 test('compose preserves Claude extended-context model aliases through hub startup', async () => {
@@ -33,7 +33,9 @@ test('compose preserves Claude extended-context model aliases through hub startu
     '---\ndescription: reviews\nkind: claude\nmodel: sonnet[1m]\n---\nx\n',
   );
   await up(f);
-  const start = (await f.read()).calls.find((args) => args[1] === 'start')!;
+  const start = (await f.read()).calls.find(
+    (args) => args[1] === 'start' && args.includes('sonnet[1m]'),
+  )!;
   assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
 });
 
@@ -49,7 +51,7 @@ test('the command line exits 75 while hub retires the old membership, and up wor
   assert.equal(await cli.exited, 75, await new Response(cli.stderr).text());
   await f.tick();
   await up(f);
-  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 2);
+  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 3);
 });
 
 test('up --dry-run --json replaces a helper whose hub state is gone', async () => {

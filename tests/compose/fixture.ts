@@ -1,5 +1,6 @@
 // A persistent fake Herdr executable shared by compose and the real hub subprocesses.
 import { onTestFinished } from 'bun:test';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -119,6 +120,21 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     const error = await new Response(proc.stderr).text();
     if ((await proc.exited) !== 0) {
       throw new Error(error);
+    }
+    // Notices reserve handles until a recipient next gets a message. A user-owned
+    // agent models that conversation so lifecycle tests can retry after delivery.
+    const snapshot = Bun.spawnSync([...hub, 'status', '--json'], { env });
+    const members = JSON.parse(snapshot.stdout.toString()).members;
+    if (members.some((m: { status: string }) => m.status === 'active')) {
+      const joined = Bun.spawnSync(
+        [...hub, 'join', '--handle', 'observer', '--description', 'test observer'],
+        { env },
+      );
+      assert.equal(joined.exitCode, 0, joined.stderr.toString());
+      const message = Bun.spawnSync([...hub, 'message', 'Continue.'], { env });
+      assert.equal(message.exitCode, 0, message.stderr.toString());
+      const delivery = Bun.spawnSync([...hub, 'tick'], { env });
+      assert.equal(delivery.exitCode, 0, delivery.stderr.toString());
     }
   }
   await tick();

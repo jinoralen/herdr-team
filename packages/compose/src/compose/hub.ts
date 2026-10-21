@@ -129,7 +129,8 @@ export class Hub {
     pane: string,
   ): Promise<void> {
     this.refresh();
-    const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
+    const args = ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
+    const proc = Bun.spawn([...this.words, ...args, '--pane', pane], {
       env: this.env,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -146,10 +147,5 @@ export class Hub {
       // Hub's own "retry later" stays one for compose's caller.
       throw code === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
     }
-  }
-  // invite starts the lead in the caller's own pane, and helpers with --pane in theirs. Kind,
-  // model and description come from the definition.
-  startArgs(agent: { definition: string; handle: string; prompt: string }): string[] {
-    return ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
   }
 }
