@@ -51,13 +51,13 @@ function start(
 }
 
 // Why a herdr command failed: herdr's own error if it printed one, else what happened to the process.
-function failure(args: string[], killed: boolean, stdout: string, stderr: string): HerdrError {
+function failure(args: string[], timedOut: boolean, stdout: string, stderr: string): HerdrError {
   const output = ErrorOutputSchema.safeParse(parseJson(stderr || stdout));
   if (output.success) {
     const { code, message } = output.data.error;
     return new HerdrError(code, message || code);
   }
-  if (killed) {
+  if (timedOut) {
     return new HerdrError('timeout', `herdr ${args.slice(0, 2).join(' ')} timed out`);
   }
   return new HerdrError('process_exit', (stderr || stdout).trim().slice(0, 500));
@@ -75,7 +75,8 @@ export async function run(
     proc.exited,
   ]);
   if (exitCode !== 0) {
-    throw failure(args, proc.killed, stdout, stderr);
+    // The timeout ends herdr with SIGKILL. Not proc.killed: Bun sets it after any exit.
+    throw failure(args, proc.signalCode === 'SIGKILL', stdout, stderr);
   }
   const output = OutputSchema.safeParse(parseJson(stdout));
   if (!output.success) {
