@@ -2,9 +2,8 @@
 // The command line: one definition per command, with its options, help and what it runs.
 // Agents run the room commands; Herdr runs `tick`.
 
-import { Command, Option } from '@commander-js/extra-typings';
+import { Command } from '@commander-js/extra-typings';
 import { cliHerdr } from '@herdr/herdr';
-import { shellQuote } from '@herdr/terminal';
 import { exitCode, guide, join, leave, message, orientation, parseTo, SELF, status } from '#agent';
 import { version } from '#package';
 import { tick } from '#rooms';
@@ -28,34 +27,6 @@ export const program = new Command()
   .addHelpText('after', `\nAgents: run \`${SELF} guide\` to learn how to use the room.`)
   .commandsGroup('Agent commands:');
 
-// Old forms get the line to run instead of a bare "unknown option".
-function refuseOldJoin(options: {
-  as?: string;
-  agent?: string | true;
-  model?: string;
-  prompt?: string;
-}): void {
-  if (options.as !== undefined) {
-    throw new Error(`The agent is positional now: ${SELF} join ${shellQuote(options.as)}`);
-  }
-  // --model and --prompt only ever went with --agent: what join started then, invite starts now.
-  if ([options.agent, options.model, options.prompt].some((o) => o !== undefined)) {
-    throw new Error(
-      `Starting an agent moved to invite: ${SELF} invite <agent>, or ${SELF} invite --agent <kind> --handle <handle> --description <text>`,
-    );
-  }
-}
-
-// A pane id (w1:p3) where invite now takes an agent: the pane is --pane.
-function refuseOldInvite(agent: string | undefined, as: string | undefined): void {
-  if (agent !== undefined && /^[^/]*:[^/]*$/.test(agent)) {
-    throw new Error(`The pane is an option now: ${SELF} invite <agent> --pane ${agent}`);
-  }
-  if (as !== undefined) {
-    throw new Error(`The agent is positional now: ${SELF} invite ${shellQuote(as)}`);
-  }
-}
-
 // The [agent] argument of join and invite, which read definitions the same way.
 const AGENT = 'an agent definition from ~/.config/herdr-team/agents (name or path)';
 
@@ -74,12 +45,7 @@ program
   .argument('[agent]', AGENT)
   .option('-d, --description <text>', 'short role shown to the other members')
   .option('--handle <handle>', 'use this exact handle; fail if it is occupied')
-  .addOption(new Option('--as <definition>').hideHelp())
-  .addOption(new Option('--agent [type]').hideHelp())
-  .addOption(new Option('--model <id>').hideHelp())
-  .addOption(new Option('--prompt <text>').hideHelp())
   .action((agent, options) => {
-    refuseOldJoin(options);
     console.log(join({ as: agent, description: options.description, handle: options.handle }));
   });
 
@@ -128,15 +94,6 @@ program
     console.log(guide());
   });
 
-// The guide's old name, which guides and deliveries already in an agent's context still name.
-program
-  .command('skill', { hidden: true })
-  .allowUnknownOption()
-  .allowExcessArguments()
-  .action(() => {
-    throw new Error(`skill is called guide now: ${SELF} guide`);
-  });
-
 program
   .command('leave')
   .summary('leave the room (agent)')
@@ -166,9 +123,7 @@ program
   .option('--model <id>', 'model for the agent, passed to it unchanged')
   .option('--prompt <text>', 'initial task after the guide')
   .option('--json', 'with --pane: print the outcome as JSON, failures and uncertain ones included')
-  .addOption(new Option('--as <definition>').hideHelp())
-  .action(async (agent, { pane, as, json, ...options }) => {
-    refuseOldInvite(agent, as);
+  .action(async (agent, { pane, json, ...options }) => {
     const start = { ...options, as: agent };
     if (pane === undefined) {
       if (json) {
@@ -256,7 +211,7 @@ program.on('command:*', ([name]: string[]) => {
   console.error(
     unknownCommand(
       name ?? '',
-      // As help lists them: hidden ones (tick, the old skill) left out.
+      // As help lists them: hidden ones (tick, __complete) left out.
       program
         .createHelp()
         .visibleCommands(program)

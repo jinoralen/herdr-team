@@ -263,7 +263,7 @@ test('initial tasks are for invite: join takes none', async () => {
     inPane: true,
   });
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /Starting an agent moved to invite: .* invite <agent>/);
+  assert.match(result.stderr, /unknown option '--prompt'/);
 });
 
 test('invite startup requires a description even with a handle and initial task', async () => {
@@ -290,7 +290,7 @@ test('model selection is for invite and validates before changing membership', a
   const { run, calls } = await remote();
   assert.match(
     (await run(['join', '--model', 'example', '--description', 'role'])).stderr,
-    /Starting an agent moved to invite: .* invite <agent>/,
+    /unknown option '--model'/,
   );
   for (const model of [
     '',

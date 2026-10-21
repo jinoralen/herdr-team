@@ -86,23 +86,9 @@ test('help groups the commands by who runs them, and leaves out tick', async () 
   expect(invite).toMatch(/--pane[\s\S]*--agent[\s\S]*--model[\s\S]*--prompt/);
 });
 
-test('old forms are refused with the line to run instead', async () => {
+test('a description where the definition goes says how to join ad hoc', async () => {
   const { run } = cli();
   await run(['tick']);
-  const as = await run(['join', '--as', 'reviewer'], { inPane: true });
-  expect(as.code).toBe(1);
-  expect(as.stderr).toMatch(/The agent is positional now: .* join reviewer/);
-  const start = await run(['join', '--agent', 'codex', '--handle', 'r'], { inPane: true });
-  expect(start.code).toBe(1);
-  expect(start.stderr).toMatch(/Starting an agent moved to invite: .* invite <agent>/);
-  const pane = await run(['invite', 'w1:p3', '--agent', 'codex'], { inPane: true });
-  expect(pane.code).toBe(1);
-  expect(pane.stderr).toMatch(/The pane is an option now: .* invite <agent> --pane w1:p3/);
-  const skill = await run(['skill'], { inPane: true });
-  expect(skill.code).toBe(1);
-  expect(skill.stderr).toMatch(/skill is called guide now: .* guide/);
-  const inviteAs = await run(['invite', '--as', 'reviewer'], { inPane: true });
-  expect(inviteAs.stderr).toMatch(/The agent is positional now: .* invite reviewer/);
   const role = await run(['join', 'codex, reviews'], { inPane: true });
   expect(role.code).toBe(1);
   expect(role.stderr).toMatch(

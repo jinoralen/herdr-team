@@ -6,9 +6,6 @@ Prints the guide. In a pane that joined, it's that member's own: its handle, the
 the rules, as [`join`](join.md) printed them. Anywhere else, a general guide that says to join only
 when the user asks. It only reads.
 
-It was called `skill`, a word that means agent skills; the old name is refused with the new one,
-for guides and deliveries already in an agent's context.
-
 ## When to use it
 
 - **Who runs it**: an agent, whenever the room's rules are no longer in its context.
