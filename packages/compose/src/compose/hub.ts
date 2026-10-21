@@ -61,9 +61,14 @@ function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeP
   return `returned the status of room ${parsed.data.room}`;
 }
 
+// Membership is read from hub's `status --json` once and then reused, so lookups don't each run a
+// process. up and down call refresh() where hub's view may have moved on: on taking the deployment
+// lock, and before reconciling (ticks may have run during seconds of Herdr calls). start() refreshes
+// on its own, since it changes membership.
 export class Hub {
   readonly words: string[];
   readonly command: string;
+  private cached: Membership[] | null = null;
   constructor(private readonly env: NodeJS.ProcessEnv) {
     this.words = env.HERDR_TEAM_HUB_BIN
       ? [env.HERDR_TEAM_HUB_BIN]
@@ -71,6 +76,14 @@ export class Hub {
     this.command = this.words.map(shellQuote).join(' ');
   }
   private snapshot(): Membership[] {
+    this.cached ??= this.read();
+    return this.cached;
+  }
+  // The next lookup reads hub again.
+  refresh(): void {
+    this.cached = null;
+  }
+  private read(): Membership[] {
     const result = Bun.spawnSync([...this.words, 'status', '--json'], {
       env: this.env,
       stdout: 'pipe',
@@ -89,6 +102,7 @@ export class Hub {
     return parsed.data.members;
   }
   check(): void {
+    this.refresh();
     this.snapshot();
   }
   members(): Membership[] {
@@ -107,6 +121,7 @@ export class Hub {
     agent: { definition: string; handle: string; prompt: string },
     pane: string,
   ): Promise<void> {
+    this.refresh();
     const proc = Bun.spawn([...this.words, ...this.startArgs(agent), '--pane', pane], {
       env: this.env,
       stdout: 'pipe',

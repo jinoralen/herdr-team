@@ -91,6 +91,26 @@ test('compose refuses a hub whose status --json it does not read, or that prints
   );
 });
 
+test('lookups share one status --json until refresh', () => {
+  const { root, env } = setup();
+  const counted = path.join(root, 'counted-hub');
+  const calls = path.join(root, 'calls');
+  fs.writeFileSync(
+    counted,
+    `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)}, 'x');\nconsole.log(JSON.stringify({ room: 'w1', members: [] }));\n`,
+    { mode: 0o755 },
+  );
+  const hub = new Hub({ ...env, HERDR_TEAM_HUB_BIN: counted });
+  const runs = (): number => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').length : 0);
+  hub.member('a');
+  hub.memberByPane('w1:p1');
+  hub.members();
+  assert.equal(runs(), 1);
+  hub.refresh();
+  hub.member('a');
+  assert.equal(runs(), 2);
+});
+
 test('hub accepts the invite lines compose starts the lead and helpers with', async () => {
   const { hub, run } = setup();
   assert.equal(run(['tick']).code, 0);

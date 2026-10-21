@@ -49,6 +49,8 @@ export async function up({
   hub.check();
   const current = await callerAgent(herdr, hub, pane);
   return withDeploymentLock(root, async () => {
+    // Another up or down may have changed membership while this one waited for the lock.
+    hub.refresh();
     const member = hub.memberByPane(pane);
     const joined = isCallerMember(member, current);
     const leadHandle = joined && member ? member.handle : 'lead';
@@ -170,6 +172,7 @@ function checkHandle(
 // recovery and seconds of Herdr calls, so a tick may have retired a kept helper since: its
 // membership is read again (from hub only), and a helper that is no longer the same join is replaced.
 async function reconcile(r: Runtime, plan: ManifestPlan, kept: Set<string>): Promise<void> {
+  r.hub.refresh();
   const members = r.hub.members();
   const stillKept = (key: string): boolean => {
     const old = r.state.agents[key];
