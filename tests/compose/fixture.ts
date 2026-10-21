@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cliLayoutHerdr, type LayoutHerdr } from '@herdr/herdr';
+import { fakeBin } from '../fake-bin.ts';
 
 type State = {
   calls: string[][];
@@ -34,7 +35,6 @@ export async function fixture(): Promise<Fixture> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-test-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = path.join(root, 'herdr.json');
-  const fake = path.join(root, 'herdr');
   await Bun.write(
     state,
     JSON.stringify({
@@ -53,8 +53,8 @@ export async function fixture(): Promise<Fixture> {
       ],
     }),
   );
-  await Bun.write(
-    fake,
+  const fake = fakeBin(
+    'herdr',
     `#!${process.execPath}
 import fs from 'node:fs';
 const file = process.env.FAKE_STATE;
@@ -109,7 +109,6 @@ else if (a[0] === 'tab' && a[1] === 'create') {
 } else fail('unsupported');
 `,
   );
-  fs.chmodSync(fake, 0o755);
   const hub = process.env.HERDR_TEST_BIN_DIR
     ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
     : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fakeBin } from '../fake-bin.ts';
 import { cli } from './run-cli.ts';
 
 const COMMAND = process.env.HERDR_TEST_BIN_DIR
@@ -21,33 +22,15 @@ const JOIN = [
   'reviews architecture',
 ];
 
-async function remote(scenario = '') {
-  // A herdr-team folder with one definition, for invite <agent>.
-  const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-invite-'));
-  onTestFinished(() => fs.rmSync(team, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(team, 'agents'));
-  fs.writeFileSync(
-    path.join(team, 'agents', 'reviewer.md'),
-    '---\ndescription: reviews architecture\nkind: pi\nmodel: example-v1\n---\nReview when asked.\n',
-  );
-  const fixture = cli({
-    HERDR_TEAM_DIR: team,
-    SCENARIO: scenario,
-    // The caller is in w1; status without inPane can inspect the target room through this env.
-    HERDR_ENV: '1',
-    HERDR_PANE_ID: 'other',
-    HERDR_WORKSPACE_ID: 'w2',
-  });
-  assert.equal((await fixture.run(['tick'])).code, 0);
-  const callsFile = path.join(fixture.root, 'calls.jsonl');
-  await Bun.write(
-    path.join(fixture.root, 'herdr'),
-    `#!${process.execPath}
+// The target pane's herdr: what it was asked is in calls.jsonl, the started agent in agent.json.
+const FAKE_HERDR = `#!${process.execPath}
 import fs from 'node:fs';
+import path from 'node:path';
 const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(args) + '\\n');
+const root = path.dirname(process.env.CALLS);
+fs.appendFileSync(path.join(root, 'calls.jsonl'), JSON.stringify(args) + '\\n');
 const scenario = process.env.SCENARIO;
-const state = ${JSON.stringify(path.join(fixture.root, 'agent.json'))};
+const state = path.join(root, 'agent.json');
 const started = fs.existsSync(state);
 const pane = { pane_id: 'w2:p2', workspace_id: 'w2', terminal_id: started && scenario === 'changed' ? 'other' : 't2',
   agent: started ? fs.readFileSync(state, 'utf8') : scenario === 'busy' ? 'claude' : null, agent_status: 'idle' };
@@ -72,8 +55,29 @@ else if (args[0] === 'pane') {
   }
   out({type: 'ok'});
 }
-`,
+`;
+
+async function remote(scenario = '') {
+  // A herdr-team folder with one definition, for invite <agent>.
+  const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-invite-'));
+  onTestFinished(() => fs.rmSync(team, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(team, 'agents'));
+  fs.writeFileSync(
+    path.join(team, 'agents', 'reviewer.md'),
+    '---\ndescription: reviews architecture\nkind: pi\nmodel: example-v1\n---\nReview when asked.\n',
   );
+  const fixture = cli({
+    HERDR_TEAM_DIR: team,
+    SCENARIO: scenario,
+    // Paths come from CALLS, so every test shares one fake.
+    HERDR_BIN_PATH: fakeBin('herdr', FAKE_HERDR),
+    // The caller is in w1; status without inPane can inspect the target room through this env.
+    HERDR_ENV: '1',
+    HERDR_PANE_ID: 'other',
+    HERDR_WORKSPACE_ID: 'w2',
+  });
+  assert.equal((await fixture.run(['tick'])).code, 0);
+  const callsFile = path.join(fixture.root, 'calls.jsonl');
   const calls = async (): Promise<string[][]> => {
     if (!(await Bun.file(callsFile).exists())) {
       return [];

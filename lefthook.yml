@@ -14,4 +14,4 @@ pre-commit:
 pre-push:
   jobs:
     - name: tests
-      run: bun test
+      run: bun test --parallel
