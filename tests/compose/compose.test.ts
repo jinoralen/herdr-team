@@ -62,6 +62,41 @@ test('changed purpose waits for hub to retire the old membership before replacin
   assert.match(s.world.prompts().at(-1)!.prompt, /Review security/);
 });
 
+test('changing the lead prompt replaces only its owned conversation', async () => {
+  const f = sim();
+  await up(f);
+  const before = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
+  await Bun.write(
+    f.file,
+    (await Bun.file(f.file).text()).replace(
+      '  use: coordinator',
+      '  use: coordinator\n  prompt: Coordinate security review.',
+    ),
+  );
+  const planned = await up({ ...f, dryRun: true });
+  assert.deepEqual(planned.changes, [
+    { action: 'replace', agent: '$lead', handle: 'lead', reasons: ['its prompt changed'] },
+  ]);
+  await assert.rejects(up(f), retryLater(/occupied|draining/));
+  f.world.tick();
+  await up(f);
+  const after = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
+  assert.equal(
+    after.find((a: { handle: string }) => a.handle === 'reviewer').pane,
+    before.find((a: { handle: string }) => a.handle === 'reviewer').pane,
+  );
+  assert.notEqual(
+    after.find((a: { handle: string }) => a.handle === 'lead').pane,
+    before.find((a: { handle: string }) => a.handle === 'lead').pane,
+  );
+  assert.ok(f.world.prompts().some((p) => p.prompt.includes('Coordinate security review.')));
+  await down(f);
+  assert.deepEqual(
+    f.world.panes.map((p) => p.pane_id),
+    ['lead'],
+  );
+});
+
 test('down retains unrelated panes and ownership survives hub state removal', async () => {
   const s = sim();
   await up(s);
