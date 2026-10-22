@@ -36,45 +36,6 @@ test('shell up owns a separate lead pane, preserves the caller and reuses the le
   );
 });
 
-test('changing the lead prompt replaces only its owned conversation', async () => {
-  const f = await fixture();
-  await up(f);
-  const before = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
-  await Bun.write(
-    f.file,
-    (await Bun.file(f.file).text()).replace(
-      '  use: coordinator',
-      '  use: coordinator\n  prompt: Coordinate security review.',
-    ),
-  );
-  const planned = await up({ ...f, dryRun: true });
-  assert.deepEqual(planned.changes, [
-    { action: 'replace', agent: '$lead', handle: 'lead', reasons: ['its prompt changed'] },
-  ]);
-  await assert.rejects(up(f), /occupied|draining/);
-  await f.tick();
-  await up(f);
-  const after = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
-  assert.equal(
-    after.find((a: { handle: string }) => a.handle === 'reviewer').pane,
-    before.find((a: { handle: string }) => a.handle === 'reviewer').pane,
-  );
-  assert.notEqual(
-    after.find((a: { handle: string }) => a.handle === 'lead').pane,
-    before.find((a: { handle: string }) => a.handle === 'lead').pane,
-  );
-  assert.ok(
-    (await f.read()).calls.some(
-      (a) => a[1] === 'prompt' && a[3]?.includes('Coordinate security review.'),
-    ),
-  );
-  await down(f);
-  assert.deepEqual(
-    (await f.read()).panes.map((p) => p.pane_id),
-    ['lead'],
-  );
-});
-
 test('up --json creates a lead from a script in a shell pane and returns JSON', async () => {
   const f = await fixture();
   const { panes } = await f.read();

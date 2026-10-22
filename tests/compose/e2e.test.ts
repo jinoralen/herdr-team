@@ -39,7 +39,7 @@ test('compose preserves Claude extended-context model aliases through hub startu
   assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
 });
 
-test('the command line exits 75 while hub retires the old membership, and up works after a tick', async () => {
+test('the command line exits 75 while hub retires the old membership', async () => {
   const f = await fixture();
   await up(f);
   await f.write('Review security');
@@ -49,9 +49,7 @@ test('the command line exits 75 while hub retires the old membership, and up wor
     stderr: 'pipe',
   });
   assert.equal(await cli.exited, 75, await new Response(cli.stderr).text());
-  await f.tick();
-  await up(f);
-  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 3);
+  // The in-process lifecycle test covers ticking and retrying; this checks the real exit code.
 });
 
 test('up --dry-run --json replaces a helper whose hub state is gone', async () => {
