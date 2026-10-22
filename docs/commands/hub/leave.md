@@ -14,7 +14,7 @@ Takes the agent out of its room at once: nothing more is delivered to it, and th
 ## Common questions
 
 **Are messages it posted before leaving still delivered?**
-After admission, yes. Messages waiting *for* it are dropped and their authors still in the room are warned, including when an earlier delivery may have arrived. Its handle becomes free once its posts and notices have drained; delivery warnings do not reserve it.
+After admission, yes. Messages waiting *for* it are dropped and their authors still in the room are warned, including when an earlier delivery may have arrived. Its handle becomes free once its posts have drained; its join and leave notices and delivery warnings do not reserve it.
 
 ## It's working if
 
