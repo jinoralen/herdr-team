@@ -3,6 +3,20 @@
 herdr-team is a one-shot Herdr plugin written in TypeScript on Bun. It compiles to standalone executables, uses SQLite through Drizzle for state, and validates Herdr responses with Zod.
 
 
+## Get started
+
+```bash
+git clone https://github.com/jinoralen/herdr-team.git
+cd herdr-team
+bun install --frozen-lockfile
+bun run build
+herdr plugin link "$PWD"
+```
+
+`herdr plugin link` does not build. Rebuild after changing the source; Herdr and agents use `dist/`.
+
+## Commands
+
 | | |
 |---|---|
 | `bun test` | run package and repository tests from source |
