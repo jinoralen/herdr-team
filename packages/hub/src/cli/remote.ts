@@ -1,6 +1,6 @@
 // `invite`: starts and enrolls a member in an existing shell pane, leaving pane ownership to the
 // caller. A pane where an agent already runs is never typed into: the caller gets the line to paste.
-import { type Agent, cliHerdr } from '@herdr/herdr';
+import { type Agent, cliHerdr, type Herdr, HerdrError } from '@herdr/herdr';
 import { join } from '#agent';
 import { rootDir, Store } from '#store';
 import { memberPrompt } from './prompt.ts';
@@ -37,6 +37,31 @@ function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
     pane.agent !== kind
   ) {
     throw new Error('The target pane changed during startup. Inspect it before retrying invite.');
+  }
+}
+
+// A pane just created (compose's) may not have reached its shell prompt yet, and Herdr refuses to
+// start an agent there. The refusal types nothing, so starting again is safe.
+const SHELL_READY_MS = 10_000;
+const SHELL_POLL_MS = 250;
+
+async function startWhenShellReady(
+  herdr: Herdr,
+  options: Parameters<Herdr['startAgent']>[0],
+): Promise<Agent> {
+  const deadline = Date.now() + SHELL_READY_MS;
+  for (;;) {
+    try {
+      return await herdr.startAgent(options);
+    } catch (error) {
+      if (
+        !(error instanceof HerdrError && error.code === 'agent_pane_busy') ||
+        Date.now() > deadline
+      ) {
+        throw error;
+      }
+      await Bun.sleep(SHELL_POLL_MS);
+    }
   }
 }
 
@@ -81,7 +106,7 @@ async function launchInPane({
     return memberPrompt(`${instructions}\n\nYour role: ${description}`, task);
   });
   try {
-    const started = await herdr.startAgent({
+    const started = await startWhenShellReady(herdr, {
       kind: agent,
       paneId: target,
       args: model ? ['--model', model] : [],

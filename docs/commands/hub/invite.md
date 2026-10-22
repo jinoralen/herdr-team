@@ -26,7 +26,7 @@ runs: that is refused, with the `join` line to paste into that agent instead.
 | Where | What happens |
 |---|---|
 | No `--pane` | Run from an interactive Herdr shell: the agent takes over this terminal, with the guide (then the definition's instructions, then the `--prompt` task) as its first prompt, and confirms its membership itself. It creates no pane |
-| `--pane w1:p3` | An existing shell pane: the agent starts there; `invite` waits until it is a member, submits the guide once, and returns. No interactive terminal is needed |
+| `--pane w1:p3` | An existing shell pane: the agent starts there; `invite` waits until it is a member, submits the guide once, and returns. A pane whose shell is still starting gets up to 10 seconds to reach its prompt. No interactive terminal is needed |
 
 ## Options
 

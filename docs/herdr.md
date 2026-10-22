@@ -31,7 +31,8 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
   Optional harness arguments follow `--`, e.g. `-- --model <id>` (checked with the installed CLI).
   Agent names must start with a lowercase letter and contain only lowercase letters, digits,
   hyphens or underscores, up to 32 characters; hub truncates its UUID suffix to fit.
-  The pane must be at an interactive shell prompt. Success means the expected agent was detected
+  The pane must be at an interactive shell prompt, else it fails with `agent_pane_busy` before typing
+  anything (a new pane's shell may still be starting; hub retries for 10 s). Success means the expected agent was detected
   in the same terminal and is ready for input. The client allows 130 seconds for this operation.
   The hub then confirms membership and submits the room guide through `agent prompt`.
 - Only agents Herdr recognizes can join; `agent` is null for a plain shell.
