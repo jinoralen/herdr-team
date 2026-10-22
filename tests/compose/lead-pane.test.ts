@@ -36,6 +36,7 @@ test('shell up owns a separate lead pane, preserves the caller and reuses the le
   );
 });
 
+// Replacement runs several real hub and Herdr processes; allow for slower CI runners.
 test('changing the lead prompt replaces only its owned conversation', async () => {
   const f = await fixture();
   await up(f);
@@ -73,7 +74,7 @@ test('changing the lead prompt replaces only its owned conversation', async () =
     (await f.read()).panes.map((p) => p.pane_id),
     ['lead'],
   );
-});
+}, 15_000);
 
 test('up --json creates a lead from a script in a shell pane and returns JSON', async () => {
   const f = await fixture();

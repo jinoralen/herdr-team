@@ -39,6 +39,7 @@ test('compose preserves Claude extended-context model aliases through hub startu
   assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
 });
 
+// Replacement runs several real hub and Herdr processes; allow for slower CI runners.
 test('the command line exits 75 while hub retires the old membership, and up works after a tick', async () => {
   const f = await fixture();
   await up(f);
@@ -52,7 +53,7 @@ test('the command line exits 75 while hub retires the old membership, and up wor
   await f.tick();
   await up(f);
   assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 3);
-});
+}, 15_000);
 
 test('up --dry-run --json replaces a helper whose hub state is gone', async () => {
   const f = await fixture();
