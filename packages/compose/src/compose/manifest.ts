@@ -87,9 +87,13 @@ export async function deploymentName(file: string): Promise<string> {
   }
   return parsed.data.name;
 }
+// workdir: the folder up runs in, where the team works: the lead runs there, and agents' cwd and
+// shared files resolve from it. use paths resolve from the team file, since definitions travel
+// with it.
 export async function loadPlan(
   file: string,
   env: NodeJS.ProcessEnv = process.env,
+  workdir: string = process.cwd(),
 ): Promise<ManifestPlan> {
   const parsed = Manifest.safeParse(Bun.YAML.parse(await Bun.file(file).text()));
   if (!parsed.success) {
@@ -99,7 +103,7 @@ export async function loadPlan(
   const base = path.dirname(path.resolve(file));
   const context = await Promise.all(
     config.shared.files.map(async (f) => {
-      const absolute = path.resolve(base, f);
+      const absolute = path.resolve(workdir, f);
       return `File ${absolute}:\n${await Bun.file(absolute).text()}`;
     }),
   );
@@ -123,7 +127,7 @@ export async function loadPlan(
     agents[key] = desiredAgent({
       definition,
       handle,
-      cwd: path.resolve(base, a.cwd),
+      cwd: path.resolve(workdir, a.cwd),
       shared,
       purpose: a.prompt,
       tab: a.tab,
@@ -132,7 +136,7 @@ export async function loadPlan(
   agents.$lead = desiredAgent({
     definition: startable(config.lead.use, base, env, 'The lead'),
     handle: 'lead',
-    cwd: base,
+    cwd: path.resolve(workdir),
     shared: [],
     purpose: coordinatorPrompt(config.name, file, agents, config.lead.prompt),
     tab: '$lead',

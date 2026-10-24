@@ -55,7 +55,7 @@ export async function up({
   return withDeploymentLock(root, async () => {
     // Another up or down may have changed membership while this one waited for the lock.
     hub.refresh();
-    const plan = await loadPlan(file, env);
+    const plan = await loadPlan(file, env, cwd);
     const states = deployments(root, workspace);
     assertUnmanagedCaller(states, pane, current);
     const state = states.find((s) => s.name === plan.name) ?? {

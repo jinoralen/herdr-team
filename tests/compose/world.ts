@@ -247,6 +247,8 @@ type Sim = {
   root: string;
   env: NodeJS.ProcessEnv;
   file: string;
+  // The folder up runs in: the fixture's own, where its shared files go.
+  cwd: string;
   world: World;
   herdr: World;
   hub: World;
@@ -295,5 +297,5 @@ agents:
     );
   write();
   const world = new World();
-  return { root, env, file, world, herdr: world, hub: world, write, define };
+  return { root, env, file, cwd: root, world, herdr: world, hub: world, write, define };
 }

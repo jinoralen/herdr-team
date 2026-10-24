@@ -45,6 +45,7 @@ test('the command line exits 75 while hub retires the old membership', async () 
   await f.write('Review security');
   const cli = Bun.spawn([...command('compose'), 'up', f.file], {
     env: f.env,
+    cwd: f.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
   });
@@ -59,6 +60,7 @@ test('up --dry-run --json replaces a helper whose hub state is gone', async () =
   await f.tick();
   const cli = Bun.spawn([...command('compose'), 'up', f.file, '--dry-run', '--json'], {
     env: f.env,
+    cwd: f.cwd,
     stdout: 'pipe',
     stderr: 'pipe',
   });

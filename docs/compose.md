@@ -21,7 +21,8 @@ shell or agent pane. `up` creates a managed `@lead` in its own tab and returns t
 caller. `down` closes the lead and helpers. The caller's terminal stays available
 for lifecycle commands; managed agents cannot run `up` or `down` themselves.
 
-The lead runs in the manifest's folder, like helpers whose `cwd` is omitted.
+A team works in the folder `up` runs in, wherever its file is. The lead runs there, like helpers
+whose `cwd` is omitted.
 
 A team names its agents' [definitions](commands/hub/join.md#joining-as-a-definition) and adds
 where they run. A manifest has a `name`, required `lead` (`use`, optional `prompt`), `shared`
@@ -33,8 +34,10 @@ description peers see and the instructions come from the definition, which needs
 definition's handle, so two agents may use one definition. Keys and handles are
 1–20 lowercase letters, digits, underscores or hyphens, starting with a letter.
 Team files live in `~/.config/herdr-team/teams/` (`$XDG_CONFIG_HOME/herdr-team`, or an
-absolute `HERDR_TEAM_DIR`), and `up <name>` finds them there. All paths, `use` included, resolve
-relative to the manifest. Shared file contents are included
+absolute `HERDR_TEAM_DIR`), and `up <name>` finds them there. Agents' `cwd` and `shared.files`
+resolve from that folder; `use` paths resolve from the team file, so definitions can sit beside
+it. Running `up` for a team from another folder moves every agent there, replacing them.
+Shared file contents are included
 in helpers' initial context; shared and agent prompts together define their purpose.
 
 An unchanged `up` preserves healthy conversations without prompting again.

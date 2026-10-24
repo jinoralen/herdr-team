@@ -10,8 +10,6 @@ agents:
   architecture:
     use: ./agents/architecture-reviewer.md
     tab: reviewers
-    cwd: ..
   correctness:
     use: ./agents/correctness-reviewer.md
     tab: reviewers
-    cwd: ..

@@ -5,7 +5,8 @@
 Reconciles a team with its deployment in this workspace. The lead and helpers run in separate
 compose-owned panes; the caller keeps its terminal. Healthy agents keep their conversations. `up review` names a team in
 `~/.config/herdr-team/teams/`, `up ./team.yaml` a file, and `up` alone reads `./herdr-team.yaml`
-in the current folder (never a parent folder's).
+in the current folder (never a parent folder's). The team works in the folder `up` runs in,
+wherever its file is.
 
 ## When to use it
 

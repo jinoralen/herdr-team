@@ -23,6 +23,8 @@ type Fixture = {
   root: string;
   env: NodeJS.ProcessEnv;
   file: string;
+  // The folder up runs in: the fixture's own, where its shared files go.
+  cwd: string;
   herdr: LayoutHerdr;
   tick: () => Promise<void>;
   write: (prompt?: string, layout?: string) => Promise<number>;
@@ -31,7 +33,8 @@ type Fixture = {
   change: (fields: Record<string, unknown>) => Promise<number>;
 };
 export async function fixture(): Promise<Fixture> {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-test-'));
+  // Real path: a process started in it reports its cwd that way (macOS's /var is a link).
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'compose-test-')));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = path.join(root, 'herdr.json');
   await Bun.write(
@@ -170,5 +173,16 @@ agents:
   const read = (): Promise<State> => Bun.file(state).json();
   const change = async (fields: Record<string, unknown>): Promise<number> =>
     Bun.write(state, JSON.stringify({ ...(await read()), ...fields }));
-  return { root, env, file, herdr: cliLayoutHerdr(env), tick, write, define, read, change };
+  return {
+    root,
+    env,
+    file,
+    cwd: root,
+    herdr: cliLayoutHerdr(env),
+    tick,
+    write,
+    define,
+    read,
+    change,
+  };
 }
