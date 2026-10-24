@@ -3,21 +3,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { fixture } from './fixture.ts';
+import { up } from '@herdr/compose';
+import { createProgram } from '@herdr/compose/cli';
+import { sim } from './world.ts';
 
-test('compose CLI starts, reports and dismantles a deployment through hub commands', async () => {
-  const f = await fixture();
-  const command = process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-compose')]
-    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/compose/cli'))];
+test('compose CLI starts, reports and dismantles a deployment through fake clients', async () => {
+  const f = sim();
   async function run(args: string[]) {
-    const proc = Bun.spawn([...command, ...args], { env: f.env, stdout: 'pipe', stderr: 'pipe' });
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
+    let stdout = '';
+    let stderr = '';
+    const code = await createProgram({
+      ...f,
+      stdout: (text) => {
+        stdout += text;
+      },
+      stderr: (text) => {
+        stderr += text;
+      },
+    }).run(args);
     assert.equal(code, 0, stderr);
     return stdout;
   }
@@ -32,11 +35,35 @@ test('__complete lists the team names up and down accept, for the zsh completion
   onTestFinished(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dir, 'teams'));
   fs.writeFileSync(path.join(dir, 'teams', 'demo.yaml'), 'name: demo\n');
-  const command = process.env.HERDR_TEST_BIN_DIR
-    ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-compose')]
-    : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/compose/cli'))];
-  const proc = Bun.spawnSync([...command, '__complete', 'teams'], {
-    env: { PATH: process.env.PATH ?? '', HERDR_TEAM_DIR: dir },
+  let stdout = '';
+  const code = await createProgram({
+    env: { HERDR_TEAM_DIR: dir },
+    stdout: (text) => {
+      stdout += text;
+    },
+  }).run(['__complete', 'teams']);
+  assert.equal(code, 0);
+  assert.equal(stdout, `demo\t${path.join(dir, 'teams', 'demo.yaml')}\n`);
+});
+
+test('up --dry-run --json replaces a helper whose hub state is gone', async () => {
+  const f = sim();
+  await up(f);
+  f.world.forgetMembers();
+  let stdout = '';
+  const code = await createProgram({
+    ...f,
+    stdout: (text) => {
+      stdout += text;
+    },
+  }).run(['up', f.file, '--dry-run', '--json']);
+  assert.equal(code, 0);
+  const planned = JSON.parse(stdout);
+  assert.equal(planned.dryRun, true);
+  assert.deepEqual(planned.changes[0], {
+    action: 'replace',
+    agent: 'reviewer',
+    handle: 'reviewer',
+    reasons: ['its conversation is gone'],
   });
-  assert.equal(proc.stdout.toString(), `demo\t${path.join(dir, 'teams', 'demo.yaml')}\n`);
 });

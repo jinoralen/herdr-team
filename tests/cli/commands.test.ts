@@ -5,6 +5,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cli } from './run-cli.ts';
 
+test('CLI invocations keep environment, output and exit codes isolated', async () => {
+  const first = cli();
+  const second = cli();
+  const exitCode = process.exitCode;
+  const stateDir = process.env.HERDR_TEAM_STATE_DIR;
+  await Promise.all([first.run(['tick']), second.run(['tick'])]);
+  const joined = await Promise.all([
+    first.run(['join', '-d', 'alpha'], { inPane: true }),
+    second.run(['join', '-d', 'beta'], { inPane: true }),
+  ]);
+  assert.match(joined[0]!.stdout, /as @alpha\./);
+  assert.doesNotMatch(joined[0]!.stdout, /@beta/);
+  assert.match(joined[1]!.stdout, /as @beta\./);
+  const [failed, healthy] = await Promise.all([
+    first.run(['status', '--unknown']),
+    second.run(['status'], { inPane: true }),
+  ]);
+  assert.equal(failed.code, 1);
+  assert.equal(healthy.code, 0);
+  assert.equal(healthy.stderr, '');
+  assert.match(healthy.stdout, /@beta/);
+  assert.doesNotMatch(healthy.stdout, /@alpha/);
+  assert.equal(process.exitCode, exitCode);
+  assert.equal(process.env.HERDR_TEAM_STATE_DIR, stateDir);
+});
+
 test('with no arguments, prints the help and points agents to guide', async () => {
   const { stdout, code } = await cli().run([]);
   expect(code).toBe(0);

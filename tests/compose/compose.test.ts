@@ -65,7 +65,7 @@ test('changed purpose waits for hub to retire the old membership before replacin
 test('changing the lead prompt replaces only its owned conversation', async () => {
   const f = sim();
   await up(f);
-  const before = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
+  const before = JSON.parse(await status({ env: f.env, json: true })).deployments[0].agents;
   await Bun.write(
     f.file,
     (await Bun.file(f.file).text()).replace(
@@ -80,7 +80,7 @@ test('changing the lead prompt replaces only its owned conversation', async () =
   await assert.rejects(up(f), retryLater(/occupied|draining/));
   f.world.tick();
   await up(f);
-  const after = JSON.parse(status({ env: f.env, json: true })).deployments[0].agents;
+  const after = JSON.parse(await status({ env: f.env, json: true })).deployments[0].agents;
   assert.equal(
     after.find((a: { handle: string }) => a.handle === 'reviewer').pane,
     before.find((a: { handle: string }) => a.handle === 'reviewer').pane,
@@ -198,7 +198,7 @@ test('new helpers start together, and one that fails leaves the others ready', a
     s.world.changes().filter((c) => c.startsWith('invite')),
     s.world.changes().slice(-3),
   );
-  const phases = JSON.parse(status({ ...s, json: true }))
+  const phases = JSON.parse(await status({ ...s, json: true }))
     .deployments[0].agents.map((a: { phase: string }) => a.phase)
     .sort();
   assert.deepEqual(phases, ['ready', 'ready', 'started']);
@@ -231,11 +231,11 @@ test('status reports ownership without Herdr access and down needs no context fi
   const s = sim();
   await up(s);
   const before = s.world.calls.length;
-  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
+  assert.match(await status(s), /reviewer=@reviewer \(ready; room: active\)/);
   assert.equal(s.world.calls.length, before);
   fs.writeFileSync(s.file, 'name: test\nshared:\n  files: [missing.md]\n');
   await down(s);
-  assert.match(status(s), /No deployments/);
+  assert.match(await status(s), /No deployments/);
 });
 
 for (const swap of [false, true]) {
@@ -261,9 +261,9 @@ for (const swap of [false, true]) {
     );
     s.world.tick();
     await up(s);
-    assert.match(status(s), /reviewer=@auditor \(ready; room: active\)/);
+    assert.match(await status(s), /reviewer=@auditor \(ready; room: active\)/);
     if (swap) {
-      assert.match(status(s), /auditor=@reviewer \(ready; room: active\)/);
+      assert.match(await status(s), /auditor=@reviewer \(ready; room: active\)/);
     }
     const starts = s.world.prompts().length;
     await up(s);
@@ -314,7 +314,7 @@ test('a team is found by name in the herdr-team folder, and use: paths are relat
     fs.readFileSync(s.file, 'utf8').replace('    use: reviewer', '    use: ./local/helper.md'),
   );
   await up({ ...s, file: 'test' });
-  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
+  assert.match(await status(s), /reviewer=@reviewer \(ready; room: active\)/);
   assert.equal(
     s.world.calls.find((c) => c[0] === 'invite')![1],
     path.join(dir, 'local', 'helper.md'),
@@ -338,7 +338,7 @@ test('up without a team reads herdr-team.yaml in the current folder only', async
     /No herdr-team/,
   );
   await up({ ...s, file: undefined, cwd: project });
-  assert.match(status(s), /Deployment test: reviewer=@reviewer \(ready; room: active\)/);
+  assert.match(await status(s), /Deployment test: reviewer=@reviewer \(ready; room: active\)/);
 });
 
 test('down without a team takes down the only deployment, and names them when there are several', async () => {
@@ -365,7 +365,7 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
     'Dry run of test; nothing was changed.\nLay out tab helpers in a new tab.\nStart @reviewer (reviewer) in tab helpers.\nLay out tab $lead in a new tab.\nStart @lead ($lead) in tab $lead.',
   );
   assert.deepEqual(s.world.changes(), []);
-  assert.equal(status(s), 'No deployments in this workspace.');
+  assert.equal(await status(s), 'No deployments in this workspace.');
   await up(s);
   const before = s.world.changes().length;
   assert.match((await up({ ...s, dryRun: true })).output, /Deployment test is unchanged\./);
@@ -388,13 +388,13 @@ test('up --dry-run says what it would do and why, and changes nothing', async ()
     },
   ]);
   assert.deepEqual(s.world.changes().slice(before), []);
-  assert.match(status(s), /reviewer=@reviewer \(ready; room: active\)/);
+  assert.match(await status(s), /reviewer=@reviewer \(ready; room: active\)/);
 });
 
 test("status shows each helper's room membership, and JSON for status and down", async () => {
   const s = sim();
   await up(s);
-  const listed = JSON.parse(status({ ...s, json: true }));
+  const listed = JSON.parse(await status({ ...s, json: true }));
   assert.equal(listed.deployments[0].name, 'test');
   assert.deepEqual(listed.deployments[0].agents[0], {
     key: 'reviewer',
@@ -404,7 +404,7 @@ test("status shows each helper's room membership, and JSON for status and down",
     room: 'active',
   });
   s.world.forgetMembers();
-  assert.match(status(s), /reviewer=@reviewer \(ready; room: not a member\)/);
+  assert.match(await status(s), /reviewer=@reviewer \(ready; room: not a member\)/);
   assert.deepEqual((await up({ ...s, dryRun: true })).changes?.[0], {
     action: 'replace',
     agent: 'reviewer',

@@ -54,12 +54,12 @@ const AGENT = { definition: 'reviewer', handle: 'reviewer', prompt: 'Review the 
 // What hub prints when it doesn't understand the line it was given.
 const NOT_UNDERSTOOD = /unknown option|unknown command|too many arguments/;
 
-test("compose reads the members from hub's status --json", () => {
+test("compose reads the members from hub's status --json", async () => {
   const { hub, run } = setup();
   assert.equal(run(['tick']).code, 0);
   assert.equal(run(['join', '--handle', 'reviewer', '--description', 'reviews']).code, 0);
   assert.deepEqual(
-    { ...hub.member('reviewer'), joined_at: 'time' },
+    { ...(await hub.member('reviewer')), joined_at: 'time' },
     {
       handle: 'reviewer',
       pane_id: 'p1',
@@ -72,43 +72,37 @@ test("compose reads the members from hub's status --json", () => {
   );
 });
 
-test('compose refuses a hub whose status --json it does not read, or that prints no JSON', () => {
-  const { root, env } = setup();
-  const other = path.join(root, 'other-hub');
-  fs.writeFileSync(
-    other,
-    `#!${process.execPath}\nconsole.log(JSON.stringify({ room: 'w1', members: [{ handle: 'x' }] }));\n`,
-    { mode: 0o755 },
-  );
-  assert.throws(
-    () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
+test('compose refuses a hub whose status --json it does not read, or that prints no JSON', async () => {
+  const { env } = setup();
+  let stdout = JSON.stringify({ room: 'w1', members: [{ handle: 'x' }] });
+  const hub = new Hub(env, async () => ({ exitCode: 0, stdout, stderr: '', timedOut: false }));
+  await assert.rejects(
+    hub.check(),
     /returned a status this compose doesn't read \(at members\.0\.pane_id\)\. Rebuild both, or fix HERDR_TEAM_HUB_BIN\./,
   );
-  fs.writeFileSync(other, `#!${process.execPath}\nconsole.log('usage: other-hub');\n`);
-  assert.throws(
-    () => new Hub({ ...env, HERDR_TEAM_HUB_BIN: other }).check(),
-    /printed no JSON for status --json\. Rebuild both/,
-  );
+  stdout = 'usage: other-hub';
+  await assert.rejects(hub.check(), /printed no JSON for status --json\. Rebuild both/);
 });
 
-test('lookups share one status --json until refresh', () => {
-  const { root, env } = setup();
-  const counted = path.join(root, 'counted-hub');
-  const calls = path.join(root, 'calls');
-  fs.writeFileSync(
-    counted,
-    `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)}, 'x');\nconsole.log(JSON.stringify({ room: 'w1', members: [] }));\n`,
-    { mode: 0o755 },
-  );
-  const hub = new Hub({ ...env, HERDR_TEAM_HUB_BIN: counted });
-  const runs = (): number => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').length : 0);
-  hub.member('a');
-  hub.memberByPane('w1:p1');
-  hub.members();
-  assert.equal(runs(), 1);
+test('lookups share one status --json until refresh, and a failed one is read again', async () => {
+  const { env } = setup();
+  const calls: string[][] = [];
+  let exitCode = 0;
+  const hub = new Hub(env, async (args, options) => {
+    calls.push(args);
+    assert.equal(options.env, env);
+    const stdout = JSON.stringify({ room: 'w1', members: [] });
+    return { exitCode, stdout, stderr: 'locked', timedOut: false };
+  });
+  await Promise.all([hub.member('a'), hub.memberByPane('w1:p1')]);
+  await hub.members();
+  assert.deepEqual(calls, [[...hub.words, 'status', '--json']]);
   hub.refresh();
-  hub.member('a');
-  assert.equal(runs(), 2);
+  exitCode = 1;
+  await assert.rejects(hub.member('a'), /locked/);
+  exitCode = 0;
+  await hub.member('a');
+  assert.equal(calls.length, 3);
 });
 
 test('hub accepts the invite lines compose starts the lead and helpers with', async () => {

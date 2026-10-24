@@ -1,4 +1,6 @@
-// Terminal-safe text and shell quoting shared by hub and compose.
+// Terminal-safe text, shell quoting and running commands, shared by hub and compose.
+export { type Exec, type Exited, spawnExec } from './exec.ts';
+
 export function sanitizeForTerminal(text: string): string {
   // Strip control chars (escape sequences) but keep newlines and tabs.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point

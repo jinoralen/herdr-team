@@ -16,7 +16,7 @@ async function keepAgent(r: Runtime, key: string, plan: ManifestPlan): Promise<b
   }
   const agents = await r.herdr.listPanes();
   const panes = await r.herdr.listPaneTopology();
-  const member = r.hub.member(old.handle);
+  const member = await r.hub.member(old.handle);
   const live = agents.find((a) => a.terminal_id === old.terminal);
   if (old.session && live?.agent_session?.value && old.session !== live.agent_session.value) {
     return false;

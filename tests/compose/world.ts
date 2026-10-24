@@ -144,18 +144,19 @@ class World implements LayoutHerdr, HubClient {
 
   // Hub
 
-  check(): void {}
+  async check(): Promise<void> {}
   refresh(): void {}
-  members(): Membership[] {
+  async members(): Promise<Membership[]> {
     return structuredClone(this.memberships);
   }
-  member(handle: string): Membership | null {
-    return this.members().find((m) => m.handle === handle) ?? null;
+  async member(handle: string): Promise<Membership | null> {
+    return (await this.members()).find((m) => m.handle === handle) ?? null;
   }
-  memberByPane(pane: string): Membership | null {
+  async memberByPane(pane: string): Promise<Membership | null> {
     return (
-      this.members().find((m) => m.pane_id === pane && ['pending', 'active'].includes(m.status)) ??
-      null
+      (await this.members()).find(
+        (m) => m.pane_id === pane && ['pending', 'active'].includes(m.status),
+      ) ?? null
     );
   }
   async start(

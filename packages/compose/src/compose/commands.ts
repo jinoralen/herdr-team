@@ -50,7 +50,7 @@ export async function up({
   const { pane, workspace } = requirePaneContext(env);
   const file = resolveTeam(team, env, cwd);
   const root = rootDir(env);
-  hub.check();
+  await hub.check();
   const current = await callerAgent(herdr, hub, pane);
   return withDeploymentLock(root, async () => {
     // Another up or down may have changed membership while this one waited for the lock.
@@ -94,7 +94,7 @@ async function callerAgent(
   hub: HubClient,
   pane: string,
 ): Promise<Agent | null> {
-  const terminal = hub.memberByPane(pane)?.terminal_id;
+  const terminal = (await hub.memberByPane(pane))?.terminal_id;
   if (terminal) {
     const moved = (await herdr.listPanes()).find((a) => a.terminal_id === terminal);
     if (moved) {
@@ -116,7 +116,7 @@ function assertUnmanagedCaller(states: Deployment[], pane: string, current: Agen
 async function preflight(r: Runtime, plan: ManifestPlan, states: Deployment[]): Promise<void> {
   const panes = new Set((await r.herdr.listPaneTopology()).map((p) => p.pane_id));
   for (const desired of Object.values(plan.agents)) {
-    checkHandle(r, plan, states, desired.handle, panes);
+    await checkHandle(r, plan, states, desired.handle, panes);
     // Linux caps one argv entry at 128 KiB. Leave room for the member guide around the purpose.
     if (Buffer.byteLength(desired.prompt) > MAX_HELPER_CONTEXT_BYTES) {
       throw new Error(`Context for @${desired.handle} exceeds 80 KB; use smaller shared files.`);
@@ -127,20 +127,20 @@ async function preflight(r: Runtime, plan: ManifestPlan, states: Deployment[]): 
 // A helper's handle is free for this deployment: no other deployment owns it, and no member
 // compose didn't start holds it. Waiting frees it when that member's pane has closed (the next
 // tick retires it) or it only has posts left to deliver. panes: the live pane IDs.
-function checkHandle(
+async function checkHandle(
   r: Runtime,
   plan: ManifestPlan,
   states: Deployment[],
   handle: string,
   panes: Set<string>,
-): void {
+): Promise<void> {
   const owner = states.find(
     (s) => s.name !== plan.name && Object.values(s.agents).some((a) => a.handle === handle),
   );
   // Ownership follows the recorded handle, even when its desired helper key changes.
   // Unique desired handles ensure its previous helper is retired before recreation.
   const old = Object.values(r.state.agents).find((agent) => agent.handle === handle);
-  const member = r.hub.member(handle);
+  const member = await r.hub.member(handle);
   const ours = !!old && !!member && isJoinOf(member, old);
   const foreign = member && !ours ? member : null;
   const holds = !!foreign && ['pending', 'active'].includes(foreign.status);
@@ -164,7 +164,7 @@ function checkHandle(
 // membership is read again (from hub only), and a helper that is no longer the same join is replaced.
 async function reconcile(r: Runtime, plan: ManifestPlan, kept: Set<string>): Promise<void> {
   r.hub.refresh();
-  const members = r.hub.members();
+  const members = await r.hub.members();
   const stillKept = (key: string): boolean => {
     const old = r.state.agents[key];
     const member = old && members.find((m) => m.handle === old.handle);

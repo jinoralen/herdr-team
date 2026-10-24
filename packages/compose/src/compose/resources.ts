@@ -94,7 +94,7 @@ export async function placeNewAgent(
   tab: ManagedTab,
   anchor: string | null,
 ): Promise<Placed> {
-  requireFreeHandle(r, desired.handle);
+  await requireFreeHandle(r, desired.handle);
   const created = await allocate(r, desired.cwd);
   const pane = created.pane;
   const live = (await r.herdr.listPaneTopology()).find((p) => p.pane_id === pane);
@@ -164,7 +164,7 @@ async function startAgent(r: Runtime, { key, desired, pane }: Placed): Promise<v
   a.phase = 'started';
   save(r);
   await r.hub.start(desired, pane);
-  const member = r.hub.member(desired.handle);
+  const member = await r.hub.member(desired.handle);
   if (!member || member.pane_id !== pane || member.status !== 'active') {
     throw new Error(
       `Membership of @${desired.handle} changed during startup. Inspect hub status before retrying.`,
@@ -191,8 +191,8 @@ export async function cleanupTabs(r: Runtime): Promise<void> {
   }
 }
 
-function requireFreeHandle(r: Runtime, handle: string): void {
-  const occupied = r.hub.member(handle);
+async function requireFreeHandle(r: Runtime, handle: string): Promise<void> {
+  const occupied = await r.hub.member(handle);
   if (occupied && (['pending', 'active'].includes(occupied.status) || occupied.queuedFrom)) {
     throw new RetryLater(
       `Handle @${handle} is still occupied or draining outgoing messages. Retry ${COMPOSE_SELF} up once a tick has retired its member and delivered its posts.`,

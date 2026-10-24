@@ -1,4 +1,4 @@
-// A persistent fake Herdr executable shared by compose and the real hub subprocesses.
+// The fake Herdr as an executable, shared by compose and the real hub subprocesses it runs.
 import { onTestFinished } from 'bun:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,19 +6,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cliLayoutHerdr, type LayoutHerdr } from '@herdr/herdr';
-import { fakeBin } from '../fake-bin.ts';
+import {
+  type HerdrState,
+  herdrBin,
+  herdrState,
+  readHerdrState,
+  writeHerdrState,
+} from '../fake-herdr.ts';
 
-type State = {
-  calls: string[][];
-  panes: {
-    pane_id: string;
-    terminal_id: string;
-    tab_id: string;
-    workspace_id: string;
-    agent: string | null;
-    agent_status: string;
-  }[];
-};
 type Fixture = {
   root: string;
   env: NodeJS.ProcessEnv;
@@ -29,79 +24,25 @@ type Fixture = {
   tick: () => Promise<void>;
   write: (prompt?: string, layout?: string) => Promise<number>;
   define: (name: string, text: string) => Promise<number>;
-  read: () => Promise<State>;
-  change: (fields: Record<string, unknown>) => Promise<number>;
+  read: () => HerdrState;
 };
 export async function fixture(): Promise<Fixture> {
   // Real path: a process started in it reports its cwd that way (macOS's /var is a link).
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'compose-test-')));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = path.join(root, 'herdr.json');
-  await Bun.write(
+  writeHerdrState(
     state,
-    JSON.stringify({
-      next: 1,
-      calls: [],
-      tabs: [],
-      panes: [
-        {
-          pane_id: 'lead',
-          terminal_id: 'lead-terminal',
-          workspace_id: 'w1',
-          tab_id: 'user',
-          agent: 'codex',
-          agent_status: 'idle',
-        },
-      ],
-    }),
-  );
-  const fake = fakeBin(
-    'herdr',
-    `#!${process.execPath}
-import fs from 'node:fs';
-const file = process.env.FAKE_STATE;
-// up runs several of these at once: each holds the state file while it reads and writes it.
-const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-const lock = () => { for (;;) { try { fs.mkdirSync(file + '.lock'); return; } catch { pause(2); } } };
-const unlock = () => fs.rmSync(file + '.lock', { recursive: true, force: true });
-const a = process.argv.slice(2);
-lock();
-process.on('exit', unlock);
-const s = JSON.parse(fs.readFileSync(file, 'utf8'));
-s.calls.push(a);
-const opt = key => a[a.indexOf(key) + 1];
-const save = () => fs.writeFileSync(file, JSON.stringify(s));
-const out = result => { save(); console.log(JSON.stringify({result})); };
-const fail = code => {save(); console.error(JSON.stringify({error:{code,message:code}})); process.exit(1);};
-if (a[0] === 'pane' && a[1] === 'list') out({panes:s.panes});
-else if (a[0] === 'pane' && a[1] === 'get') {
- const pane = s.panes.find(p=>p.pane_id === a[2]);
- if (!pane) fail('pane_not_found');
- out({pane});
-} else if (a[0] === 'tab' && a[1] === 'list') out({tabs:s.tabs});
-else if (a[0] === 'tab' && a[1] === 'create') {
- if (s.rejectCreate) {s.rejectCreate=false;fail('refused');}
- const id = s.next++;
- const tab = {tab_id:'tab'+id,workspace_id:opt('--workspace'),label:opt('--label')};
- const pane = {pane_id:'pane'+id,terminal_id:'terminal'+id,workspace_id:tab.workspace_id,tab_id:tab.tab_id,agent:null,agent_status:'idle'};
- s.tabs.push(tab); s.panes.push(pane);
- if (s.failCreate) {s.failCreate=false;fail('timeout');}
- out({tab,root_pane:pane});
-} else if (a[0] === 'tab' && a[1] === 'rename') {
- s.tabs.find(t=>t.tab_id===a[2]).label=a[3];out({});
-} else if (a[0] === 'pane' && a[1] === 'move') {
- const p=s.panes.find(p=>p.pane_id===a[2]);
- p.tab_id=opt('--tab');out({});
-} else if (a[0] === 'pane' && a[1] === 'close') {
- s.panes=s.panes.filter(p=>p.pane_id!==a[2]);out({});
-} else if (a[0] === 'agent' && a[1] === 'start') {
- const p=s.panes.find(p=>p.pane_id===opt('--pane'));
- p.agent=opt('--kind');p.agent_session={value:'session-'+s.next++};out({agent:p});
-} else if (a[0] === 'agent' && a[1] === 'prompt') {
- if (s.failPrompt) {s.failPrompt=false;fail('timeout');}
- out({});
-} else fail('unsupported');
-`,
+    herdrState([
+      {
+        pane_id: 'lead',
+        terminal_id: 'lead-terminal',
+        workspace_id: 'w1',
+        tab_id: 'user',
+        agent: 'codex',
+        agent_status: 'idle',
+      },
+    ]),
   );
   const hub = process.env.HERDR_TEST_BIN_DIR
     ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
@@ -113,9 +54,9 @@ else if (a[0] === 'tab' && a[1] === 'create') {
     HERDR_PANE_ID: 'lead',
     HERDR_WORKSPACE_ID: 'w1',
     HERDR_TEAM_STATE_DIR: path.join(root, 'state'),
-    HERDR_BIN_PATH: fake,
+    HERDR_BIN_PATH: herdrBin(),
     HERDR_TEAM_DIR: path.join(root, 'team'),
-    FAKE_STATE: state,
+    FAKE_HERDR_STATE: state,
     ...(process.env.HERDR_TEST_BIN_DIR ? { HERDR_TEAM_HUB_BIN: hub[0] } : {}),
   };
   async function tick(): Promise<void> {
@@ -170,9 +111,7 @@ agents:
 `,
     );
   await write();
-  const read = (): Promise<State> => Bun.file(state).json();
-  const change = async (fields: Record<string, unknown>): Promise<number> =>
-    Bun.write(state, JSON.stringify({ ...(await read()), ...fields }));
+  const read = (): HerdrState => readHerdrState(state);
   return {
     root,
     env,
@@ -183,6 +122,5 @@ agents:
     write,
     define,
     read,
-    change,
   };
 }

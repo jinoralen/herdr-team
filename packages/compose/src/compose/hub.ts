@@ -1,7 +1,7 @@
 // Hub integration crosses a subprocess seam, including when both tools run from source.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { shellQuote } from '@herdr/terminal';
+import { type Exec, shellQuote, spawnExec } from '@herdr/terminal';
 import { z } from 'zod';
 import type { ManagedAgent } from '#store';
 import { RETRY_LATER_EXIT, RetryLater } from './retry.ts';
@@ -61,8 +61,8 @@ function snapshotProblem(json: unknown, parsed: ReturnType<typeof Snapshot.safeP
   return `returned the status of room ${parsed.data.room}`;
 }
 
-// What up, down and status ask of hub. Hub (below) runs hub's command line; tests pass an
-// in-memory one.
+// What up, down and status ask of hub. Hub (below) runs hub's command line through an Exec; tests
+// pass an in-memory client, or an Exec that answers as hub would.
 export type HubClient = Pick<
   Hub,
   'command' | 'check' | 'refresh' | 'members' | 'member' | 'memberByPane' | 'start'
@@ -75,31 +75,39 @@ export type HubClient = Pick<
 export class Hub {
   readonly words: string[];
   readonly command: string;
-  private cached: Membership[] | null = null;
-  constructor(private readonly env: NodeJS.ProcessEnv) {
+  private cached: Promise<Membership[]> | null = null;
+  constructor(
+    private readonly env: NodeJS.ProcessEnv,
+    private readonly exec: Exec = spawnExec,
+  ) {
     this.words = env.HERDR_TEAM_HUB_BIN
       ? [env.HERDR_TEAM_HUB_BIN]
       : words('herdr-hub', () => fileURLToPath(import.meta.resolve('@herdr/hub/cli')));
     this.command = this.words.map(shellQuote).join(' ');
   }
-  private snapshot(): Membership[] {
-    this.cached ??= this.read();
+  // Lookups made together share one read; a failed read isn't kept, so the next lookup tries again.
+  private snapshot(): Promise<Membership[]> {
+    if (!this.cached) {
+      const reading = this.read();
+      this.cached = reading;
+      reading.catch(() => {
+        if (this.cached === reading) {
+          this.cached = null;
+        }
+      });
+    }
     return this.cached;
   }
   // The next lookup reads hub again.
   refresh(): void {
     this.cached = null;
   }
-  private read(): Membership[] {
-    const result = Bun.spawnSync([...this.words, 'status', '--json'], {
-      env: this.env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+  private async read(): Promise<Membership[]> {
+    const result = await this.exec([...this.words, 'status', '--json'], { env: this.env });
     if (result.exitCode !== 0) {
-      throw new Error(result.stderr.toString().trim());
+      throw new Error(result.stderr.trim());
     }
-    const json = parseJson(result.stdout.toString());
+    const json = parseJson(result.stdout);
     const parsed = Snapshot.safeParse(json);
     if (!parsed.success || parsed.data.room !== this.env.HERDR_WORKSPACE_ID) {
       throw new Error(
@@ -108,20 +116,21 @@ export class Hub {
     }
     return parsed.data.members;
   }
-  check(): void {
+  async check(): Promise<void> {
     this.refresh();
-    this.snapshot();
+    await this.snapshot();
   }
-  members(): Membership[] {
+  members(): Promise<Membership[]> {
     return this.snapshot();
   }
-  member(handle: string): Membership | null {
-    return this.snapshot().find((m) => m.handle === handle) ?? null;
+  async member(handle: string): Promise<Membership | null> {
+    return (await this.snapshot()).find((m) => m.handle === handle) ?? null;
   }
-  memberByPane(pane: string): Membership | null {
+  async memberByPane(pane: string): Promise<Membership | null> {
     return (
-      this.snapshot().find((m) => m.pane_id === pane && ['pending', 'active'].includes(m.status)) ??
-      null
+      (await this.snapshot()).find(
+        (m) => m.pane_id === pane && ['pending', 'active'].includes(m.status),
+      ) ?? null
     );
   }
   async start(
@@ -130,22 +139,15 @@ export class Hub {
   ): Promise<void> {
     this.refresh();
     const args = ['invite', agent.definition, '--handle', agent.handle, '--prompt', agent.prompt];
-    const proc = Bun.spawn([...this.words, ...args, '--pane', pane], {
+    const { exitCode, stdout, stderr } = await this.exec([...this.words, ...args, '--pane', pane], {
       env: this.env,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
     // Other starts may run alongside this one: the next lookup reads hub after this start ended.
     this.refresh();
-    if (code !== 0) {
+    if (exitCode !== 0) {
       const message = stderr.trim() || stdout.trim();
       // Hub's own "retry later" stays one for compose's caller.
-      throw code === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
+      throw exitCode === RETRY_LATER_EXIT ? new RetryLater(message) : new Error(message);
     }
   }
 }
