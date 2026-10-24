@@ -3,9 +3,9 @@
 ## What it does
 
 Lists the team files in `~/.config/herdr-team/teams/`, the ones [up](up.md) finds by name, each
-read as `up` would read it: its definitions resolved, working folders and shared files checked. A
-team that can't be used is listed with what is wrong with it. It only reads files, so it needs no
-Herdr and no hub.
+read as `up` would read it from the current folder: its definitions resolved, working folders and
+shared files checked. A team that can't be used is listed with what is wrong with it. It only
+reads files, so it needs no Herdr and no hub.
 
 ## When to use it
 
