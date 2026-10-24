@@ -10,8 +10,14 @@ const COMMAND = process.env.HERDR_TEST_BIN_DIR
   ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
   : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 
-async function shell() {
-  const fixture = cli();
+async function shell(useProcess = false) {
+  const fixture = cli(
+    {},
+    {
+      process: useProcess,
+      panes: [{ pane_id: 'p1', terminal_id: 't1', agent: null, agent_status: 'idle' }],
+    },
+  );
   assert.equal((await fixture.run(['tick'])).code, 0);
   const result = path.join(fixture.root, 'launch.json');
   const harness = `#!${process.execPath}
@@ -22,26 +28,30 @@ await Bun.write(process.env.LAUNCH_RESULT, JSON.stringify({
 }));
 process.exit(23);
 `;
-  // The agents' folder, with one harness per agent.
-  const agents = path.dirname(['codex', 'claude', 'pi'].map((a) => fakeBin(a, harness))[0]!);
-  const herdr = fakeBin(
-    'herdr',
-    `#!${process.execPath}
-console.log(JSON.stringify({result: {pane: {
-  pane_id: 'p1', terminal_id: 't1', agent: process.env.LIVE_AGENT || null, agent_status: 'idle'
-}}}));
-`,
-  );
+  // The agents' folder, with one harness per agent. In-process, which finds them there.
+  const agents = useProcess
+    ? path.dirname(['codex', 'claude', 'pi'].map((a) => fakeBin(a, harness))[0]!)
+    : path.join(fixture.root, 'bin');
   const env = {
     PATH: `${agents}:${process.env.PATH ?? ''}`,
-    HERDR_ENV: '1',
-    HERDR_PANE_ID: 'p1',
-    HERDR_WORKSPACE_ID: 'w1',
-    HERDR_TEAM_STATE_DIR: path.join(fixture.root, 'state'),
-    HERDR_BIN_PATH: herdr,
     LAUNCH_RESULT: result,
     LAUNCH_MARKER: 'preserved',
   };
+  // What the harness above records, from the execve that would have started it.
+  const execve = ((binary: string, args: string[] = [], inherited: NodeJS.ProcessEnv = {}) => {
+    assert.equal(args[0], binary);
+    assert.equal(args.at(-2), '--');
+    fs.writeFileSync(
+      result,
+      JSON.stringify({
+        args: args.slice(1).filter((arg) => arg !== '--'),
+        bin: path.basename(binary),
+        pane: inherited.HERDR_PANE_ID,
+        workspace: inherited.HERDR_WORKSPACE_ID,
+        marker: inherited.LAUNCH_MARKER,
+      }),
+    );
+  }) as typeof process.execve;
   async function start(
     agent: string,
     extra: Record<string, string> = {},
@@ -62,11 +72,30 @@ console.log(JSON.stringify({result: {pane: {
       extra,
     );
   }
-  // Runs `invite <args>` in the fake shell pane, in a real terminal.
+  // Runs the parser with a recorded execve, or the executable in a real terminal for smoke tests.
   async function startWith(args: string[], extra: Record<string, string> = {}) {
+    const commandEnv: NodeJS.ProcessEnv = { ...env, ...extra };
+    if (!useProcess) {
+      const { code, stdout, stderr } = await fixture.run(['invite', ...args], {
+        inPane: true,
+        env: commandEnv,
+        system: {
+          isTTY: { stdin: true, stdout: true },
+          which: (agent) => (commandEnv.PATH === fixture.root ? null : path.join(agents, agent)),
+          execve,
+        },
+      });
+      return { pid: process.pid, code, output: stdout + stderr };
+    }
     const chunks: Buffer[] = [];
     const proc = Bun.spawn([...COMMAND, 'invite', ...args], {
-      env: { ...env, ...extra },
+      env: {
+        ...fixture.env,
+        HERDR_ENV: '1',
+        HERDR_PANE_ID: 'p1',
+        HERDR_WORKSPACE_ID: 'w1',
+        ...commandEnv,
+      },
       cwd: fixture.root,
       timeout: 10000,
       terminal: {
@@ -82,16 +111,17 @@ console.log(JSON.stringify({result: {pane: {
       proc.terminal?.close();
     }
   }
-  return { ...fixture, env, result, start, startWith };
+  return { ...fixture, result, start, startWith };
 }
 
 const AGENTS = ['codex', 'claude', 'pi'];
 
-// One test per agent: each starts the CLI from source, and a failure names the agent.
+// One test per agent in a real process and terminal: the handoff itself. The other launch tests
+// record execve in-process.
 test.each(AGENTS)(
   'invite without --pane hands the same process and terminal to %s with its room guide',
   async (agent) => {
-    const { start, result, root, run } = await shell();
+    const { start, result, root, run } = await shell(true);
     const launched = await start(agent);
     assert.equal(launched.code, 23, launched.output);
     const record = await Bun.file(result).json();
@@ -111,12 +141,13 @@ test.each(AGENTS)(
 );
 
 test('invite without --pane refuses nested agents and unsupported kinds before joining', async () => {
-  for (const [agent, env] of [
-    ['codex', { LIVE_AGENT: 'claude' }],
-    ['unknown', {}],
+  for (const [agent, live] of [
+    ['codex', 'claude'],
+    ['unknown', null],
   ] as const) {
-    const { start, run, result } = await shell();
-    const launched = await start(agent, env);
+    const { start, run, result, herdr } = await shell();
+    herdr().panes[0]!.agent = live;
+    const launched = await start(agent);
     assert.equal(launched.code, 1);
     assert.equal(await Bun.file(result).exists(), false);
     assert.doesNotMatch((await run(['status'], { inPane: true })).stdout, /@reviewer/);
@@ -150,7 +181,7 @@ test('same-pane startup appends the initial task after the guide without changin
   const { start, result, run } = await shell();
   const task = 'Review the cache.\nKeep $(literal), `text`, and unicode 🚀 unchanged.';
   const launched = await start('codex', {}, task);
-  assert.equal(launched.code, 23, launched.output);
+  assert.equal(launched.code, 0, launched.output);
   const { args } = await Bun.file(result).json();
   assert.ok(args[0].endsWith(`Your initial task:\n${task}`));
   assert.ok(args[0].indexOf('as @reviewer.') < args[0].indexOf('Your initial task:'));
@@ -163,7 +194,7 @@ test.each(AGENTS)(
     const { start, result } = await shell();
     const model = agent === 'claude' ? 'sonnet[1m]' : 'example-v1';
     const launched = await start(agent, {}, undefined, model);
-    assert.equal(launched.code, 23, launched.output);
+    assert.equal(launched.code, 0, launched.output);
     const record = await Bun.file(result).json();
     assert.deepEqual(record.args.slice(0, 2), ['--model', model]);
     assert.match(record.args.at(-1), /as @reviewer/);
@@ -192,7 +223,7 @@ test("invite <agent> starts the definition's kind and model with the guide, its 
     ['reviewer', '--prompt', 'Review the cache.'],
     team(root, REVIEWER),
   );
-  assert.equal(launched.code, 23, launched.output);
+  assert.equal(launched.code, 0, launched.output);
   const { args, bin } = await Bun.file(result).json();
   assert.equal(bin, 'claude');
   assert.deepEqual(args.slice(0, 2), ['--model', 'sonnet[1m]']);
@@ -227,7 +258,7 @@ test('--agent <kind>, --model, --handle and --description override the definitio
     ],
     team(root, REVIEWER),
   );
-  assert.equal(launched.code, 23, launched.output);
+  assert.equal(launched.code, 0, launched.output);
   const record = await Bun.file(result).json();
   assert.equal(record.bin, 'codex');
   assert.deepEqual(record.args.slice(0, 2), ['--model', 'example-v1']);

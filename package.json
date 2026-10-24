@@ -24,7 +24,8 @@
     "lefthook": "2.2.2",
     "@herdr/hub": "workspace:*",
     "@herdr/compose": "workspace:*",
-    "@herdr/herdr": "workspace:*"
+    "@herdr/herdr": "workspace:*",
+    "@herdr/terminal": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^7"

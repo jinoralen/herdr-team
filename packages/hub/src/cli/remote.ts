@@ -1,6 +1,6 @@
 // `invite`: starts and enrolls a member in an existing shell pane, leaving pane ownership to the
 // caller. A pane where an agent already runs is never typed into: the caller gets the line to paste.
-import { type Agent, cliHerdr, type Herdr, HerdrError } from '@herdr/herdr';
+import { type Agent, type Herdr, HerdrError } from '@herdr/herdr';
 import { join } from '#agent';
 import { rootDir, Store } from '#store';
 import { memberPrompt } from './prompt.ts';
@@ -18,14 +18,16 @@ export function invite({
   as,
   prompt,
   env = process.env,
+  herdr,
   ...given
 }: Partial<Start> & {
   pane: string;
   as?: string;
   prompt?: string;
   env?: NodeJS.ProcessEnv;
+  herdr: Herdr;
 }): Promise<Invited> {
-  return launchInPane({ ...prepareStart(given, as, prompt, env), as, pane, env });
+  return launchInPane({ ...prepareStart(given, as, prompt, env), as, pane, env, herdr });
 }
 
 function checkPane(pane: Agent | null, expected: Agent, kind: string): void {
@@ -74,6 +76,7 @@ async function launchInPane({
   task,
   pane: target,
   env,
+  herdr,
 }: {
   agent: string;
   as?: string;
@@ -83,8 +86,8 @@ async function launchInPane({
   task: string;
   pane: string;
   env: NodeJS.ProcessEnv;
+  herdr: Herdr;
 }): Promise<Invited> {
-  const herdr = cliHerdr(env);
   const pane = await herdr.pane(target);
   if (!pane || pane.pane_id !== target || !pane.workspace_id) {
     throw new Error(

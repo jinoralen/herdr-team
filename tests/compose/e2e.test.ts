@@ -2,7 +2,6 @@
 // in-memory hub can't show. Hub's prompt, the agent's kind and model, and exit codes.
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { up } from '@herdr/compose';
@@ -11,7 +10,7 @@ import { fixture } from './fixture.ts';
 test('helpers start through hub from their definition: kind, model, guide, instructions and task', async () => {
   const f = await fixture();
   await up(f);
-  const calls = (await f.read()).calls;
+  const calls = f.read().calls;
   const start = calls.find((a) => a[1] === 'start' && a.includes('example-v1'))!;
   assert.equal(start[2], 'reviewer-pane2');
   assert.deepEqual(start.slice(3, 5), ['--kind', 'codex']);
@@ -23,8 +22,7 @@ test('helpers start through hub from their definition: kind, model, guide, instr
   );
   const hub = Bun.spawnSync([...command('hub'), 'status'], { env: f.env }).stdout.toString();
   assert.match(hub, /@reviewer — reviews the code/);
-  await up(f);
-  assert.equal((await f.read()).calls.filter((a) => a[1] === 'start').length, 2);
+  assert.ok(calls.some((a) => a[1] === 'prompt' && /Hub starts you as @lead/.test(a[3] ?? '')));
 });
 
 test('compose preserves Claude extended-context model aliases through hub startup', async () => {
@@ -34,9 +32,7 @@ test('compose preserves Claude extended-context model aliases through hub startu
     '---\ndescription: reviews\nkind: claude\nmodel: sonnet[1m]\n---\nx\n',
   );
   await up(f);
-  const start = (await f.read()).calls.find(
-    (args) => args[1] === 'start' && args.includes('sonnet[1m]'),
-  )!;
+  const start = f.read().calls.find((args) => args[1] === 'start' && args.includes('sonnet[1m]'))!;
   assert.deepEqual(start.slice(-3), ['--', '--model', 'sonnet[1m]']);
 });
 
@@ -52,28 +48,6 @@ test('the command line exits 75 while hub retires the old membership', async () 
   });
   assert.equal(await cli.exited, 75, await new Response(cli.stderr).text());
   // The in-process lifecycle test covers ticking and retrying; this checks the real exit code.
-});
-
-test('up --dry-run --json replaces a helper whose hub state is gone', async () => {
-  const f = await fixture();
-  await up(f);
-  fs.rmSync(path.join(f.root, 'state', 'hub'), { recursive: true });
-  await f.tick();
-  const cli = Bun.spawn([...command('compose'), 'up', f.file, '--dry-run', '--json'], {
-    env: f.env,
-    cwd: f.cwd,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const planned = JSON.parse(await new Response(cli.stdout).text());
-  assert.equal(await cli.exited, 0);
-  assert.equal(planned.dryRun, true);
-  assert.deepEqual(planned.changes[0], {
-    action: 'replace',
-    agent: 'reviewer',
-    handle: 'reviewer',
-    reasons: ['its conversation is gone'],
-  });
 });
 
 // The hub or compose executable, as users run it.

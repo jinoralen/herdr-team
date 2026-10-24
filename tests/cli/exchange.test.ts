@@ -2,7 +2,10 @@ import { expect, test } from 'bun:test';
 import { cli } from './run-cli.ts';
 
 test('two agents exchange a multiline message through real CLI processes', async () => {
-  const { run, prompts } = cli();
+  const { run, prompts } = cli({}, { process: true });
+  expect((await run(['--version'])).code).toBe(0);
+  expect((await run(['--help'])).code).toBe(0);
+  expect((await run(['status', '--unknown'])).code).toBe(1);
   expect((await run(['tick'])).code).toBe(0);
   expect((await run(['join', '--description', 'codex'], { inPane: true })).code).toBe(0);
   expect(

@@ -3,13 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { fakeBin } from '../fake-bin.ts';
 import { cli } from './run-cli.ts';
 
-const COMMAND = process.env.HERDR_TEST_BIN_DIR
-  ? [path.resolve(process.env.HERDR_TEST_BIN_DIR, 'herdr-hub')]
-  : [process.execPath, fileURLToPath(import.meta.resolve('@herdr/hub/cli'))];
 const JOIN = [
   'invite',
   '--pane',
@@ -22,44 +17,6 @@ const JOIN = [
   'reviews architecture',
 ];
 
-// The target pane's herdr: what it was asked is in calls.jsonl, the started agent in agent.json.
-const FAKE_HERDR = `#!${process.execPath}
-import fs from 'node:fs';
-import path from 'node:path';
-const args = process.argv.slice(2);
-const root = path.dirname(process.env.CALLS);
-fs.appendFileSync(path.join(root, 'calls.jsonl'), JSON.stringify(args) + '\\n');
-const scenario = process.env.SCENARIO;
-const state = path.join(root, 'agent.json');
-const started = fs.existsSync(state);
-const pane = { pane_id: 'w2:p2', workspace_id: 'w2', terminal_id: started && scenario === 'changed' ? 'other' : 't2',
-  agent: started ? fs.readFileSync(state, 'utf8') : scenario === 'busy' ? 'claude' : null, agent_status: 'idle' };
-const out = result => console.log(JSON.stringify({result}));
-const fail = code => { console.error(JSON.stringify({error: {code, message: code}})); process.exit(1); };
-if (args[0] === 'pane' && args[1] === 'list') out({panes: [pane]});
-else if (args[0] === 'pane') {
-  if (scenario === 'missing') fail('pane_not_found');
-  out({pane});
-} else if (args[1] === 'start') {
-  if (scenario === 'start-timeout') fail('timeout');
-  // A new pane whose shell hasn't reached its prompt yet: Herdr refuses the first start.
-  const starts = fs.readFileSync(path.join(root, 'calls.jsonl'), 'utf8').split('"start"').length - 1;
-  if (scenario === 'shell-starting' && starts === 1) fail('agent_pane_busy');
-  if (scenario === 'reject') {
-    const tick = Bun.spawnSync([...${JSON.stringify(COMMAND)}, 'tick'], {env: process.env});
-    if (tick.exitCode !== 0) process.exit(tick.exitCode);
-  }
-  fs.writeFileSync(state, args[args.indexOf('--kind') + 1]);
-  out({agent: {...pane, agent: args[args.indexOf('--kind') + 1]}});
-} else if (args[1] === 'prompt') {
-  if (scenario === 'prompt-timeout') fail('timeout');
-  if (scenario === 'leave-on-prompt') {
-    Bun.spawnSync([...${JSON.stringify(COMMAND)}, 'leave'], {env: {...process.env, HERDR_ENV: '1', HERDR_PANE_ID: 'w2:p2', HERDR_WORKSPACE_ID: 'w2'}});
-  }
-  out({type: 'ok'});
-}
-`;
-
 async function remote(scenario = '') {
   // A herdr-team folder with one definition, for invite <agent>.
   const team = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-team-invite-'));
@@ -69,27 +26,51 @@ async function remote(scenario = '') {
     path.join(team, 'agents', 'reviewer.md'),
     '---\ndescription: reviews architecture\nkind: pi\nmodel: example-v1\n---\nReview when asked.\n',
   );
-  const fixture = cli({
-    HERDR_TEAM_DIR: team,
-    SCENARIO: scenario,
-    // Paths come from CALLS, so every test shares one fake.
-    HERDR_BIN_PATH: fakeBin('herdr', FAKE_HERDR),
-    // The caller is in w1; status without inPane can inspect the target room through this env.
-    HERDR_ENV: '1',
-    HERDR_PANE_ID: 'other',
-    HERDR_WORKSPACE_ID: 'w2',
-  });
-  assert.equal((await fixture.run(['tick'])).code, 0);
-  const callsFile = path.join(fixture.root, 'calls.jsonl');
-  const calls = async (): Promise<string[][]> => {
-    if (!(await Bun.file(callsFile).exists())) {
-      return [];
-    }
-    return (await Bun.file(callsFile).text())
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
+  const target = {
+    pane_id: 'w2:p2',
+    workspace_id: 'w2',
+    terminal_id: 't2',
+    agent: scenario === 'busy' ? 'claude' : null,
+    agent_status: 'idle',
   };
+  const fixture = cli(
+    {
+      HERDR_TEAM_DIR: team,
+      // The caller is in w1; status without inPane can inspect the target room through this env.
+      HERDR_ENV: '1',
+      HERDR_PANE_ID: 'other',
+      HERDR_WORKSPACE_ID: 'w2',
+    },
+    {
+      panes: scenario === 'missing' ? [] : [target],
+      around: async (args, next) => {
+        const command = `${args[0]} ${args[1]}`;
+        if (command === 'agent start' && scenario === 'reject') {
+          const result = await fixture.run(['tick']);
+          assert.equal(result.code, 0, result.stderr);
+        }
+        if (command === 'agent prompt' && scenario === 'leave-on-prompt') {
+          const result = await fixture.run(['leave'], {
+            env: { HERDR_ENV: '1', HERDR_PANE_ID: 'w2:p2', HERDR_WORKSPACE_ID: 'w2' },
+          });
+          assert.equal(result.code, 0, result.stderr);
+        }
+        const exited = next();
+        if (command === 'agent start' && scenario === 'changed') {
+          fixture.herdr().panes[0]!.terminal_id = 'other';
+        }
+        return exited;
+      },
+    },
+  );
+  const fail: Record<string, Record<string, string>> = {
+    'start-timeout': { 'agent start': 'timeout' },
+    'shell-starting': { 'agent start': 'agent_pane_busy' },
+    'prompt-timeout': { 'agent prompt': 'timeout' },
+  };
+  fixture.herdr().fail = fail[scenario] ?? {};
+  assert.equal((await fixture.run(['tick'])).code, 0);
+  const calls = async (): Promise<string[][]> => fixture.calls();
   return { ...fixture, calls, team };
 }
 

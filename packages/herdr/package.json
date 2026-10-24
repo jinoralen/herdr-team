@@ -10,6 +10,7 @@
     "typecheck": "bun check"
   },
   "dependencies": {
+    "@herdr/terminal": "workspace:*",
     "zod": "^4.6.5"
   }
 }

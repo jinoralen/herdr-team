@@ -1,16 +1,16 @@
 // Pane layout operations used by compose; agent startup stays with hub.
+import { type Exec, spawnExec } from '@herdr/terminal';
 import { z } from 'zod';
-import { cliHerdr, HerdrError, run } from './client.ts';
+import { cliHerdr, HerdrError, herdrCommand } from './client.ts';
 import { type LayoutHerdr, type NewTab, type Pane, PaneSchema } from './types.ts';
-export function cliLayoutHerdr(env = process.env): LayoutHerdr {
-  const bin = env.HERDR_BIN_PATH || 'herdr';
+export function cliLayoutHerdr(env = process.env, exec: Exec = spawnExec): LayoutHerdr {
+  const run = herdrCommand(env, exec);
   return {
-    ...cliHerdr(env),
+    ...cliHerdr(env, exec),
     async listPaneTopology(workspace?: string): Promise<Pane[]> {
       const result = await run(
-        bin,
         ['pane', 'list', ...(workspace ? ['--workspace', workspace] : [])],
-        { timeout: 10000, env },
+        10000,
       );
       const parsed = z.object({ panes: z.array(PaneSchema) }).safeParse(result);
       if (!parsed.success) {
@@ -28,9 +28,8 @@ export function cliLayoutHerdr(env = process.env): LayoutHerdr {
       label: string;
     }): Promise<NewTab> {
       const result = await run(
-        bin,
         ['tab', 'create', '--workspace', workspace, '--cwd', cwd, '--label', label, '--no-focus'],
-        { timeout: 10000, env },
+        10000,
       );
       const parsed = z
         .object({
@@ -44,7 +43,7 @@ export function cliLayoutHerdr(env = process.env): LayoutHerdr {
       return { tab: parsed.data.tab.tab_id, pane: parsed.data.root_pane.pane_id };
     },
     async listTabs(): Promise<{ tab_id: string; label?: string; workspace_id: string }[]> {
-      const result = await run(bin, ['tab', 'list'], { timeout: 10000, env });
+      const result = await run(['tab', 'list'], 10000);
       const parsed = z
         .object({
           tabs: z.array(
@@ -62,14 +61,13 @@ export function cliLayoutHerdr(env = process.env): LayoutHerdr {
       return parsed.data.tabs;
     },
     async renameTab(tab: string, label: string): Promise<void> {
-      await run(bin, ['tab', 'rename', tab, label], { timeout: 10000, env });
+      await run(['tab', 'rename', tab, label], 10000);
     },
     async movePane(
       pane: string,
       { tab, target, direction }: { tab: string; target: string; direction: 'right' | 'down' },
     ): Promise<void> {
       await run(
-        bin,
         [
           'pane',
           'move',
@@ -82,11 +80,11 @@ export function cliLayoutHerdr(env = process.env): LayoutHerdr {
           direction,
           '--no-focus',
         ],
-        { timeout: 10000, env },
+        10000,
       );
     },
     async closePane(pane: string): Promise<void> {
-      await run(bin, ['pane', 'close', pane], { timeout: 10000, env });
+      await run(['pane', 'close', pane], 10000);
     },
   };
 }

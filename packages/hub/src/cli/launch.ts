@@ -1,5 +1,5 @@
 // Starts a room member in the user's current Herdr shell pane, with its guide as the first prompt.
-import { cliHerdr } from '@herdr/herdr';
+import type { Herdr } from '@herdr/herdr';
 import { join, SELF } from '#agent';
 import { rootDir, Store } from '#store';
 import { joinLine, memberPrompt } from './prompt.ts';
@@ -12,34 +12,46 @@ function callerPane(env: NodeJS.ProcessEnv): string {
   return env.HERDR_PANE_ID;
 }
 
-export async function launch({
-  as,
-  prompt,
-  env = process.env,
-  ...given
-}: Partial<Start> & {
-  as?: string;
-  prompt?: string;
-  env?: NodeJS.ProcessEnv;
-}): Promise<string> {
+// What launch needs of the process it runs in. execve replaces it with the agent and never returns.
+type Takeover = {
+  isTTY: boolean;
+  which: typeof Bun.which;
+  execve: typeof process.execve | undefined;
+};
+
+export async function launch(
+  {
+    as,
+    prompt,
+    env = process.env,
+    herdr,
+    ...given
+  }: Partial<Start> & {
+    as?: string;
+    prompt?: string;
+    env?: NodeJS.ProcessEnv;
+    herdr: Herdr;
+  },
+  { isTTY, which, execve }: Takeover,
+): Promise<void> {
   const { agent, model, handle, description, task } = prepareStart(given, as, prompt, env);
   const args = modelArgs(model);
   const current = callerPane(env);
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (!isTTY) {
     throw new Error('Starting an agent requires an interactive terminal.');
   }
-  const binary = Bun.which(agent, { PATH: env.PATH });
+  const binary = which(agent, { PATH: env.PATH });
   if (!binary) {
     throw new Error(
       `Cannot start ${agent}: it is not on PATH. Install it and retry ${SELF} invite.`,
     );
   }
-  if (!process.execve) {
+  if (!execve) {
     throw new Error(
       'This Bun runtime cannot start the agent. Use a Bun version with process.execve support.',
     );
   }
-  const pane = await cliHerdr(env).pane(current);
+  const pane = await herdr.pane(current);
   if (!pane) {
     throw new Error(
       `The current Herdr pane no longer exists. Run ${SELF} invite from its current shell.`,
@@ -57,7 +69,7 @@ export async function launch({
   const inherited = Object.fromEntries(
     Object.entries(env).filter((entry) => entry[1] !== undefined),
   );
-  return process.execve(binary, [binary, ...args, '--', initial], inherited);
+  execve(binary, [binary, ...args, '--', initial], inherited);
 }
 
 // The model was checked by prepareStart.

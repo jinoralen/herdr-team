@@ -8,7 +8,7 @@ import { Hub, type HubClient, isJoinOf, type Membership } from './hub.ts';
 
 type Room = Membership['status'] | 'not a member';
 
-export function status({
+export async function status({
   env = process.env,
   hub,
   json = false,
@@ -16,7 +16,7 @@ export function status({
   env?: NodeJS.ProcessEnv;
   hub?: HubClient;
   json?: boolean;
-} = {}): string {
+} = {}): Promise<string> {
   const { workspace } = requirePaneContext(env);
   const states = deployments(rootDir(env), workspace);
   // Ownership is compose's own record; the room is only shown when hub can be asked.
@@ -24,7 +24,7 @@ export function status({
   let unavailable = '';
   if (states.length) {
     try {
-      members = (hub ?? new Hub(env)).members();
+      members = await (hub ?? new Hub(env)).members();
     } catch (error) {
       unavailable = (error as Error).message;
     }

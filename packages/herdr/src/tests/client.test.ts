@@ -1,120 +1,133 @@
-// Runs the real CLI adapter against a fake `herdr` executable.
+// The herdr adapter against a recorded Exec that answers with what herdr prints. The process itself
+// is @herdr/terminal's spawnExec, tested there.
 
-import { onTestFinished, test } from 'bun:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { cliHerdr, run } from '../client.ts';
+import type { Exited } from '@herdr/terminal';
+import { cliHerdr } from '../client.ts';
 
-function fakeBinary(body: string) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-herdr-'));
-  onTestFinished(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const bin = path.join(dir, 'herdr');
-  fs.writeFileSync(bin, `#!/usr/bin/env bun\n${body}\n`, { mode: 0o755 });
-  return { bin, dir };
+const ok = (result: unknown): Exited => ({
+  exitCode: 0,
+  stdout: `${JSON.stringify({ result })}\n`,
+  stderr: '',
+  timedOut: false,
+});
+const failed = (stderr: string, more: Partial<Exited> = {}): Exited => ({
+  exitCode: 1,
+  stdout: '',
+  stderr,
+  timedOut: false,
+  ...more,
+});
+
+// exited: what herdr prints, or the spawn error a missing herdr rejects with.
+function recorded(exited: Exited | Error) {
+  const calls: string[][] = [];
+  const herdr = cliHerdr({ HERDR_BIN_PATH: '/bin/herdr' }, async ([bin, ...args]) => {
+    assert.equal(bin, '/bin/herdr');
+    calls.push(args);
+    if (exited instanceof Error) {
+      throw exited;
+    }
+    return exited;
+  });
+  return { herdr, calls };
 }
 
 test('prompt text reaches herdr as one argv entry, untouched', async () => {
-  const { bin, dir } = fakeBinary(
-    `require('fs').writeFileSync(process.env.OUT, JSON.stringify(process.argv.slice(2))); console.log('{"result":{"type":"ok"}}');`,
-  );
-  const out = path.join(dir, 'argv.json');
+  const { herdr, calls } = recorded(ok({ type: 'ok' }));
   const text = 'line1\n$(touch /tmp/pwned) `id` ; \'q\' "dq" 🚀';
-  await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out }).prompt('w1:p1', text);
-  assert.deepEqual(JSON.parse(fs.readFileSync(out, 'utf8')).slice(0, 4), [
-    'agent',
-    'prompt',
-    'w1:p1',
-    text,
-  ]);
+  await herdr.prompt('w1:p1', text);
+  assert.deepEqual(calls[0]!.slice(0, 4), ['agent', 'prompt', 'w1:p1', text]);
 });
 
 test('herdr JSON errors become coded errors', async () => {
-  const { bin } = fakeBinary(
-    `process.stderr.write('{"error":{"code":"agent_blocked","message":"blocked"}}\\n'); process.exit(1);`,
-  );
-  await assert.rejects(cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).prompt('p', 'x'), {
-    code: 'agent_blocked',
-  });
+  const { herdr } = recorded(failed('{"error":{"code":"agent_blocked","message":"blocked"}}\n'));
+  await assert.rejects(herdr.prompt('p', 'x'), { code: 'agent_blocked', message: 'blocked' });
 });
 
 test('a failure without herdr JSON is a process exit, not a timeout', async () => {
-  const { bin } = fakeBinary(`process.stderr.write('panic: socket closed\\n'); process.exit(2);`);
-  await assert.rejects(run(bin, ['pane', 'list'], { timeout: 10000, env: process.env }), {
+  const { herdr } = recorded(failed('panic: socket closed\n', { exitCode: 2 }));
+  await assert.rejects(herdr.listPanes(), {
     code: 'process_exit',
     message: 'panic: socket closed',
   });
 });
 
-test('a herdr that outlives its timeout is killed and reported as one', async () => {
-  const { bin } = fakeBinary('setTimeout(() => {}, 10000);');
-  await assert.rejects(run(bin, ['pane', 'list'], { timeout: 200, env: process.env }), {
-    code: 'timeout',
-  });
+test('a herdr that outlives its timeout is reported as one', async () => {
+  const { herdr } = recorded(failed('', { exitCode: 137, timedOut: true }));
+  await assert.rejects(herdr.listPanes(), { code: 'timeout' });
+});
+
+test('non-JSON success output is an invalid response', async () => {
+  const { herdr } = recorded({ ...ok(null), stdout: 'usage: herdr' });
+  await assert.rejects(herdr.listPanes(), { code: 'invalid_response' });
 });
 
 test('missing binary is reported clearly', async () => {
-  await assert.rejects(
-    cliHerdr({ ...process.env, HERDR_BIN_PATH: '/nonexistent/herdr' }).listPanes(),
-    { code: 'missing_binary' },
-  );
+  const { herdr } = recorded(Object.assign(new Error('spawn'), { code: 'ENOENT' }));
+  await assert.rejects(herdr.listPanes(), { code: 'missing_binary' });
 });
 
 test('listPanes parses the pane list, panes without an agent included', async () => {
-  const { bin } = fakeBinary(
-    `console.log(JSON.stringify({ id: 'x', result: { type: 'pane_list', panes: [{ pane_id: 'w1:p1', terminal_id: 't1', agent: 'claude', agent_status: 'idle' }, { pane_id: 'w1:p2', terminal_id: 't2', agent_status: 'unknown' }] } }));`,
+  const { herdr, calls } = recorded(
+    ok({
+      panes: [
+        { pane_id: 'w1:p1', terminal_id: 't1', agent: 'claude', agent_status: 'idle' },
+        { pane_id: 'w1:p2', terminal_id: 't2', agent_status: 'unknown' },
+      ],
+    }),
   );
-  const panes = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listPanes();
   assert.deepEqual(
-    panes.map((p) => p.agent),
+    (await herdr.listPanes()).map((p) => p.agent),
     ['claude', undefined],
   );
+  assert.deepEqual(calls, [['pane', 'list']]);
 });
 
 test('a closed pane is null', async () => {
-  const { bin } = fakeBinary(
-    `process.stderr.write('{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}\\n'); process.exit(1);`,
-  );
-  assert.equal(await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).pane('w1:p9'), null);
+  const { herdr, calls } = recorded(failed('{"error":{"code":"pane_not_found"}}'));
+  assert.equal(await herdr.pane('w1:p9'), null);
+  assert.deepEqual(calls, [['pane', 'get', 'w1:p9']]);
 });
 
 test('malformed agent records are rejected before reaching the router', async () => {
-  const { bin } = fakeBinary(
-    `console.log(JSON.stringify({ result: { panes: [{ pane_id: 'p', terminal_id: 42, agent: 'codex', agent_status: 'idle' }] } }));`,
+  const { herdr } = recorded(
+    ok({ panes: [{ pane_id: 'p', terminal_id: 42, agent: 'codex', agent_status: 'idle' }] }),
   );
-  await assert.rejects(cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).listPanes(), {
-    code: 'invalid_response',
-  });
+  await assert.rejects(herdr.listPanes(), { code: 'invalid_response' });
 });
 
+const AGENT = {
+  pane_id: 'w2:p3',
+  workspace_id: 'w2',
+  terminal_id: 't3',
+  agent: 'codex',
+  agent_status: 'idle',
+};
+
 test('agent startup passes the target pane and validates the returned agent', async () => {
-  const { bin, dir } = fakeBinary(`
-require('node:fs').writeFileSync(process.env.OUT, JSON.stringify(process.argv.slice(2)));
-console.log(JSON.stringify({ result: { agent: {
-  pane_id: 'w2:p3', workspace_id: 'w2', terminal_id: 't3', agent: 'codex', agent_status: 'idle'
-} } }));`);
-  const out = path.join(dir, 'args.json');
-  const agent = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out }).startAgent({
-    label: 'reviewer',
-    kind: 'codex',
-    paneId: 'w2:p3',
-  });
+  const { herdr, calls } = recorded(ok({ agent: AGENT }));
+  const agent = await herdr.startAgent({ label: 'reviewer', kind: 'codex', paneId: 'w2:p3' });
   assert.equal(agent.workspace_id, 'w2');
   assert.equal(agent.terminal_id, 't3');
-  const args = JSON.parse(fs.readFileSync(out, 'utf8'));
-  assert.deepEqual(args.slice(0, 3), ['agent', 'start', 'reviewer-w2-p3']);
-  assert.deepEqual(args.slice(3), ['--kind', 'codex', '--pane', 'w2:p3', '--timeout', '120000']);
+  assert.deepEqual(calls, [
+    [
+      'agent',
+      'start',
+      'reviewer-w2-p3',
+      '--kind',
+      'codex',
+      '--pane',
+      'w2:p3',
+      '--timeout',
+      '120000',
+    ],
+  ]);
 });
 
 test('agent names keep mixed-case pane IDs distinct and fit Herdr rules', async () => {
-  const { bin, dir } = fakeBinary(`
-require('node:fs').appendFileSync(process.env.OUT, process.argv[4] + '\\n');
-console.log(JSON.stringify({ result: { agent: {
-  pane_id: 'p', workspace_id: 'w', terminal_id: 't', agent: 'codex', agent_status: 'idle'
-} } }));`);
-  const out = path.join(dir, 'names.txt');
-  const herdr = cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out });
+  const { herdr, calls } = recorded(ok({ agent: AGENT }));
   for (const [label, paneId] of [
     ['reviewer', 'w2N:p3'],
     ['reviewer', 'w2n:p3'],
@@ -123,24 +136,15 @@ console.log(JSON.stringify({ result: { agent: {
   ] as const) {
     await herdr.startAgent({ label, kind: 'codex', paneId });
   }
-  assert.deepEqual(fs.readFileSync(out, 'utf8').trim().split('\n'), [
-    'reviewer-w2_n-p3',
-    'reviewer-w2n-p3',
-    'agent-2nd-w1-p1',
-    'a-very-long-handl-w2_n_v_x-p1234',
-  ]);
+  assert.deepEqual(
+    calls.map((args) => args[2]),
+    ['reviewer-w2_n-p3', 'reviewer-w2n-p3', 'agent-2nd-w1-p1', 'a-very-long-handl-w2_n_v_x-p1234'],
+  );
 });
 
 test('agent startup rejects malformed success responses', async () => {
-  const { bin } = fakeBinary(
-    `console.log(JSON.stringify({ result: { agent: { pane_id: 'p' } } }));`,
-  );
-  await assert.rejects(
-    cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).startAgent({
-      label: 'codex',
-      kind: 'codex',
-      paneId: 'p',
-    }),
-    { code: 'invalid_response' },
-  );
+  const { herdr } = recorded(ok({ agent: { pane_id: 'p' } }));
+  await assert.rejects(herdr.startAgent({ label: 'codex', kind: 'codex', paneId: 'p' }), {
+    code: 'invalid_response',
+  });
 });

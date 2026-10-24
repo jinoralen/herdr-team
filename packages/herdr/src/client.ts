@@ -1,5 +1,6 @@
 // Thin adapter over the installed `herdr` CLI, used by ticks and agent startup. Herdr's guarantees:
 // docs/herdr.md.
+import { type Exec, type Exited, spawnExec } from '@herdr/terminal';
 import { z } from 'zod';
 import { type Agent, AgentSchema, type Herdr } from './types.ts';
 
@@ -26,32 +27,8 @@ function parseJson(text: string): unknown {
   }
 }
 
-function start(
-  bin: string,
-  args: string[],
-  timeout: number,
-  env: NodeJS.ProcessEnv,
-): Bun.Subprocess<'ignore', 'pipe', 'pipe'> {
-  try {
-    // An argv array, never a shell: message text is passed as a single argv entry.
-    return Bun.spawn([bin, ...args], {
-      env,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      timeout,
-      killSignal: 'SIGKILL',
-    });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new HerdrError('missing_binary', `Cannot run ${bin}; is Herdr installed?`);
-    }
-    throw error;
-  }
-}
-
 // Why a herdr command failed: herdr's own error if it printed one, else what happened to the process.
-function failure(args: string[], timedOut: boolean, stdout: string, stderr: string): HerdrError {
+function failure(args: string[], { timedOut, stdout, stderr }: Exited): HerdrError {
   const output = ErrorOutputSchema.safeParse(parseJson(stderr || stdout));
   if (output.success) {
     const { code, message } = output.data.error;
@@ -63,26 +40,31 @@ function failure(args: string[], timedOut: boolean, stdout: string, stderr: stri
   return new HerdrError('process_exit', (stderr || stdout).trim().slice(0, 500));
 }
 
-export async function run(
-  bin: string,
-  args: string[],
-  { timeout, env }: { timeout: number; env: NodeJS.ProcessEnv },
-): Promise<unknown> {
-  const proc = start(bin, args, timeout, env);
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (exitCode !== 0) {
-    // The timeout ends herdr with SIGKILL. Not proc.killed: Bun sets it after any exit.
-    throw failure(args, proc.signalCode === 'SIGKILL', stdout, stderr);
-  }
-  const output = OutputSchema.safeParse(parseJson(stdout));
-  if (!output.success) {
-    throw new HerdrError('invalid_response', 'Herdr returned non-JSON output');
-  }
-  return output.data.result;
+// Runs one herdr command and returns its `result`, which each caller validates.
+export function herdrCommand(
+  env: NodeJS.ProcessEnv,
+  exec: Exec,
+): (args: string[], timeout: number) => Promise<unknown> {
+  const bin = env.HERDR_BIN_PATH || 'herdr';
+  return async (args: string[], timeout: number): Promise<unknown> => {
+    let exited: Exited;
+    try {
+      exited = await exec([bin, ...args], { env, timeout });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new HerdrError('missing_binary', `Cannot run ${bin}; is Herdr installed?`);
+      }
+      throw error;
+    }
+    if (exited.exitCode !== 0) {
+      throw failure(args, exited);
+    }
+    const output = OutputSchema.safeParse(parseJson(exited.stdout));
+    if (!output.success) {
+      throw new HerdrError('invalid_response', 'Herdr returned non-JSON output');
+    }
+    return output.data.result;
+  };
 }
 
 // The agent's name in Herdr's sidebar. Names must be unique among live agents in all workspaces;
@@ -94,8 +76,8 @@ function agentName(label: string, paneId: string): string {
   return `${base.slice(0, 31 - pane.length)}-${pane}`;
 }
 
-export function cliHerdr(env = process.env): Herdr {
-  const bin = env.HERDR_BIN_PATH || 'herdr';
+export function cliHerdr(env = process.env, exec: Exec = spawnExec): Herdr {
+  const run = herdrCommand(env, exec);
   return {
     async startAgent({
       label,
@@ -109,7 +91,6 @@ export function cliHerdr(env = process.env): Herdr {
       args?: string[];
     }): Promise<Agent> {
       const result = await run(
-        bin,
         [
           'agent',
           'start',
@@ -122,7 +103,7 @@ export function cliHerdr(env = process.env): Herdr {
           '120000',
           ...(args.length ? ['--', ...args] : []),
         ],
-        { timeout: 130000, env },
+        130000,
       );
       const parsed = z.object({ agent: AgentSchema }).safeParse(result);
       if (!parsed.success) {
@@ -131,7 +112,7 @@ export function cliHerdr(env = process.env): Herdr {
       return parsed.data.agent;
     },
     async listPanes(): Promise<Agent[]> {
-      const result = await run(bin, ['pane', 'list'], { timeout: 10000, env });
+      const result = await run(['pane', 'list'], 10000);
       const parsed = z.object({ panes: z.array(AgentSchema) }).safeParse(result);
       if (!parsed.success) {
         throw new HerdrError('invalid_response', 'pane list has invalid panes data');
@@ -141,7 +122,7 @@ export function cliHerdr(env = process.env): Herdr {
     async pane(paneId: string): Promise<Agent | null> {
       let result: unknown;
       try {
-        result = await run(bin, ['pane', 'get', paneId], { timeout: 10000, env });
+        result = await run(['pane', 'get', paneId], 10000);
       } catch (caught) {
         if ((caught as HerdrError).code === 'pane_not_found') {
           return null;
@@ -158,7 +139,6 @@ export function cliHerdr(env = process.env): Herdr {
     // before the next one. Herdr reports agent_prompt_stalled if no turn starts within 5s.
     async prompt(paneId: string, text: string): Promise<void> {
       await run(
-        bin,
         [
           'agent',
           'prompt',
@@ -172,7 +152,7 @@ export function cliHerdr(env = process.env): Herdr {
           '--timeout',
           '20000',
         ],
-        { timeout: 30000, env },
+        30000,
       );
     },
   };
