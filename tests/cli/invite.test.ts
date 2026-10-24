@@ -101,6 +101,7 @@ test('invite starts and confirms a target room member, submits its guide and pre
   assert.match(result.stdout, /room w2/);
   const history = await calls();
   const start = history.find((args) => args[1] === 'start')!;
+  assert.equal(start[2], 'reviewer-w2-p2');
   assert.deepEqual(start.slice(3), ['--kind', 'codex', '--pane', 'w2:p2', '--timeout', '120000']);
   const prompts = history.filter((args) => args[1] === 'prompt');
   assert.equal(prompts.length, 1);

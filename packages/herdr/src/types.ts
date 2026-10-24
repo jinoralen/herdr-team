@@ -22,7 +22,13 @@ export interface Herdr {
   // One pane as it is now; null if it closed.
   pane(paneId: string): Promise<Agent | null>;
   prompt(paneId: string, text: string): Promise<void>;
-  startAgent(options: { kind: string; paneId: string; args?: string[] }): Promise<Agent>;
+  // Herdr names the agent after the label and the pane: see agentName.
+  startAgent(options: {
+    label: string;
+    kind: string;
+    paneId: string;
+    args?: string[];
+  }): Promise<Agent>;
 }
 
 // Pane topology, including shells with no recognized agent.

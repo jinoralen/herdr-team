@@ -30,7 +30,11 @@ Every command prints JSON: `{"result": …}` on success, `{"error": {"code", "me
 - `invite --pane <pane>` uses `herdr agent start <name> --kind <kind> --pane <pane> --timeout 120000`.
   Optional harness arguments follow `--`, e.g. `-- --model <id>` (checked with the installed CLI).
   Agent names must start with a lowercase letter and contain only lowercase letters, digits,
-  hyphens or underscores, up to 32 characters; hub truncates its UUID suffix to fit.
+  hyphens or underscores, up to 32 characters, and be unique among live agents across workspaces.
+  The name is what Herdr's sidebar shows (under the workspace): hub uses the handle, then the pane
+  ID, which Herdr never reuses, with each capital written as `_` and its lowercase letter
+  (`reviewer-w2_n-p3` for `w2N:p3`). The handle is cut to fit; one starting with a digit gets
+  `agent-` in front.
   The pane must be at an interactive shell prompt, else it fails with `agent_pane_busy` before typing
   anything (a new pane's shell may still be starting; hub retries for 10 s). Success means the expected agent was detected
   in the same terminal and is ready for input. The client allows 130 seconds for this operation.
