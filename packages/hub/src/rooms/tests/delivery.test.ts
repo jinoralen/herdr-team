@@ -260,13 +260,17 @@ test('a warning is withdrawn once the post it is about gets through, and FYI pos
 });
 
 test('a batch of many posts from one author can always be written ahead', async () => {
-  const { herdr, env, joinAs, tick, store } = await installed();
+  const { herdr, joinAs, tick, store } = await installed();
   await joinAs('p1', 'claude');
   await joinAs('p2', 'codex');
   herdr.set('p1', { agent_status: 'working' });
-  for (let i = 0; i < 3000; i++) {
-    message({ text: 'x', env: env('p2') });
-  }
+  // Queued in one transaction: 3000 separate posts would time the setup, not the delivery.
+  const s = store();
+  s.transaction(() => {
+    for (let i = 0; i < 3000; i++) {
+      s.enqueue('codex', 'x', ['claude']);
+    }
+  });
   herdr.set('p1', { agent_status: 'idle' });
   await tick();
   assert.equal(herdr.promptsTo('p1').length, 1);
