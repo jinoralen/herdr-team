@@ -107,6 +107,7 @@ async function launchInPane({
   });
   try {
     const started = await startWhenShellReady(herdr, {
+      label: handle,
       kind: agent,
       paneId: target,
       args: model ? ['--model', model] : [],

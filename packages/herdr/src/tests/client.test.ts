@@ -96,15 +96,39 @@ console.log(JSON.stringify({ result: { agent: {
 } } }));`);
   const out = path.join(dir, 'args.json');
   const agent = await cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out }).startAgent({
+    label: 'reviewer',
     kind: 'codex',
     paneId: 'w2:p3',
   });
   assert.equal(agent.workspace_id, 'w2');
   assert.equal(agent.terminal_id, 't3');
   const args = JSON.parse(fs.readFileSync(out, 'utf8'));
-  assert.deepEqual(args.slice(0, 2), ['agent', 'start']);
-  assert.match(args[2], /^hub-[a-z0-9_-]{1,28}$/);
+  assert.deepEqual(args.slice(0, 3), ['agent', 'start', 'reviewer-w2-p3']);
   assert.deepEqual(args.slice(3), ['--kind', 'codex', '--pane', 'w2:p3', '--timeout', '120000']);
+});
+
+test('agent names keep mixed-case pane IDs distinct and fit Herdr rules', async () => {
+  const { bin, dir } = fakeBinary(`
+require('node:fs').appendFileSync(process.env.OUT, process.argv[4] + '\\n');
+console.log(JSON.stringify({ result: { agent: {
+  pane_id: 'p', workspace_id: 'w', terminal_id: 't', agent: 'codex', agent_status: 'idle'
+} } }));`);
+  const out = path.join(dir, 'names.txt');
+  const herdr = cliHerdr({ ...process.env, HERDR_BIN_PATH: bin, OUT: out });
+  for (const [label, paneId] of [
+    ['reviewer', 'w2N:p3'],
+    ['reviewer', 'w2n:p3'],
+    ['2nd', 'w1:p1'],
+    ['a-very-long-handle-x', 'w2NVX:p1234'],
+  ] as const) {
+    await herdr.startAgent({ label, kind: 'codex', paneId });
+  }
+  assert.deepEqual(fs.readFileSync(out, 'utf8').trim().split('\n'), [
+    'reviewer-w2_n-p3',
+    'reviewer-w2n-p3',
+    'agent-2nd-w1-p1',
+    'a-very-long-handl-w2_n_v_x-p1234',
+  ]);
 });
 
 test('agent startup rejects malformed success responses', async () => {
@@ -112,7 +136,11 @@ test('agent startup rejects malformed success responses', async () => {
     `console.log(JSON.stringify({ result: { agent: { pane_id: 'p' } } }));`,
   );
   await assert.rejects(
-    cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).startAgent({ kind: 'codex', paneId: 'p' }),
+    cliHerdr({ ...process.env, HERDR_BIN_PATH: bin }).startAgent({
+      label: 'codex',
+      kind: 'codex',
+      paneId: 'p',
+    }),
     { code: 'invalid_response' },
   );
 });

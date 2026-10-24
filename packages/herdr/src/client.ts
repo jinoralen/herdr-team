@@ -85,14 +85,25 @@ export async function run(
   return output.data.result;
 }
 
+// The agent's name in Herdr's sidebar. Names must be unique among live agents in all workspaces;
+// Herdr never reuses a pane ID, so the pane makes it so. Names are lowercase letters, digits, - and
+// _, start with a letter and fit 32 characters, while IDs mix cases (w2N:p3 becomes w2_n-p3).
+function agentName(label: string, paneId: string): string {
+  const pane = paneId.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`).replace(/[^a-z0-9_]/g, '-');
+  const base = /^[a-z]/.test(label) ? label : `agent-${label}`;
+  return `${base.slice(0, 31 - pane.length)}-${pane}`;
+}
+
 export function cliHerdr(env = process.env): Herdr {
   const bin = env.HERDR_BIN_PATH || 'herdr';
   return {
     async startAgent({
+      label,
       kind,
       paneId,
       args = [],
     }: {
+      label: string;
       kind: string;
       paneId: string;
       args?: string[];
@@ -102,7 +113,7 @@ export function cliHerdr(env = process.env): Herdr {
         [
           'agent',
           'start',
-          `hub-${crypto.randomUUID().slice(0, 28)}`,
+          agentName(label, paneId),
           '--kind',
           kind,
           '--pane',

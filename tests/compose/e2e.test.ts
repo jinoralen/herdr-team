@@ -13,6 +13,7 @@ test('helpers start through hub from their definition: kind, model, guide, instr
   await up(f);
   const calls = (await f.read()).calls;
   const start = calls.find((a) => a[1] === 'start' && a.includes('example-v1'))!;
+  assert.equal(start[2], 'reviewer-pane2');
   assert.deepEqual(start.slice(3, 5), ['--kind', 'codex']);
   assert.deepEqual(start.slice(-3), ['--', '--model', 'example-v1']);
   const prompt = calls.find((a) => a[1] === 'prompt' && a[3]?.includes('Review the code'))![3]!;
