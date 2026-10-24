@@ -77,5 +77,5 @@ Biome checks formatting, module import boundaries, cognitive complexity, unused 
 | [`docs/adr/`](adr/) | decisions and the alternatives they ruled out |
 | [`GLOSSARY.md`](../GLOSSARY.md) | the domain's terms |
 | [`docs/herdr.md`](herdr.md) | the Herdr behaviour the code relies on |
-| [`docs/agents/`](agents/) | setup the agent skills read: issue tracker, domain docs, how to write command pages. The skills come from [mattpocock/skills](https://github.com/mattpocock/skills); install them globally |
+| [`docs/agents/`](agents/) | setup the agent skills read: issue tracker, domain docs, how to write command pages |
 | [`CODING_STANDARDS.md`](../CODING_STANDARDS.md) | review rules beyond what Biome enforces |
